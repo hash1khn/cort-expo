@@ -147,7 +147,7 @@ const styles = StyleSheet.create({
 
   topCard: {
     position: 'absolute',
-    top: 10,
+    top: 62,
     left: 16,
     right: 16,
     backgroundColor: colors.white,

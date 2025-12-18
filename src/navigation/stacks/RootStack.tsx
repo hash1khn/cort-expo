@@ -4,6 +4,7 @@ import { AuthStack } from './AuthStack';
 import { ChauffeurStack } from './ChauffeurStack';
 import { PassengerTabNavigator } from '../tabs/PassengerTabs';
 import { ShuttleTabNavigator } from '../tabs/ShuttleTabs';
+import { ChauffeurTabNavigator } from '../tabs/ChauffeurTabs';
 import { useAuthStore } from '../../core/stores/useAuthStore';
 
 /**
@@ -25,7 +26,7 @@ export function RootNavigator() {
 
     switch (userRole) {
       case 'CHAUFFEUR':
-        return <ChauffeurStack />;
+        return <ChauffeurTabNavigator />;
       case 'SHUTTLE_DRIVER':
         return <ShuttleTabNavigator />;
       case 'EMPLOYEE':
