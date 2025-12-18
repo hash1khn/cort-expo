@@ -2,18 +2,21 @@ import React, { useMemo, useState } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
+  Pressable,
   SafeAreaView,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
 
 import { CortButton, CortCard } from '../../../components';
 import { colors, radii, typography } from '../../../core/theme';
 import { useAuthStore } from '../../../core/stores/useAuthStore';
 
 export function LoginScreen() {
+  const navigation = useNavigation<any>();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -94,12 +97,24 @@ export function LoginScreen() {
                 await login(email.trim(), password);
                 // RootNavigator will switch stacks based on persisted role
               } catch (e) {
-                setError(e instanceof Error ? e.message : 'Login failed');
+                const msg = e instanceof Error ? e.message : 'Login failed';
+                setError(msg);
+                if (msg.toLowerCase().includes('pending admin approval')) {
+                  navigation.navigate('ChauffeurPending', { email: email.trim() });
+                }
               } finally {
                 setIsSubmitting(false);
               }
             }}
           />
+
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => navigation.navigate('ChauffeurSignup')}
+            style={({ pressed }) => [styles.linkBtn, pressed && styles.linkBtnPressed]}
+          >
+            <Text style={styles.linkText}>Apply as Chauffeur Driver</Text>
+          </Pressable>
 
           <Text style={styles.footerText}>
             By continuing you agree to CORT security policies.
@@ -182,6 +197,9 @@ const styles = StyleSheet.create({
     color: colors.text,
   },
   button: { marginTop: 18 },
+  linkBtn: { marginTop: 12, alignItems: 'center', paddingVertical: 10 },
+  linkBtnPressed: { opacity: 0.9 },
+  linkText: { fontFamily: typography.family.semibold, fontSize: 12, color: colors.orange },
   errorText: {
     marginTop: 12,
     fontFamily: typography.family.medium,
