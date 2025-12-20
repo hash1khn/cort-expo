@@ -4,8 +4,8 @@ export const typography = {
     // medium: 'Inter_500Medium',
     // semibold: 'Inter_600SemiBold',
     regular: 'Montserrat_400Regular',
-    medium: 'Montserrat_400Regular',
-    semibold: 'Montserrat_400Regular',
+    medium: 'Montserrat_500Regular',
+    semibold: 'Montserrat_600Regular',
   },
   size: {
     xs: 11,
