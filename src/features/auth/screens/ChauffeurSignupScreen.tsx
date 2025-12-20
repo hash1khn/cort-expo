@@ -62,7 +62,7 @@ export function ChauffeurSignupScreen() {
             />
             <View>
               <Text style={styles.logoText}>CORT</Text>
-              <Text style={styles.logoSubText}>Enterprise Mobility</Text>
+              <Text style={styles.logoSubText}>At Your Service</Text>
             </View>
           </View>
         </View>
@@ -253,14 +253,16 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   logoText: {
-    fontFamily: typography.family.semibold,
+    fontFamily: 'Montserrat_400Regular',
+    fontWeight: '400',
     fontSize: 28,
     letterSpacing: 2,
     color: colors.white,
     lineHeight: 32,
   },
   logoSubText: {
-    fontFamily: typography.family.regular,
+    fontFamily: 'Montserrat_400Regular',
+    fontWeight: '400',
     fontSize: 12,
     letterSpacing: 1,
     color: 'rgba(255,255,255,0.7)',
@@ -289,19 +291,22 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   title: {
-    fontFamily: typography.family.semibold,
+    fontFamily: 'Montserrat_400Regular',
+    fontWeight: '700',
     fontSize: 24,
     color: colors.navy,
     marginBottom: 6,
   },
   subtitle: {
-    fontFamily: typography.family.regular,
+    fontFamily: 'Montserrat_400Regular',
+    fontWeight: '400',
     fontSize: 14,
     color: colors.muted,
   },
   label: {
     marginBottom: 8,
-    fontFamily: typography.family.medium,
+    fontFamily: 'Montserrat_400Regular',
+    fontWeight: '500',
     fontSize: 13,
     color: colors.text,
   },
@@ -312,7 +317,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#FAFAFA',
     borderWidth: 1.5,
     borderColor: colors.border,
-    fontFamily: typography.family.regular,
+    fontFamily: 'Montserrat_400Regular',
+    fontWeight: '400',
     fontSize: 15,
     color: colors.text,
   },
@@ -321,7 +327,8 @@ const styles = StyleSheet.create({
   },
   errorText: {
     marginTop: 12,
-    fontFamily: typography.family.medium,
+    fontFamily: 'Montserrat_400Regular',
+    fontWeight: '500',
     fontSize: 13,
     color: colors.red,
   },

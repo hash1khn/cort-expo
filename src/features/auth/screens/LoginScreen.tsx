@@ -67,7 +67,7 @@ export function LoginScreen() {
             />
             <View>
               <Text style={styles.logoText}>CORT</Text>
-              <Text style={styles.logoSubText}>Enterprise Mobility</Text>
+              <Text style={styles.logoSubText}>At Your Service</Text>
             </View>
           </View>
         </View>
@@ -190,14 +190,16 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   logoText: {
-    fontFamily: typography.family.semibold,
+    fontFamily: 'Montserrat_400Regular',
+    fontWeight: '400',
     fontSize: 28,
     letterSpacing: 2,
     color: colors.white,
     lineHeight: 32,
   },
   logoSubText: {
-    fontFamily: typography.family.regular,
+    fontFamily: 'Montserrat_400Regular',
+    fontWeight: '400',
     fontSize: 12,
     letterSpacing: 1,
     color: 'rgba(255,255,255,0.7)',
@@ -223,13 +225,15 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   title: {
-    fontFamily: typography.family.semibold,
+    fontFamily: 'Montserrat_400Regular',
+    fontWeight: '700',
     fontSize: 24,
     color: colors.navy,
     marginBottom: 6,
   },
   subtitle: {
-    fontFamily: typography.family.regular,
+    fontFamily: 'Montserrat_400Regular',
+    fontWeight: '400',
     fontSize: 14,
     color: colors.muted,
   },
@@ -242,12 +246,14 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   label: {
-    fontFamily: typography.family.medium,
+    fontFamily: 'Montserrat_400Regular',
+    fontWeight: '500',
     fontSize: 13,
     color: colors.text,
   },
   forgotPass: {
-    fontFamily: typography.family.medium,
+    fontFamily: 'Montserrat_400Regular',
+    fontWeight: '500',
     fontSize: 12,
     color: colors.orange, // Interactive element
   },
@@ -258,7 +264,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#FAFAFA',
     borderWidth: 1.5,
     borderColor: colors.border,
-    fontFamily: typography.family.regular,
+    fontFamily: 'Montserrat_400Regular',
+    fontWeight: '400',
     fontSize: 15,
     color: colors.text,
   },
@@ -278,7 +285,8 @@ const styles = StyleSheet.create({
     borderLeftColor: colors.red,
   },
   errorText: {
-    fontFamily: typography.family.medium,
+    fontFamily: 'Montserrat_400Regular',
+    fontWeight: '500',
     fontSize: 13,
     color: colors.red,
   },
@@ -296,7 +304,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   footerText: {
-    fontFamily: typography.family.regular,
+    fontFamily: 'Montserrat_400Regular',
+    fontWeight: '400',
     fontSize: 14,
     color: colors.muted,
     marginBottom: 4,
@@ -309,7 +318,8 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
   linkText: {
-    fontFamily: typography.family.semibold,
+    fontFamily: 'Montserrat_400Regular',
+    fontWeight: '700',
     fontSize: 15,
     color: colors.navy// Use Navy for secondary link to distinguish from CTA
   },

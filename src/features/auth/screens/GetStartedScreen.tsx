@@ -29,7 +29,7 @@ export function GetStartedScreen({ onGetStarted }: Props) {
         />
         
         <Text style={styles.title}>CORT</Text>
-        <Text style={styles.subTitle}>Enterprise Mobility Platform</Text>
+        <Text style={styles.subTitle}>At Your Service</Text>
       </View>
 
       {/* Bottom Section: Action */}
@@ -82,8 +82,8 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
   },
   title: { 
-    // fontFamily: 'Inter-Bold', // Ensure Inter is linked
-    fontWeight: '800',
+    fontFamily: 'Montserrat_400Regular',
+    fontWeight: '400',
     fontSize: 42, 
     color: colors.navy, 
     letterSpacing: 4,
@@ -91,8 +91,8 @@ const styles = StyleSheet.create({
   },
   subTitle: {
     marginTop: 8,
-    // fontFamily: 'Inter-Medium',
-    fontWeight: '500',
+    fontFamily: 'Montserrat_400Regular',
+    fontWeight: '400',
     fontSize: 14,
     color: colors.muted,
     textTransform: 'uppercase',
@@ -118,13 +118,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   heading: {
-    fontSize: 22,
+    fontFamily: 'Montserrat_400Regular',
     fontWeight: '700',
+    fontSize: 22,
     color: colors.navy,
     marginBottom: 12,
     textAlign: 'center',
   },
   body: {
+    fontFamily: 'Montserrat_400Regular',
+    fontWeight: '400',
     fontSize: 15,
     color: colors.text,
     lineHeight: 22,
@@ -150,12 +153,14 @@ const styles = StyleSheet.create({
     transform: [{ scale: 0.98 }] 
   },
   ctaText: { 
+    fontFamily: 'Montserrat_400Regular',
     fontSize: 17, 
     fontWeight: '700', 
     color: colors.white,
     letterSpacing: 0.5,
   },
   foot: {
+    fontFamily: 'Montserrat_400Regular',
     marginTop: 20,
     textAlign: 'center',
     fontSize: 12,

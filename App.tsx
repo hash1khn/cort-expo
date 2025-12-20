@@ -8,6 +8,10 @@ import {
   Inter_500Medium,
   Inter_600SemiBold,
 } from '@expo-google-fonts/inter';
+import {
+  Montserrat_300Light,
+  Montserrat_400Regular,
+} from '@expo-google-fonts/montserrat';
 import * as SplashScreen from 'expo-splash-screen';
 
 import { RootNavigator } from './src/navigation/stacks/RootStack';
@@ -21,6 +25,8 @@ export default function App() {
     Inter_400Regular,
     Inter_500Medium,
     Inter_600SemiBold,
+    Montserrat_300Light,
+    Montserrat_400Regular,
   });
 
   useEffect(() => {
