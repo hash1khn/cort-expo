@@ -1,7 +1,24 @@
 import React from 'react';
-import { Pressable, SafeAreaView, StyleSheet, Text, View } from 'react-native';
+import { 
+  Pressable, 
+  StyleSheet, 
+  Text, 
+  View, 
+  StatusBar,
+  Platform 
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { colors, radii, typography } from '../../../core/theme';
+// Mapped from design.md
+const cortColors = {
+  navy: '#0c225e',      // Corporate Anchor
+  orange: '#f47f00',    // Primary Action (CTA)
+  purple: '#670e4c',    // Secondary/Accents
+  lightGrey: '#F5F5F5', // Background
+  white: '#FFFFFF',
+  text: '#1f2937',      // Dark Grey for body
+  muted: '#6b7280',     // Muted text
+};
 
 type Props = {
   onGetStarted?: () => void;
@@ -9,69 +26,173 @@ type Props = {
 
 export function GetStartedScreen({ onGetStarted }: Props) {
   return (
-    <SafeAreaView style={styles.root}>
+    <SafeAreaView style={styles.root} edges={['top']}>
+      <StatusBar barStyle="dark-content" backgroundColor={cortColors.lightGrey} />
+      
+      {/* Top Section: Branding */}
       <View style={styles.header}>
-        <View style={styles.brandMark} />
+        <View style={styles.logoContainer}>
+          {/* Abstract Logo Placeholder using Brand Colors */}
+          <View style={[styles.logoShape, styles.logoBack]} />
+          <View style={[styles.logoShape, styles.logoFront]} />
+        </View>
+        
         <Text style={styles.title}>CORT</Text>
-        <Text style={styles.subTitle}>Corporate transport, reimagined.</Text>
+        <Text style={styles.subTitle}>Enterprise Mobility Platform</Text>
       </View>
 
-      <View style={styles.bottom}>
-        <Text style={styles.body}>
-          Premium rides for employees, chauffeurs, and shuttle operations—secure, reliable, and on time.
-        </Text>
+      {/* Bottom Section: Action */}
+      <View style={styles.bottomContainer}>
+        <View style={styles.textBlock}>
+          <Text style={styles.heading}>
+            Managed Corporate Transport
+          </Text>
+          <Text style={styles.body}>
+            Secure shuttles and premium chauffeur services for your workforce. 
+            Reliable, tracked, and reimagined.
+          </Text>
+        </View>
 
-        <Pressable onPress={onGetStarted} style={({ pressed }) => [styles.cta, pressed && styles.ctaPressed]}>
+        {/* Primary CTA - Cort Orange */}
+        <Pressable 
+          onPress={onGetStarted} 
+          style={({ pressed }) => [
+            styles.cta, 
+            pressed && styles.ctaPressed,
+            styles.shadow
+          ]}
+        >
           <Text style={styles.ctaText}>Get Started</Text>
         </Pressable>
 
-        <Text style={styles.foot}>By continuing you agree to CORT policies.</Text>
+        <Text style={styles.foot}>
+          By continuing, you agree to CORT policies.
+        </Text>
       </View>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.white, paddingHorizontal: 18 },
-  header: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  brandMark: {
-    width: 54,
-    height: 54,
-    borderRadius: radii.md,
-    backgroundColor: colors.navy,
-    marginBottom: 16,
+  root: { 
+    flex: 1, 
+    backgroundColor: cortColors.lightGrey, //
   },
-  title: { fontFamily: typography.family.semibold, fontSize: 36, color: colors.navy, letterSpacing: 2 },
+  header: { 
+    flex: 3, // Takes up top 60% of screen
+    justifyContent: 'center', 
+    alignItems: 'center',
+    paddingHorizontal: 20,
+  },
+  // Logo Logic: Creating a visual mark using Navy and Purple
+  logoContainer: {
+    width: 80,
+    height: 80,
+    marginBottom: 24,
+    position: 'relative',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  logoShape: {
+    position: 'absolute',
+    borderRadius: 16,
+  },
+  logoBack: {
+    width: 60,
+    height: 60,
+    backgroundColor: cortColors.purple, // Secondary Brand Color
+    transform: [{ rotate: '-12deg' }],
+    opacity: 0.8,
+  },
+  logoFront: {
+    width: 60,
+    height: 60,
+    backgroundColor: cortColors.navy, // Corporate Anchor
+    transform: [{ rotate: '12deg' }],
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 5,
+    elevation: 6,
+  },
+  title: { 
+    // fontFamily: 'Inter-Bold', // Ensure Inter is linked
+    fontWeight: '800',
+    fontSize: 42, 
+    color: cortColors.navy, 
+    letterSpacing: 4,
+    textAlign: 'center',
+  },
   subTitle: {
-    marginTop: 10,
-    fontFamily: typography.family.regular,
+    marginTop: 8,
+    // fontFamily: 'Inter-Medium',
+    fontWeight: '500',
     fontSize: 14,
-    color: colors.muted,
+    color: cortColors.muted,
+    textTransform: 'uppercase',
+    letterSpacing: 1.5,
   },
-  bottom: { paddingBottom: 22 },
+  bottomContainer: { 
+    flex: 2, // Takes up bottom 40%
+    backgroundColor: cortColors.white,
+    borderTopLeftRadius: 32,
+    borderTopRightRadius: 32,
+    paddingHorizontal: 32,
+    paddingTop: 40,
+    paddingBottom: Platform.OS === 'ios' ? 20 : 32,
+    // Shadow for the bottom sheet effect
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: -3 },
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    elevation: 10,
+  },
+  textBlock: {
+    marginBottom: 32,
+    alignItems: 'center',
+  },
+  heading: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: cortColors.navy,
+    marginBottom: 12,
+    textAlign: 'center',
+  },
   body: {
-    fontFamily: typography.family.regular,
-    fontSize: 14,
-    color: colors.text,
-    lineHeight: 20,
-    marginBottom: 14,
+    fontSize: 15,
+    color: cortColors.text,
+    lineHeight: 22,
+    textAlign: 'center',
   },
   cta: {
-    height: 52,
-    borderRadius: radii.md,
-    backgroundColor: colors.navy,
+    height: 56,
+    borderRadius: 12,
+    backgroundColor: cortColors.orange, // Primary Action Color
     alignItems: 'center',
     justifyContent: 'center',
+    width: '100%',
   },
-  ctaPressed: { opacity: 0.92, transform: [{ scale: 0.99 }] },
-  ctaText: { fontFamily: typography.family.semibold, fontSize: 15, color: colors.white },
+  shadow: {
+    shadowColor: cortColors.orange,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  ctaPressed: { 
+    opacity: 0.85, 
+    transform: [{ scale: 0.98 }] 
+  },
+  ctaText: { 
+    fontSize: 17, 
+    fontWeight: '700', 
+    color: cortColors.white,
+    letterSpacing: 0.5,
+  },
   foot: {
-    marginTop: 12,
+    marginTop: 20,
     textAlign: 'center',
-    fontFamily: typography.family.regular,
-    fontSize: 11,
-    color: colors.muted,
+    fontSize: 12,
+    color: cortColors.muted,
   },
 });
-
-
