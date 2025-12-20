@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
+import { typography } from '../../../core/theme/typography';
 
 export function RoleSelectScreen() {
   return (
@@ -16,7 +17,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   text: {
-    fontFamily: 'Montserrat_400Regular',
+    fontFamily: typography.family.regular,
     fontWeight: '400',
     fontSize: 16,
   },

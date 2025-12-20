@@ -77,7 +77,7 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.white, paddingHorizontal: 18 },
   header: { paddingTop: 10 },
   backBtn: { alignSelf: 'flex-start', paddingVertical: 8, paddingHorizontal: 10, borderRadius: radii.pill, backgroundColor: colors.bgGrey },
-  backText: { fontFamily: 'Montserrat_400Regular', fontWeight: '700', fontSize: 12, color: colors.navy },
+  backText: { fontFamily: typography.family.regular, fontWeight: '700', fontSize: 12, color: colors.navy },
   card: {
     marginTop: 14,
     paddingHorizontal: 18,
@@ -87,13 +87,13 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     shadowColor: colors.shadowNavy,
   },
-  title: { fontFamily: 'Montserrat_400Regular', fontWeight: '700', fontSize: 20, color: colors.text },
-  subtitle: { marginTop: 8, fontFamily: 'Montserrat_400Regular', fontWeight: '400', fontSize: 13, color: colors.muted, lineHeight: 18 },
+  title: { fontFamily: 'typ', fontWeight: '700', fontSize: 20, color: colors.text },
+  subtitle: { marginTop: 8, fontFamily: 'typography.family.regular', fontWeight: '400', fontSize: 13, color: colors.muted, lineHeight: 18 },
   statusRow: { marginTop: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  statusLabel: { fontFamily: 'Montserrat_400Regular', fontWeight: '500', fontSize: 12, color: colors.muted },
+  statusLabel: { fontFamily: 'typ', fontWeight: '500', fontSize: 12, color: colors.muted },
   statusPill: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: radii.pill, backgroundColor: 'rgba(244, 127, 0, 0.12)' },
-  statusText: { fontFamily: 'Montserrat_400Regular', fontWeight: '700', fontSize: 12, color: colors.orange },
-  devNote: { marginTop: 14, marginBottom: 10, fontFamily: 'Montserrat_400Regular', fontWeight: '400', fontSize: 12, color: colors.muted },
+  statusText: { fontFamily: 'typ', fontWeight: '700', fontSize: 12, color: colors.orange },
+  devNote: { marginTop: 14, marginBottom: 10, fontFamily: 'typ', fontWeight: '400', fontSize: 12, color: colors.muted },
 });
 
 

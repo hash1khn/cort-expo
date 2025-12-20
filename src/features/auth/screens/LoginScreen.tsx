@@ -190,7 +190,7 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   logoText: {
-    fontFamily: 'Montserrat_400Regular',
+    fontFamily: typography.family.regular,
     fontWeight: '400',
     fontSize: 28,
     letterSpacing: 2,
@@ -198,7 +198,7 @@ const styles = StyleSheet.create({
     lineHeight: 32,
   },
   logoSubText: {
-    fontFamily: 'Montserrat_400Regular',
+    fontFamily: typography.family.regular,
     fontWeight: '400',
     fontSize: 12,
     letterSpacing: 1,
@@ -225,14 +225,14 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   title: {
-    fontFamily: 'Montserrat_400Regular',
+    fontFamily: typography.family.regular,
     fontWeight: '700',
     fontSize: 24,
     color: colors.navy,
     marginBottom: 6,
   },
   subtitle: {
-    fontFamily: 'Montserrat_400Regular',
+    fontFamily: typography.family.regular,
     fontWeight: '400',
     fontSize: 14,
     color: colors.muted,
@@ -246,13 +246,13 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   label: {
-    fontFamily: 'Montserrat_400Regular',
+    fontFamily: typography.family.regular,
     fontWeight: '500',
     fontSize: 13,
     color: colors.text,
   },
   forgotPass: {
-    fontFamily: 'Montserrat_400Regular',
+    fontFamily: typography.family.regular,
     fontWeight: '500',
     fontSize: 12,
     color: colors.orange, // Interactive element
@@ -264,7 +264,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FAFAFA',
     borderWidth: 1.5,
     borderColor: colors.border,
-    fontFamily: 'Montserrat_400Regular',
+    fontFamily: typography.family.regular,
     fontWeight: '400',
     fontSize: 15,
     color: colors.text,
@@ -285,7 +285,7 @@ const styles = StyleSheet.create({
     borderLeftColor: colors.red,
   },
   errorText: {
-    fontFamily: 'Montserrat_400Regular',
+    fontFamily: typography.family.regular,
     fontWeight: '500',
     fontSize: 13,
     color: colors.red,
@@ -304,7 +304,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   footerText: {
-    fontFamily: 'Montserrat_400Regular',
+    fontFamily: typography.family.regular,
     fontWeight: '400',
     fontSize: 14,
     color: colors.muted,
@@ -318,7 +318,7 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
   linkText: {
-    fontFamily: 'Montserrat_400Regular',
+    fontFamily: typography.family.regular,
     fontWeight: '700',
     fontSize: 15,
     color: colors.navy// Use Navy for secondary link to distinguish from CTA

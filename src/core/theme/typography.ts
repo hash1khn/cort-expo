@@ -1,8 +1,11 @@
 export const typography = {
   family: {
-    regular: 'Inter_400Regular',
-    medium: 'Inter_500Medium',
-    semibold: 'Inter_600SemiBold',
+    // regular: 'Inter_400Regular',
+    // medium: 'Inter_500Medium',
+    // semibold: 'Inter_600SemiBold',
+    regular: 'Montserrat_400Regular',
+    medium: 'Montserrat_400Regular',
+    semibold: 'Montserrat_400Regular',
   },
   size: {
     xs: 11,

@@ -9,7 +9,7 @@ import {
   Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { colors } from '../../../core/theme';
+import { colors, typography } from '../../../core/theme';
 
 type Props = {
   onGetStarted?: () => void;
@@ -82,7 +82,7 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
   },
   title: { 
-    fontFamily: 'Montserrat_400Regular',
+    fontFamily: typography.family.regular,
     fontWeight: '400',
     fontSize: 42, 
     color: colors.navy, 
@@ -91,7 +91,7 @@ const styles = StyleSheet.create({
   },
   subTitle: {
     marginTop: 8,
-    fontFamily: 'Montserrat_400Regular',
+    fontFamily: typography.family.regular,
     fontWeight: '400',
     fontSize: 14,
     color: colors.muted,
@@ -118,7 +118,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   heading: {
-    fontFamily: 'Montserrat_400Regular',
+    fontFamily: typography.family.regular,
     fontWeight: '700',
     fontSize: 22,
     color: colors.navy,
@@ -126,7 +126,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   body: {
-    fontFamily: 'Montserrat_400Regular',
+    fontFamily: typography.family.regular,
     fontWeight: '400',
     fontSize: 15,
     color: colors.text,
@@ -153,14 +153,14 @@ const styles = StyleSheet.create({
     transform: [{ scale: 0.98 }] 
   },
   ctaText: { 
-    fontFamily: 'Montserrat_400Regular',
+    fontFamily: typography.family.regular,
     fontSize: 17, 
     fontWeight: '700', 
     color: colors.white,
     letterSpacing: 0.5,
   },
   foot: {
-    fontFamily: 'Montserrat_400Regular',
+    fontFamily: typography.family.regular,
     marginTop: 20,
     textAlign: 'center',
     fontSize: 12,
