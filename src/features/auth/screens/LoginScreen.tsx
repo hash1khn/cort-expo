@@ -3,13 +3,13 @@ import {
   KeyboardAvoidingView,
   Platform,
   Pressable,
-  SafeAreaView,
   StyleSheet,
   Text,
   TextInput,
   View,
   StatusBar,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 
 // Assuming these are your core components
@@ -323,7 +323,6 @@ const styles = StyleSheet.create({
   linkText: {
     fontFamily: typography.family.semibold,
     fontSize: 15,
-    color: colors.navy, // Use Navy for secondary link to distinguish from CTA
-    textDecorationLine: 'underline',
+    color: colors.navy// Use Navy for secondary link to distinguish from CTA
   },
 });

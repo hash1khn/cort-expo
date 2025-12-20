@@ -8,17 +8,7 @@ import {
   Platform 
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-
-// Mapped from design.md
-const cortColors = {
-  navy: '#0c225e',      // Corporate Anchor
-  orange: '#f47f00',    // Primary Action (CTA)
-  purple: '#670e4c',    // Secondary/Accents
-  lightGrey: '#F5F5F5', // Background
-  white: '#FFFFFF',
-  text: '#1f2937',      // Dark Grey for body
-  muted: '#6b7280',     // Muted text
-};
+import { colors } from '../../../core/theme';
 
 type Props = {
   onGetStarted?: () => void;
@@ -27,7 +17,7 @@ type Props = {
 export function GetStartedScreen({ onGetStarted }: Props) {
   return (
     <SafeAreaView style={styles.root} edges={['top']}>
-      <StatusBar barStyle="dark-content" backgroundColor={cortColors.lightGrey} />
+      <StatusBar barStyle="dark-content" backgroundColor={colors.bgGrey} />
       
       {/* Top Section: Branding */}
       <View style={styles.header}>
@@ -76,7 +66,7 @@ export function GetStartedScreen({ onGetStarted }: Props) {
 const styles = StyleSheet.create({
   root: { 
     flex: 1, 
-    backgroundColor: cortColors.lightGrey, //
+    backgroundColor: colors.bgGrey,
   },
   header: { 
     flex: 3, // Takes up top 60% of screen
@@ -100,14 +90,14 @@ const styles = StyleSheet.create({
   logoBack: {
     width: 60,
     height: 60,
-    backgroundColor: cortColors.purple, // Secondary Brand Color
+    backgroundColor: colors.purple, // Secondary Brand Color
     transform: [{ rotate: '-12deg' }],
     opacity: 0.8,
   },
   logoFront: {
     width: 60,
     height: 60,
-    backgroundColor: cortColors.navy, // Corporate Anchor
+    backgroundColor: colors.navy, // Corporate Anchor
     transform: [{ rotate: '12deg' }],
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 4 },
@@ -119,7 +109,7 @@ const styles = StyleSheet.create({
     // fontFamily: 'Inter-Bold', // Ensure Inter is linked
     fontWeight: '800',
     fontSize: 42, 
-    color: cortColors.navy, 
+    color: colors.navy, 
     letterSpacing: 4,
     textAlign: 'center',
   },
@@ -128,13 +118,13 @@ const styles = StyleSheet.create({
     // fontFamily: 'Inter-Medium',
     fontWeight: '500',
     fontSize: 14,
-    color: cortColors.muted,
+    color: colors.muted,
     textTransform: 'uppercase',
     letterSpacing: 1.5,
   },
   bottomContainer: { 
     flex: 2, // Takes up bottom 40%
-    backgroundColor: cortColors.white,
+    backgroundColor: colors.white,
     borderTopLeftRadius: 32,
     borderTopRightRadius: 32,
     paddingHorizontal: 32,
@@ -154,26 +144,26 @@ const styles = StyleSheet.create({
   heading: {
     fontSize: 22,
     fontWeight: '700',
-    color: cortColors.navy,
+    color: colors.navy,
     marginBottom: 12,
     textAlign: 'center',
   },
   body: {
     fontSize: 15,
-    color: cortColors.text,
+    color: colors.text,
     lineHeight: 22,
     textAlign: 'center',
   },
   cta: {
     height: 56,
     borderRadius: 12,
-    backgroundColor: cortColors.orange, // Primary Action Color
+    backgroundColor: colors.orange, // Primary Action Color
     alignItems: 'center',
     justifyContent: 'center',
     width: '100%',
   },
   shadow: {
-    shadowColor: cortColors.orange,
+    shadowColor: colors.orange,
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.3,
     shadowRadius: 12,
@@ -186,13 +176,13 @@ const styles = StyleSheet.create({
   ctaText: { 
     fontSize: 17, 
     fontWeight: '700', 
-    color: cortColors.white,
+    color: colors.white,
     letterSpacing: 0.5,
   },
   foot: {
     marginTop: 20,
     textAlign: 'center',
     fontSize: 12,
-    color: cortColors.muted,
+    color: colors.muted,
   },
 });

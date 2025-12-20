@@ -3,14 +3,16 @@ import {
   KeyboardAvoidingView,
   Platform,
   Pressable,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
   View,
+  StatusBar,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
+import { Ionicons } from '@expo/vector-icons';
 
 import { CortButton, CortCard } from '../../../components';
 import { colors, radii, typography } from '../../../core/theme';
@@ -35,26 +37,46 @@ export function ChauffeurSignupScreen() {
 
   return (
     <SafeAreaView style={styles.root}>
+      <StatusBar barStyle="light-content" backgroundColor={colors.navy} />
+      
       <KeyboardAvoidingView
-        style={styles.root}
+        style={{ flex: 1 }}
         behavior={Platform.select({ ios: 'padding', android: undefined })}
       >
-        <ScrollView
-          keyboardShouldPersistTaps="handled"
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
-        >
-          <View style={styles.header}>
-            <Pressable accessibilityRole="button" onPress={() => navigation.goBack()} style={styles.backBtn}>
-              <Text style={styles.backText}>Back</Text>
-            </Pressable>
-            <Text style={styles.headerTitle}>Chauffeur Application</Text>
-            <Text style={styles.headerSub}>Submit your details for admin approval.</Text>
-          </View>
+        {/* Header Section - Deep Navy */}
+        <View style={styles.header}>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => navigation.goBack()}
+            style={({ pressed }) => [styles.backBtn, pressed && styles.backBtnPressed]}
+          >
+            <Ionicons name="chevron-back" size={22} color={colors.white} />
+          </Pressable>
 
-          <CortCard style={styles.card}>
-            <Text style={styles.title}>Sign up to drive</Text>
-            <Text style={styles.subtitle}>Applications require admin approval before you can log in.</Text>
+          <View style={styles.logoRow}>
+            {/* Logo Placeholder (Consistent with Login) */}
+            <View style={styles.logoPlaceholder}>
+              <View style={styles.logoIcon} />
+            </View>
+            <View>
+              <Text style={styles.logoText}>CORT</Text>
+              <Text style={styles.logoSubText}>Enterprise Mobility</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Floating Card */}
+        <View style={styles.contentContainer}>
+          <ScrollView
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={styles.scrollContent}
+            showsVerticalScrollIndicator={false}
+          >
+            <CortCard style={styles.card}>
+              <View style={styles.cardHeader}>
+                <Text style={styles.title}>Chauffeur Application</Text>
+                <Text style={styles.subtitle}>Submit your details for admin approval</Text>
+              </View>
 
             <Field label="Full Name">
               <TextInput
@@ -144,7 +166,7 @@ export function ChauffeurSignupScreen() {
 
             <CortButton
               title="Submit Application"
-              variant="navy"
+              variant="primary"
               disabled={!canSubmit || submitting}
               loading={submitting}
               style={{ marginTop: 16 }}
@@ -168,8 +190,9 @@ export function ChauffeurSignupScreen() {
                 }
               }}
             />
-          </CortCard>
-        </ScrollView>
+            </CortCard>
+          </ScrollView>
+        </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -177,7 +200,7 @@ export function ChauffeurSignupScreen() {
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <View style={{ marginTop: 14 }}>
+    <View style={styles.field}>
       <Text style={styles.label}>{label}</Text>
       {children}
     </View>
@@ -185,38 +208,135 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.white },
-  scrollContent: { paddingBottom: 26 },
-  header: { paddingHorizontal: 18, paddingTop: 10, paddingBottom: 10 },
-  backBtn: { alignSelf: 'flex-start', paddingVertical: 8, paddingHorizontal: 10, borderRadius: radii.pill, backgroundColor: colors.bgGrey },
-  backText: { fontFamily: typography.family.semibold, fontSize: 12, color: colors.navy },
-  headerTitle: { marginTop: 10, fontFamily: typography.family.semibold, fontSize: 18, color: colors.text },
-  headerSub: { marginTop: 6, fontFamily: typography.family.regular, fontSize: 12, color: colors.muted },
-  card: {
-    marginTop: 10,
-    marginHorizontal: 18,
-    paddingHorizontal: 18,
-    paddingTop: 18,
-    paddingBottom: 16,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-    shadowColor: colors.shadowNavy,
+  root: {
+    flex: 1,
+    backgroundColor: colors.bgGrey,
   },
-  title: { fontFamily: typography.family.semibold, fontSize: 20, color: colors.text },
-  subtitle: { marginTop: 6, fontFamily: typography.family.regular, fontSize: 13, color: colors.muted },
-  label: { marginBottom: 8, fontFamily: typography.family.medium, fontSize: 12, color: colors.text },
-  input: {
-    height: 48,
-    borderRadius: radii.md,
-    paddingHorizontal: 14,
-    backgroundColor: colors.white,
+  header: {
+    height: '32%',
+    backgroundColor: colors.navy,
+    borderBottomLeftRadius: 32,
+    borderBottomRightRadius: 32,
+    paddingHorizontal: 24,
+    paddingTop: Platform.OS === 'android' ? 40 : 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    position: 'relative',
+  },
+  backBtn: {
+    position: 'absolute',
+    top: Platform.OS === 'android' ? 50 : 20,
+    left: 24,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(12, 34, 94, 0.18)',
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  backBtnPressed: {
+    opacity: 0.7,
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+  },
+  logoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 40,
+  },
+  logoPlaceholder: {
+    width: 48,
+    height: 48,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.2)',
+    borderStyle: 'dashed',
+  },
+  logoIcon: {
+    width: 24,
+    height: 24,
+    backgroundColor: colors.orange,
+    borderRadius: 4,
+    transform: [{ rotate: '45deg' }],
+  },
+  logoText: {
+    fontFamily: typography.family.semibold,
+    fontSize: 28,
+    letterSpacing: 2,
+    color: colors.white,
+    lineHeight: 32,
+  },
+  logoSubText: {
+    fontFamily: typography.family.regular,
+    fontSize: 12,
+    letterSpacing: 1,
+    color: 'rgba(255,255,255,0.7)',
+    textTransform: 'uppercase',
+  },
+  contentContainer: {
+    flex: 1,
+    marginTop: -60,
+    paddingHorizontal: 20,
+  },
+  scrollContent: {
+    paddingBottom: 26,
+  },
+  card: {
+    backgroundColor: colors.white,
+    borderRadius: 20,
+    padding: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 8,
+    borderWidth: 0,
+  },
+  cardHeader: {
+    marginBottom: 24,
+  },
+  title: {
+    fontFamily: typography.family.semibold,
+    fontSize: 24,
+    color: colors.navy,
+    marginBottom: 6,
+  },
+  subtitle: {
     fontFamily: typography.family.regular,
     fontSize: 14,
+    color: colors.muted,
+  },
+  label: {
+    marginBottom: 8,
+    fontFamily: typography.family.medium,
+    fontSize: 13,
     color: colors.text,
   },
-  errorText: { marginTop: 12, fontFamily: typography.family.medium, fontSize: 12, color: colors.red },
+  input: {
+    height: 52,
+    borderRadius: radii.md,
+    paddingHorizontal: 16,
+    backgroundColor: '#FAFAFA',
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    fontFamily: typography.family.regular,
+    fontSize: 15,
+    color: colors.text,
+  },
+  field: {
+    marginBottom: 20,
+  },
+  errorText: {
+    marginTop: 12,
+    fontFamily: typography.family.medium,
+    fontSize: 13,
+    color: colors.red,
+  },
 });
 
 
