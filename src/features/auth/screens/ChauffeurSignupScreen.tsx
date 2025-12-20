@@ -9,6 +9,7 @@ import {
   TextInput,
   View,
   StatusBar,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -54,10 +55,11 @@ export function ChauffeurSignupScreen() {
           </Pressable>
 
           <View style={styles.logoRow}>
-            {/* Logo Placeholder (Consistent with Login) */}
-            <View style={styles.logoPlaceholder}>
-              <View style={styles.logoIcon} />
-            </View>
+            <Image 
+              source={require('../../../../assets/cort-app-icon.png')} 
+              style={styles.logoImage}
+              resizeMode="contain"
+            />
             <View>
               <Text style={styles.logoText}>CORT</Text>
               <Text style={styles.logoSubText}>Enterprise Mobility</Text>
@@ -245,24 +247,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 40,
   },
-  logoPlaceholder: {
-    width: 48,
-    height: 48,
-    borderRadius: 10,
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
-    borderStyle: 'dashed',
-  },
-  logoIcon: {
-    width: 24,
-    height: 24,
-    backgroundColor: colors.orange,
-    borderRadius: 4,
-    transform: [{ rotate: '45deg' }],
+  logoImage: {
+    width: 64,
+    height: 64,
+    marginRight: 8,
   },
   logoText: {
     fontFamily: typography.family.semibold,

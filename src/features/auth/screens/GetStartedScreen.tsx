@@ -5,7 +5,8 @@ import {
   Text, 
   View, 
   StatusBar,
-  Platform 
+  Platform,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors } from '../../../core/theme';
@@ -21,11 +22,11 @@ export function GetStartedScreen({ onGetStarted }: Props) {
       
       {/* Top Section: Branding */}
       <View style={styles.header}>
-        <View style={styles.logoContainer}>
-          {/* Abstract Logo Placeholder using Brand Colors */}
-          <View style={[styles.logoShape, styles.logoBack]} />
-          <View style={[styles.logoShape, styles.logoFront]} />
-        </View>
+        <Image 
+          source={require('../../../../assets/cort-app-icon.png')} 
+          style={styles.logoImage}
+          resizeMode="contain"
+        />
         
         <Text style={styles.title}>CORT</Text>
         <Text style={styles.subTitle}>Enterprise Mobility Platform</Text>
@@ -74,36 +75,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 20,
   },
-  // Logo Logic: Creating a visual mark using Navy and Purple
-  logoContainer: {
-    width: 80,
-    height: 80,
-    marginBottom: 24,
-    position: 'relative',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  logoShape: {
-    position: 'absolute',
-    borderRadius: 16,
-  },
-  logoBack: {
-    width: 60,
-    height: 60,
-    backgroundColor: colors.purple, // Secondary Brand Color
-    transform: [{ rotate: '-12deg' }],
-    opacity: 0.8,
-  },
-  logoFront: {
-    width: 60,
-    height: 60,
-    backgroundColor: colors.navy, // Corporate Anchor
-    transform: [{ rotate: '12deg' }],
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 5,
-    elevation: 6,
+  logoImage: {
+    width: 120,
+    height: 120,
+    marginBottom: 12,
+    alignSelf: 'center',
   },
   title: { 
     // fontFamily: 'Inter-Bold', // Ensure Inter is linked

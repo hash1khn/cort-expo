@@ -4,11 +4,11 @@
     "slug": "cort-expo",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    "icon": "./assets/cort-app-icon.svg",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "splash": {
-      "image": "./assets/splash-icon.png",
+      "image": "./assets/cort-app-icon.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
