@@ -21,7 +21,12 @@ const Stack = createNativeStackNavigator<AuthStackParamList>();
 type GetStartedProps = NativeStackScreenProps<AuthStackParamList, 'GetStarted'>;
 
 function GetStartedRoute({ navigation }: GetStartedProps) {
-  return <GetStartedScreen onGetStarted={() => navigation.navigate('Login')} />;
+  return (
+    <GetStartedScreen
+      onGetStarted={() => navigation.navigate('Login')}
+      onApplyAsChauffeur={() => navigation.navigate('ChauffeurSignup')}
+    />
+  );
 }
 
 export function AuthStack() {

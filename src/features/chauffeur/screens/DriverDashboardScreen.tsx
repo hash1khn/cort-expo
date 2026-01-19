@@ -10,10 +10,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import MapView from 'react-native-maps';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
+import { Ionicons } from '@expo/vector-icons';
+import { CortCard } from '../../../components';
 
 import { colors, radii, typography } from '../../../core/theme';
 import { useAuthStore } from '../../../core/stores/useAuthStore';
-import { IncomingRequestModal } from '../components/IncomingRequestModal';
 
 const PURPLE_GRADIENT = ['#5B21B6', '#6D28D9', '#7C3AED'] as const;
 
@@ -23,17 +24,16 @@ type Props = {
 
 export function DriverDashboardScreen({ driverName = 'Driver' }: Props) {
   const navigation = useNavigation<any>();
+  // Mock next assigned ride
+  const nextRide = {
+    pickupTime: '2:30 PM',
+    pickup: 'SFO Terminal 2',
+    passenger: 'Sarah Jenkins',
+  };
+
   const [isOnline, setIsOnline] = useState(false);
   const earningsToday = 245.75;
   const logout = useAuthStore((s) => s.logout);
-  const [incomingVisible, setIncomingVisible] = useState(false);
-
-  // Demo: when going online, simulate a job after a short delay
-  useEffect(() => {
-    if (!isOnline) return;
-    const t = setTimeout(() => setIncomingVisible(true), 1500);
-    return () => clearTimeout(t);
-  }, [isOnline]);
 
   // Bottom sheet slide-in
   const slide = useRef(new Animated.Value(0)).current;
@@ -104,14 +104,14 @@ export function DriverDashboardScreen({ driverName = 'Driver' }: Props) {
               </View>
             </View>
 
-            <Pressable
+            {/* <Pressable
               onPress={() => navigation.navigate('Settings')}
               style={styles.iconBtn}
               accessibilityRole="button"
               accessibilityLabel="Open Settings"
             >
               <Text style={styles.iconBtnText}>⋯</Text>
-            </Pressable>
+            </Pressable> */}
           </View>
 
           <View style={styles.actionRow}>
@@ -128,6 +128,24 @@ export function DriverDashboardScreen({ driverName = 'Driver' }: Props) {
           <Text style={styles.sheetTitle}>Today</Text>
           <Text style={styles.earningsValue}>${earningsToday.toFixed(2)}</Text>
           <Text style={styles.earningsHint}>Total earnings</Text>
+
+          {/* Up Next Card */}
+          <Pressable onPress={() => navigation.navigate('ActiveTrip')} style={styles.cardPressable}>
+            <CortCard style={styles.upNextCard}>
+              <View style={styles.upNextHeader}>
+                <Text style={styles.upNextLabel}>UP NEXT</Text>
+                <Text style={styles.upNextTime}>{nextRide.pickupTime}</Text>
+              </View>
+              <View style={styles.upNextRow}>
+                <Ionicons name="car-sport" size={20} color={colors.navy} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.upNextTitle}>{nextRide.pickup}</Text>
+                  <Text style={styles.upNextSub}>{nextRide.passenger}</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color={colors.muted} />
+              </View>
+            </CortCard>
+          </Pressable>
 
           {/* Big "Go Online" toggle */}
           <View style={{ height: 18 }} />
@@ -159,11 +177,7 @@ export function DriverDashboardScreen({ driverName = 'Driver' }: Props) {
         </Animated.View>
       </SafeAreaView>
 
-      <IncomingRequestModal
-        visible={incomingVisible}
-        onDecline={() => setIncomingVisible(false)}
-        onAccept={() => setIncomingVisible(false)}
-      />
+
     </View>
   );
 }
@@ -256,6 +270,46 @@ const styles = StyleSheet.create({
     fontFamily: typography.family.semibold,
     fontSize: 12,
     color: colors.white,
+  },
+  cardPressable: {
+    marginTop: 20,
+  },
+  upNextCard: {
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: 12,
+  },
+  upNextHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  upNextLabel: {
+    fontFamily: typography.family.semibold,
+    fontSize: 11,
+    color: '#64748B',
+    letterSpacing: 0.5,
+  },
+  upNextTime: {
+    fontFamily: typography.family.semibold,
+    fontSize: 12,
+    color: colors.navy,
+  },
+  upNextRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  upNextTitle: {
+    fontFamily: typography.family.semibold,
+    fontSize: 15,
+    color: colors.text,
+  },
+  upNextSub: {
+    fontFamily: typography.family.regular,
+    fontSize: 13,
+    color: colors.muted,
   },
   sheet: {
     position: 'absolute',

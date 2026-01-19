@@ -10,8 +10,9 @@ import {
   StatusBar,
   Image,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
+import { Ionicons } from '@expo/vector-icons';
 
 // Assuming these are your core components
 import { CortButton, CortCard } from '../../../components';
@@ -19,16 +20,18 @@ import { colors, radii, typography } from '../../../core/theme';
 import { useAuthStore } from '../../../core/stores/useAuthStore';
 
 export function LoginScreen() {
+  const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
-  
+
   // Focused state for inputs to add polish
   const [focusedField, setFocusedField] = useState<'email' | 'password' | null>(null);
 
   const login = useAuthStore((s) => s.login);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isBiometricLoading, setIsBiometricLoading] = useState(false);
 
   const canLogin = useMemo(() => email.trim().length > 0 && password.length > 0, [email, password]);
 
@@ -49,26 +52,44 @@ export function LoginScreen() {
     }
   };
 
+  const handleBiometricLogin = async () => {
+    try {
+      setIsBiometricLoading(true);
+      setError(null);
+
+      // Simulate face/fingerprint scan delay
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
+      // Use mock employee credentials from mockData.ts
+      await login('employee@cort.com', '123456');
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Biometric authentication failed';
+      setError(msg);
+    } finally {
+      setIsBiometricLoading(false);
+    }
+  };
+
   return (
-    <SafeAreaView style={styles.root}>
+    <SafeAreaView style={styles.root} edges={['left', 'right', 'bottom']}>
       <StatusBar barStyle="light-content" backgroundColor={colors.navy} />
-      
+
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.select({ ios: 'padding', android: undefined })}
       >
         {/* Header Section - Deep Navy */}
-        <View style={styles.header}>
+        <View style={[styles.header, { paddingTop: insets.top }]}>
           <View style={styles.logoRow}>
-            <Image 
-              source={require('../../../../assets/cort-app-icon.png')} 
+            <Image
+              source={require('../../../../assets/Asset-1@2x (1).png')}
               style={styles.logoImage}
               resizeMode="contain"
             />
-            <View>
+            {/* <View>
               <Text style={styles.logoText}>CORT</Text>
               <Text style={styles.logoSubText}>At Your Service</Text>
-            </View>
+            </View> */}
           </View>
         </View>
 
@@ -148,15 +169,38 @@ export function LoginScreen() {
             </View>
           </CortCard>
 
+
           {/* Public Signup Link for Chauffeurs */}
           <View style={styles.footer}>
-            <Text style={styles.footerText}>Want to drive with us?</Text>
+
+            {/* Biometric Option */}
+            <Pressable
+              onPress={handleBiometricLogin}
+              disabled={isBiometricLoading || isSubmitting}
+              style={({ pressed }) => [
+                styles.biometricBtn,
+                pressed && styles.biometricBtnPressed
+              ]}
+            >
+              <Ionicons
+                name="finger-print-outline"
+                size={32}
+                color={colors.navy}
+              />
+              <Text style={styles.biometricText}>
+                {isBiometricLoading ? 'Verifying...' : 'Unlock with Face ID'}
+              </Text>
+            </Pressable>
+
+            {/* <View style={styles.divider} /> */}
+
+            {/* <Text style={styles.footerText}>Want to drive with us?</Text>
             <Pressable
               onPress={() => navigation.navigate('ChauffeurSignup')}
               style={({ pressed }) => [styles.linkBtn, pressed && styles.linkBtnPressed]}
             >
               <Text style={styles.linkText}>Apply as Chauffeur</Text>
-            </Pressable>
+            </Pressable> */}
           </View>
         </View>
       </KeyboardAvoidingView>
@@ -175,7 +219,7 @@ const styles = StyleSheet.create({
     borderBottomLeftRadius: 32,
     borderBottomRightRadius: 32,
     paddingHorizontal: 24,
-    paddingTop: Platform.OS === 'android' ? 40 : 0,
+    // paddingTop: Platform.OS === 'android' ? 40 : 0, // Handled by insets now
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -185,8 +229,8 @@ const styles = StyleSheet.create({
     marginBottom: 40, // Push logo up so it clears the card
   },
   logoImage: {
-    width: 64,
-    height: 64,
+    width: 200,
+    height: 200,
     marginRight: 8,
   },
   logoText: {
@@ -299,9 +343,31 @@ const styles = StyleSheet.create({
     borderWidth: 0,
   },
   footer: {
-    marginTop: 32,
+    marginTop: 24,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  biometricBtn: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 24,
+    padding: 8,
+  },
+  biometricBtnPressed: {
+    opacity: 0.6,
+  },
+  biometricText: {
+    fontFamily: typography.family.regular,
+    fontWeight: '500',
+    fontSize: 14,
+    color: colors.navy,
+    marginTop: 8,
+  },
+  divider: {
+    width: '40%',
+    height: 1,
+    backgroundColor: 'rgba(0,0,0,0.1)',
+    marginBottom: 24,
   },
   footerText: {
     fontFamily: typography.family.regular,

@@ -9,6 +9,7 @@ export function EmployeeHomeScreen() {
     <EmployeeDashboardScreen
       onScanPress={() => navigation.navigate('EmployeeQrScanner')}
       onPreviewSuccessPress={() => navigation.navigate('BoardingSuccess')}
+      onChauffeurPress={() => navigation.navigate('EmployeeChauffeurDetails')}
     />
   );
 }

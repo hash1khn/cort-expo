@@ -56,14 +56,14 @@ export function ChauffeurSignupScreen() {
 
           <View style={styles.logoRow}>
             <Image 
-              source={require('../../../../assets/cort-app-icon.png')} 
+              source={require('../../../../assets/Asset-1@2x (1).png')} 
               style={styles.logoImage}
               resizeMode="contain"
             />
-            <View>
+            {/* <View>
               <Text style={styles.logoText}>CORT</Text>
               <Text style={styles.logoSubText}>At Your Service</Text>
-            </View>
+            </View> */}
           </View>
         </View>
 
@@ -248,8 +248,8 @@ const styles = StyleSheet.create({
     marginBottom: 40,
   },
   logoImage: {
-    width: 64,
-    height: 64,
+    width: 200,
+    height: 200,
     marginRight: 8,
   },
   logoText: {

@@ -51,18 +51,18 @@ export type ShuttleRoute = {
 export const VALID_SHUTTLE_QR = 'cort-shuttle-01' as const;
 
 export const shuttleCoordinates = {
-  latitude: 37.78825,
-  longitude: -122.4324,
+  latitude: 24.8607,
+  longitude: 67.0011,
 } as const;
 
 export const mockShuttlePolyline = [
-  { latitude: 37.78825, longitude: -122.4324 },
-  { latitude: 37.78915, longitude: -122.4309 },
-  { latitude: 37.7902, longitude: -122.4299 },
-  { latitude: 37.7913, longitude: -122.431 },
-  { latitude: 37.79035, longitude: -122.4332 },
-  { latitude: 37.7891, longitude: -122.4342 },
-  { latitude: 37.78825, longitude: -122.4324 },
+  { latitude: 24.8607, longitude: 67.0011 },
+  { latitude: 24.8615, longitude: 67.0020 },
+  { latitude: 24.8625, longitude: 67.0025 },
+  { latitude: 24.8635, longitude: 67.0020 },
+  { latitude: 24.8625, longitude: 67.0005 },
+  { latitude: 24.8615, longitude: 66.9995 },
+  { latitude: 24.8607, longitude: 67.0011 },
 ] as const;
 
 // 1) Users
@@ -80,7 +80,7 @@ export const mockUsers = [
     id: 'u_driver_1',
     email: 'driver@cort.com',
     password: '123456',
-    name: 'James D.',
+    name: 'Ali Hassan',
     role: 'CHAUFFEUR',
     avatar: undefined,
     rating: 4.9,
@@ -100,17 +100,17 @@ export const activeRide = {
   id: 'ride_active_1',
   status: 'EN_ROUTE',
   etaMinutes: 3,
-  origin: { label: 'CORT HQ - Main Entrance' },
-  destination: { label: 'Downtown Office Plaza' },
+  origin: { label: 'Dolmen Mall Clifton' },
+  destination: { label: 'I.I. Chundrigar Road' },
   driver: {
     id: 'u_driver_1',
-    name: 'James D.',
+    name: 'Ali Hassan',
     rating: 4.9,
   },
   car: {
-    model: 'Lexus ES',
-    color: 'Black',
-    plate: 'ABC-123',
+    model: 'Toyota Corolla',
+    color: 'White',
+    plate: 'KHI-2023',
   },
 } as const satisfies ActiveRide;
 

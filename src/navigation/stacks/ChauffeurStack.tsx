@@ -2,26 +2,21 @@ import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
 import { DriverDashboardScreen } from '../../features/chauffeur/screens/DriverDashboardScreen';
-import { SettingsScreen } from '../../features/shared/screens/SettingsScreen';
+import { TripRequestsScreen } from '../../features/chauffeur/screens/TripRequestsScreen';
+import { EarningsScreen } from '../../features/chauffeur/screens/EarningsScreen';
+import { ProfileScreen } from '../../features/chauffeur/screens/ProfileScreen';
+import { ActiveTripScreen } from '../../features/chauffeur/screens/ActiveTripScreen';
 
-export type ChauffeurStackParamList = {
-  DriverDashboard: undefined;
-  Settings: undefined;
-};
-
-const Stack = createNativeStackNavigator<ChauffeurStackParamList>();
+const Stack = createNativeStackNavigator();
 
 export function ChauffeurStack() {
   return (
-    <Stack.Navigator>
-      <Stack.Screen
-        name="DriverDashboard"
-        component={DriverDashboardScreen}
-        options={{ title: 'Dashboard', headerShown: false }}
-      />
-      <Stack.Screen name="Settings" component={SettingsScreen} options={{ title: 'Settings' }} />
+    <Stack.Navigator screenOptions={{ headerShown: false, animation: 'slide_from_right' }}>
+      <Stack.Screen name="Dashboard" component={DriverDashboardScreen} />
+      <Stack.Screen name="AssignedRides" component={TripRequestsScreen} />
+      <Stack.Screen name="ActiveTrip" component={ActiveTripScreen} />
+      <Stack.Screen name="Earnings" component={EarningsScreen} />
+      <Stack.Screen name="Profile" component={ProfileScreen} />
     </Stack.Navigator>
   );
 }
-
-

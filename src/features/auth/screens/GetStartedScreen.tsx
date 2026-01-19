@@ -1,142 +1,145 @@
 import React from 'react';
-import { 
-  Pressable, 
-  StyleSheet, 
-  Text, 
-  View, 
+import {
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
   StatusBar,
   Platform,
   Image,
+  Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, typography } from '../../../core/theme';
 
+const { width, height } = Dimensions.get('window');
+
 type Props = {
   onGetStarted?: () => void;
+  onApplyAsChauffeur?: () => void;
 };
 
-export function GetStartedScreen({ onGetStarted }: Props) {
+export function GetStartedScreen({ onGetStarted, onApplyAsChauffeur }: Props) {
   return (
-    <SafeAreaView style={styles.root} edges={['top']}>
-      <StatusBar barStyle="dark-content" backgroundColor={colors.bgGrey} />
-      
-      {/* Top Section: Branding */}
-      <View style={styles.header}>
-        <Image 
-          source={require('../../../../assets/cort-app-icon.png')} 
-          style={styles.logoImage}
-          resizeMode="contain"
-        />
-        
-        <Text style={styles.title}>CORT</Text>
-        <Text style={styles.subTitle}>At Your Service</Text>
-      </View>
+    <View style={styles.root}>
+      <StatusBar barStyle="dark-content" backgroundColor={colors.white} />
+      <SafeAreaView style={styles.safeArea}>
 
-      {/* Bottom Section: Action */}
-      <View style={styles.bottomContainer}>
-        <View style={styles.textBlock}>
-          <Text style={styles.heading}>
-            Managed Corporate Transport
-          </Text>
-          <Text style={styles.body}>
-            Secure shuttles and premium chauffeur services for your workforce. 
-            Reliable, tracked, and reimagined.
-          </Text>
+
+        {/* Header: Logo */}
+        <View style={styles.header}>
+          <Image
+            source={require('../../../../assets/cort-without-at-your.png')}
+            style={styles.logoImage}
+            resizeMode="contain"
+          />
         </View>
 
-        {/* Primary CTA - Cort Orange */}
-        <Pressable 
-          onPress={onGetStarted} 
-          style={({ pressed }) => [
-            styles.cta, 
-            pressed && styles.ctaPressed,
-            styles.shadow
-          ]}
-        >
-          <Text style={styles.ctaText}>Get Started</Text>
-        </Pressable>
+        {/* Content: Hero Image */}
+        <View style={styles.heroContainer}>
+          <Image
+            source={require('../../../../assets/imagee.png')}
+            style={styles.heroImage}
+            resizeMode="contain"
+          />
+        </View>
 
-        <Text style={styles.foot}>
-          By continuing, you agree to CORT policies.
-        </Text>
-      </View>
-    </SafeAreaView>
+        {/* Footer: Text & CTA */}
+        <View style={styles.footer}>
+          <View style={styles.textBlock}>
+            <Text style={styles.heading}>
+              Your Commute, Simplified
+            </Text>
+            <Text style={styles.body}>
+              Safe • On-Time • Tracked
+            </Text>
+          </View>
+
+          <Pressable
+            onPress={onGetStarted}
+            style={({ pressed }) => [
+              styles.cta,
+              pressed && styles.ctaPressed,
+              styles.shadow
+            ]}
+          >
+            <Text style={styles.ctaText}>Get Started</Text>
+          </Pressable>
+
+          <Pressable
+            onPress={onApplyAsChauffeur}
+            style={({ pressed }) => [
+              styles.linkContainer,
+              pressed && styles.linkPressed
+            ]}
+          >
+            <Text style={styles.linkText}>Apply as a chauffeur</Text>
+          </Pressable>
+        </View>
+      </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { 
-    flex: 1, 
-    backgroundColor: colors.bgGrey,
+  root: {
+    flex: 1,
+    backgroundColor: colors.white,
   },
-  header: { 
-    flex: 3, // Takes up top 60% of screen
-    justifyContent: 'center', 
+  safeArea: {
+    flex: 1,
+  },
+  header: {
+    height: 60,
+    justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 20,
+    marginTop: 10,
   },
   logoImage: {
-    width: 120,
-    height: 120,
-    marginBottom: 12,
-    alignSelf: 'center',
+    width: 125, // Smaller logo at the top
+    height: 40,
   },
-  title: { 
-    fontFamily: typography.family.regular,
-    fontWeight: '400',
-    fontSize: 42, 
-    color: colors.navy, 
-    letterSpacing: 4,
-    textAlign: 'center',
+  heroContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    marginTop: -20, // Pull up slightly visually
   },
-  subTitle: {
-    marginTop: 8,
-    fontFamily: typography.family.regular,
-    fontWeight: '400',
-    fontSize: 14,
-    color: colors.muted,
-    textTransform: 'uppercase',
-    letterSpacing: 1.5,
+  heroImage: {
+    width: width * 0.9,
+    height: width * 0.9, // Keep it somewhat square-ish for the illustration
+    maxHeight: height * 0.45,
   },
-  bottomContainer: { 
-    flex: 2, // Takes up bottom 40%
-    backgroundColor: colors.white,
-    borderTopLeftRadius: 32,
-    borderTopRightRadius: 32,
-    paddingHorizontal: 32,
-    paddingTop: 40,
+  footer: {
+    paddingHorizontal: 24,
     paddingBottom: Platform.OS === 'ios' ? 20 : 32,
-    // Shadow for the bottom sheet effect
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: -3 },
-    shadowOpacity: 0.05,
-    shadowRadius: 10,
-    elevation: 10,
+    paddingTop: 20,
   },
   textBlock: {
-    marginBottom: 32,
+    marginBottom: 40,
     alignItems: 'center',
   },
   heading: {
-    fontFamily: typography.family.regular,
-    fontWeight: '700',
-    fontSize: 22,
+    fontFamily: typography.family.semibold,
+    fontSize: 28,
     color: colors.navy,
     marginBottom: 12,
     textAlign: 'center',
+    letterSpacing: -0.5,
   },
   body: {
     fontFamily: typography.family.regular,
-    fontWeight: '400',
-    fontSize: 15,
+    fontSize: 16,
     color: colors.text,
-    lineHeight: 22,
+    lineHeight: 24,
     textAlign: 'center',
+    paddingHorizontal: 10,
   },
   cta: {
     height: 56,
-    borderRadius: 12,
-    backgroundColor: colors.orange, // Primary Action Color
+    borderRadius: 28, // Pill shape
+    backgroundColor: colors.orange,
     alignItems: 'center',
     justifyContent: 'center',
     width: '100%',
@@ -144,26 +147,31 @@ const styles = StyleSheet.create({
   shadow: {
     shadowColor: colors.orange,
     shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
+    shadowOpacity: 0.35,
+    shadowRadius: 16,
     elevation: 8,
   },
-  ctaPressed: { 
-    opacity: 0.85, 
-    transform: [{ scale: 0.98 }] 
+  ctaPressed: {
+    opacity: 0.9,
+    transform: [{ scale: 0.98 }]
   },
-  ctaText: { 
-    fontFamily: typography.family.regular,
-    fontSize: 17, 
-    fontWeight: '700', 
+  ctaText: {
+    fontFamily: typography.family.semibold,
+    fontSize: 18,
     color: colors.white,
-    letterSpacing: 0.5,
   },
-  foot: {
-    fontFamily: typography.family.regular,
+  linkContainer: {
     marginTop: 20,
-    textAlign: 'center',
-    fontSize: 12,
-    color: colors.muted,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  linkPressed: {
+    opacity: 0.6,
+  },
+  linkText: {
+    fontFamily: typography.family.regular,
+    fontWeight: '700',
+    fontSize: 15,
+    color: colors.navy// Use Navy for secondary link to distinguish from CTA
   },
 });

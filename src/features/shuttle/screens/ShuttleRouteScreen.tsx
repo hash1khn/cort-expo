@@ -267,8 +267,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.white,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
-    shadowColor: colors.shadowNavy,
     ...shadows.card,
+    shadowColor: colors.shadowNavy,
   },
   headerTopRow: {
     flexDirection: 'row',

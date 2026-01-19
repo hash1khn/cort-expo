@@ -11,9 +11,14 @@ import { activeRide, mockShuttlePolyline, shuttleCoordinates } from '../../../da
 type Props = {
   onScanPress?: () => void;
   onPreviewSuccessPress?: () => void;
+  onChauffeurPress?: () => void;
 };
 
-export function EmployeeDashboardScreen({ onScanPress, onPreviewSuccessPress }: Props) {
+export function EmployeeDashboardScreen({
+  onScanPress,
+  onPreviewSuccessPress,
+  onChauffeurPress,
+}: Props) {
   const user = useAuthStore((s) => s.user);
   const hasPrivateRide = Boolean(user?.hasPrivateRide);
 
@@ -93,7 +98,10 @@ export function EmployeeDashboardScreen({ onScanPress, onPreviewSuccessPress }: 
 
         {activeChauffeurRide ? (
           <View pointerEvents="box-none" style={styles.sheetWrap}>
-            <View style={styles.sheet}>
+            <Pressable
+              onPress={onChauffeurPress}
+              style={({ pressed }) => [styles.sheet, pressed && { opacity: 0.96 }]}
+            >
               <View style={styles.sheetStrip} />
               <View style={styles.sheetBody}>
                 <View style={styles.driverAvatar}>
@@ -109,7 +117,7 @@ export function EmployeeDashboardScreen({ onScanPress, onPreviewSuccessPress }: 
                   <Text style={styles.sheetStatus}>Your Chauffeur is waiting</Text>
                 </View>
               </View>
-            </View>
+            </Pressable>
           </View>
         ) : null}
 

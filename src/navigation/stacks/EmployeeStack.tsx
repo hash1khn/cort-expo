@@ -5,12 +5,14 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { EmployeeHomeScreen } from '../../features/employee/screens/EmployeeHomeScreen';
 import { EmployeeQrScannerScreen } from '../../features/employee/screens/EmployeeQrScannerScreen';
 import { BoardingSuccessScreen } from '../../features/employee/screens/BoardingSuccessScreen';
+import { EmployeeChauffeurDetailsScreen } from '../../features/employee/screens/EmployeeChauffeurDetailsScreen';
 import { useAuthStore } from '../../core/stores/useAuthStore';
 
 export type EmployeeStackParamList = {
   EmployeeHome: undefined;
   EmployeeQrScanner: undefined;
   BoardingSuccess: undefined;
+  EmployeeChauffeurDetails: undefined;
 };
 
 const Stack = createNativeStackNavigator<EmployeeStackParamList>();
@@ -45,6 +47,11 @@ export function EmployeeStack() {
         name="BoardingSuccess"
         component={BoardingSuccessRoute}
         options={{ presentation: 'modal' }}
+      />
+      <Stack.Screen
+        name="EmployeeChauffeurDetails"
+        component={EmployeeChauffeurDetailsScreen}
+        options={{ headerShown: false }}
       />
     </Stack.Navigator>
   );
