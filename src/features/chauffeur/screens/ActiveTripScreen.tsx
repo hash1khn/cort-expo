@@ -68,7 +68,7 @@ export function ActiveTripScreen() {
                     title="Arrived at Pickup"
                     variant="primary"
                     onPress={() => alert('Arrived!')}
-                    style={styles.mainBtn}
+                    
                 />
             </View>
         </View>
@@ -91,7 +91,7 @@ const styles = StyleSheet.create({
     },
     grabber: { width: 40, height: 4, backgroundColor: '#E2E8F0', borderRadius: 2, alignSelf: 'center', marginBottom: 20 },
     header: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 16, alignItems: 'center' },
-    status: { fontFamily: typography.family.bold, fontSize: 11, color: '#0EA5E9', letterSpacing: 0.5 },
+    status: { fontFamily: typography.family.semibold, fontSize: 11, color: '#0EA5E9', letterSpacing: 0.5 },
     time: { fontFamily: typography.family.semibold, fontSize: 16, color: colors.text },
     card: { padding: 16, marginBottom: 20, borderWidth: 1, borderColor: colors.border },
     passengerRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },

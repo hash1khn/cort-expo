@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-import { activeRide, mockUsers, shuttleRoute } from '../data/mockData';
+import { activeRide, mockUsers, shuttleRoute } from './mockData';
 import type { UserRole } from '../core/types/navigation';
 
 function delay(ms: number) {
@@ -144,5 +144,4 @@ export const mockApi = {
     return shuttleRoute;
   },
 } as const;
-
 

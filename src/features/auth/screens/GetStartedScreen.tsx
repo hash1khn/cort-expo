@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, typography } from '../../../core/theme';
+import { CortButton } from '@/components';
 
 const { width, height } = Dimensions.get('window');
 
@@ -36,7 +37,7 @@ export function GetStartedScreen({ onGetStarted, onApplyAsChauffeur }: Props) {
         </View>
 
         {/* Content: Hero Image */}
-        <View style={styles.heroContainer}>
+        <View style={styles.heroContainer} className="">
           <Image
             source={require('../../../../assets/imagee.png')}
             style={styles.heroImage}
@@ -45,7 +46,7 @@ export function GetStartedScreen({ onGetStarted, onApplyAsChauffeur }: Props) {
         </View>
 
         {/* Footer: Text & CTA */}
-        <View style={styles.footer}>
+        <View style={styles.footer} className="">
           <View style={styles.textBlock}>
             <Text style={styles.heading}>
               Your Commute, Simplified
@@ -55,16 +56,12 @@ export function GetStartedScreen({ onGetStarted, onApplyAsChauffeur }: Props) {
             </Text>
           </View>
 
-          <Pressable
+          <CortButton
+            title="Get Started"
             onPress={onGetStarted}
-            style={({ pressed }) => [
-              styles.cta,
-              pressed && styles.ctaPressed,
-              styles.shadow
-            ]}
-          >
-            <Text style={styles.ctaText}>Get Started</Text>
-          </Pressable>
+            variant="primary"
+            disabled={false}
+          />
 
           <Pressable
             onPress={onApplyAsChauffeur}
@@ -73,7 +70,7 @@ export function GetStartedScreen({ onGetStarted, onApplyAsChauffeur }: Props) {
               pressed && styles.linkPressed
             ]}
           >
-            <Text style={styles.linkText}>Apply as a chauffeur</Text>
+            <Text style={styles.linkText} className="text-center mt-8 mb-4">Apply as a chauffeur</Text>
           </Pressable>
         </View>
       </SafeAreaView>
@@ -100,12 +97,12 @@ const styles = StyleSheet.create({
     height: 40,
   },
   heroContainer: {
-    flex: 1,
+    flexGrow: 1,
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 20,
-    marginTop: -20, // Pull up slightly visually
   },
+
   heroImage: {
     width: width * 0.9,
     height: width * 0.9, // Keep it somewhat square-ish for the illustration
@@ -164,6 +161,7 @@ const styles = StyleSheet.create({
     marginTop: 20,
     paddingVertical: 12,
     alignItems: 'center',
+    width: '100%',
   },
   linkPressed: {
     opacity: 0.6,
@@ -172,6 +170,7 @@ const styles = StyleSheet.create({
     fontFamily: typography.family.regular,
     fontWeight: '700',
     fontSize: 15,
+    alignItems: 'center',
     color: colors.navy// Use Navy for secondary link to distinguish from CTA
   },
 });

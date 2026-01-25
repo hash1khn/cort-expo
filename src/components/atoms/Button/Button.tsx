@@ -1,16 +1,7 @@
-import React from 'react';
-import {
-  ActivityIndicator,
-  Pressable,
-  StyleProp,
-  StyleSheet,
-  Text,
-  ViewStyle,
-} from 'react-native';
+import React from "react";
+import { ActivityIndicator, Pressable, Text } from "react-native";
 
-import { colors, radii, typography } from '../../../core/theme';
-
-type Variant = 'primary' | 'navy' | 'outline';
+type Variant = "primary" | "navy" | "outline";
 
 type Props = {
   title: string;
@@ -18,17 +9,27 @@ type Props = {
   disabled?: boolean;
   loading?: boolean;
   onPress?: () => void;
-  style?: StyleProp<ViewStyle>;
   testID?: string;
+};
+
+const VARIANT_CONTAINER: Record<Variant, string> = {
+  primary: "bg-orange-500",
+  navy: "bg-[#0B1C2D]",
+  outline: "bg-transparent border-2 border-red-500",
+};
+
+const VARIANT_TEXT: Record<Variant, string> = {
+  primary: "text-white",
+  navy: "text-white",
+  outline: "text-red-500",
 };
 
 export function CortButton({
   title,
-  variant = 'primary',
+  variant = "primary",
   disabled = false,
   loading = false,
   onPress,
-  style,
   testID,
 }: Props) {
   const isDisabled = disabled || loading;
@@ -40,65 +41,26 @@ export function CortButton({
       accessibilityState={{ disabled: isDisabled, busy: loading }}
       disabled={isDisabled}
       onPress={onPress}
-      style={({ pressed }) => [
-        styles.base,
-        variantStyles.container[variant],
-        isDisabled && styles.disabled,
-        pressed && !isDisabled && styles.pressed,
-        style,
-      ]}
+      className={[
+        "w-full h-[55px] rounded-[14px] px-4 items-center justify-center",
+        VARIANT_CONTAINER[variant],
+        isDisabled && "opacity-50",
+      ].filter(Boolean).join(" ")}
     >
       {loading ? (
-        <ActivityIndicator color={variantStyles.activity[variant]} />
+        <ActivityIndicator
+          color={variant === "outline" ? "#ef4444" : "#ffffff"}
+        />
       ) : (
-        <Text style={[styles.textBase, variantStyles.text[variant]]}>{title}</Text>
+        <Text
+          className={[
+            "text-[15px] font-semibold tracking-wide",
+            VARIANT_TEXT[variant],
+          ].join(" ")}
+        >
+          {title}
+        </Text>
       )}
     </Pressable>
   );
 }
-
-const styles = StyleSheet.create({
-  base: {
-    height: 50,
-    borderRadius: radii.sm,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 16,
-  },
-  textBase: {
-    fontFamily: typography.family.semibold,
-    fontSize: 15,
-    letterSpacing: 0.2,
-  },
-  pressed: {
-    opacity: 0.92,
-    transform: [{ scale: 0.99 }],
-  },
-  disabled: {
-    opacity: 0.55,
-  },
-});
-
-const variantStyles = {
-  container: StyleSheet.create({
-    primary: { backgroundColor: colors.orange },
-    navy: { backgroundColor: colors.navy },
-    outline: {
-      backgroundColor: 'transparent',
-      borderWidth: 1.5,
-      borderColor: colors.red,
-    },
-  }) as Record<Variant, ViewStyle>,
-  text: StyleSheet.create({
-    primary: { color: colors.white },
-    navy: { color: colors.white },
-    outline: { color: colors.red },
-  }),
-  activity: {
-    primary: colors.white,
-    navy: colors.white,
-    outline: colors.red,
-  } as Record<Variant, string>,
-} as const;
-
-

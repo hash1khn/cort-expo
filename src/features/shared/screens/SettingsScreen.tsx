@@ -3,7 +3,9 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { CortCard } from '../../../components';
-import { useAuthStore } from '../../../core/stores/useAuthStore';
+import { useAppDispatch, useAppSelector } from '../../../store/hooks';
+import { logOut } from '../../auth/store';
+import { logout } from '../../auth/services';
 import { colors, radii, typography } from '../../../core/theme';
 
 function roleLabel(role: string | null) {
@@ -14,22 +16,26 @@ function roleLabel(role: string | null) {
 }
 
 export function SettingsScreen() {
-  const user = useAuthStore((s) => s.user);
-  const role = useAuthStore((s) => s.role);
-  const logout = useAuthStore((s) => s.logout);
+  // TODO: User/role data needs to be handled separately (e.g., from API or separate store)
+  // The simplified auth state only tracks login status, not user details
+  const dispatch = useAppDispatch();
+  const handleLogout = async () => {
+    await logout();
+    dispatch(logOut());
+  };
 
   return (
     <SafeAreaView style={styles.root}>
       <View style={styles.header}>
         <View style={styles.avatar}>
-          <Text style={styles.avatarText}>{(user?.name ?? 'U').slice(0, 1).toUpperCase()}</Text>
+          <Text style={styles.avatarText}>U</Text>
         </View>
         <View style={{ flex: 1, minWidth: 0 }}>
           <Text style={styles.name} numberOfLines={1}>
-            {user?.name ?? 'User'}
+            User
           </Text>
           <View style={styles.roleBadge}>
-            <Text style={styles.roleText}>{roleLabel(role)}</Text>
+            <Text style={styles.roleText}>Guest</Text>
           </View>
         </View>
       </View>
@@ -51,7 +57,7 @@ export function SettingsScreen() {
         </CortCard>
       </View>
 
-      <Pressable onPress={logout} accessibilityRole="button" style={styles.logoutBtn}>
+      <Pressable onPress={handleLogout} accessibilityRole="button" style={styles.logoutBtn}>
         <Text style={styles.logoutText}>Log Out</Text>
       </Pressable>
     </SafeAreaView>

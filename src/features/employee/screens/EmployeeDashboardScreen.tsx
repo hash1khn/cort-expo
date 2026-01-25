@@ -5,8 +5,8 @@ import MapView, { Marker, Polyline } from 'react-native-maps';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 
 import { colors, radii, shadows, typography } from '../../../core/theme';
-import { useAuthStore } from '../../../core/stores/useAuthStore';
-import { activeRide, mockShuttlePolyline, shuttleCoordinates } from '../../../data/mockData';
+import { useAppSelector } from '../../../store/hooks';
+import { activeRide, mockShuttlePolyline, shuttleCoordinates } from '../../../services/mockData';
 
 type Props = {
   onScanPress?: () => void;
@@ -19,8 +19,9 @@ export function EmployeeDashboardScreen({
   onPreviewSuccessPress,
   onChauffeurPress,
 }: Props) {
-  const user = useAuthStore((s) => s.user);
-  const hasPrivateRide = Boolean(user?.hasPrivateRide);
+  // TODO: User data needs to be handled separately (e.g., from API or separate store)
+  // The simplified auth state only tracks login status, not user details
+  const hasPrivateRide = false; // Placeholder - user data needs to be handled separately
 
   // Demo: Chauffeur context if user.hasPrivateRide is true
   const activeChauffeurRide = hasPrivateRide ? activeRide : null;
@@ -90,7 +91,7 @@ export function EmployeeDashboardScreen({
       <SafeAreaView pointerEvents="box-none" style={styles.safe}>
         <View style={styles.topCard}>
           <Text style={styles.topLabel}>MY SHUTTLE ROUTE</Text>
-          <Text style={styles.routeName} numberOfLines={1}>
+          <Text className="text-2xl" numberOfLines={1}>
             Clifton ⇄ Tower Loop
           </Text>
           <Text style={styles.status}>Arriving in 5 min</Text>

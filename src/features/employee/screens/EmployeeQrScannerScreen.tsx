@@ -5,7 +5,7 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import { Ionicons } from '@expo/vector-icons';
 
 import { colors, radii, shadows, typography } from '../../../core/theme';
-import { VALID_SHUTTLE_QR } from '../../../data/mockData';
+import { VALID_SHUTTLE_QR } from '../../../services/mockData';
 
 type Props = {
   onClose?: () => void;
@@ -97,7 +97,7 @@ export function EmployeeQrScannerScreen({ onClose, onSuccess }: Props) {
 
         <Text style={styles.bottomText}>Align the code within the frame to validate your ride.</Text>
 
-        <Pressable accessibilityRole="button" style={styles.flashBtn} onPress={() => {}}>
+        <Pressable accessibilityRole="button" style={styles.flashBtn} onPress={() => { }}>
           <Ionicons name="flash" size={20} color={colors.white} />
         </Pressable>
 

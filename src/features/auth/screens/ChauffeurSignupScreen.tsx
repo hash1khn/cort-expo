@@ -39,7 +39,7 @@ export function ChauffeurSignupScreen() {
   return (
     <SafeAreaView style={styles.root}>
       <StatusBar barStyle="light-content" backgroundColor={colors.navy} />
-      
+
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.select({ ios: 'padding', android: undefined })}
@@ -55,8 +55,8 @@ export function ChauffeurSignupScreen() {
           </Pressable>
 
           <View style={styles.logoRow}>
-            <Image 
-              source={require('../../../../assets/Asset-1@2x (1).png')} 
+            <Image
+              source={require('../../../../assets/Asset-1@2x (1).png')}
               style={styles.logoImage}
               resizeMode="contain"
             />
@@ -80,118 +80,118 @@ export function ChauffeurSignupScreen() {
                 <Text style={styles.subtitle}>Submit your details for admin approval</Text>
               </View>
 
-            <Field label="Full Name">
-              <TextInput
-                value={name}
-                onChangeText={(t) => {
-                  setName(t);
-                  if (error) setError(null);
+              <Field label="Full Name">
+                <TextInput
+                  value={name}
+                  onChangeText={(t) => {
+                    setName(t);
+                    if (error) setError(null);
+                  }}
+                  placeholder="Ali Khan"
+                  placeholderTextColor={colors.muted}
+                  style={styles.input}
+                />
+              </Field>
+
+              <Field label="Email">
+                <TextInput
+                  value={email}
+                  onChangeText={(t) => {
+                    setEmail(t);
+                    if (error) setError(null);
+                  }}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  keyboardType="email-address"
+                  placeholder="driver@company.com"
+                  placeholderTextColor={colors.muted}
+                  style={styles.input}
+                />
+              </Field>
+
+              <Field label="Phone (optional)">
+                <TextInput
+                  value={phone}
+                  onChangeText={(t) => {
+                    setPhone(t);
+                    if (error) setError(null);
+                  }}
+                  keyboardType="phone-pad"
+                  placeholder="+92 300 1234567"
+                  placeholderTextColor={colors.muted}
+                  style={styles.input}
+                />
+              </Field>
+
+              <Field label="CNIC (optional)">
+                <TextInput
+                  value={cnic}
+                  onChangeText={(t) => {
+                    setCnic(t);
+                    if (error) setError(null);
+                  }}
+                  keyboardType="number-pad"
+                  placeholder="35202-1234567-1"
+                  placeholderTextColor={colors.muted}
+                  style={styles.input}
+                />
+              </Field>
+
+              <Field label="License Number (optional)">
+                <TextInput
+                  value={licenseNumber}
+                  onChangeText={(t) => {
+                    setLicenseNumber(t);
+                    if (error) setError(null);
+                  }}
+                  placeholder="DL-123456"
+                  placeholderTextColor={colors.muted}
+                  style={styles.input}
+                />
+              </Field>
+
+              <Field label="Password">
+                <TextInput
+                  value={password}
+                  onChangeText={(t) => {
+                    setPassword(t);
+                    if (error) setError(null);
+                  }}
+                  secureTextEntry
+                  placeholder="••••••••"
+                  placeholderTextColor={colors.muted}
+                  style={styles.input}
+                />
+              </Field>
+
+              {error ? <Text style={styles.errorText}>{error}</Text> : null}
+
+              <CortButton
+                title="Submit Application"
+                variant="primary"
+                disabled={!canSubmit || submitting}
+                loading={submitting}
+               
+                onPress={async () => {
+                  try {
+                    setSubmitting(true);
+                    setError(null);
+                    await mockApi.submitChauffeurApplication({
+                      name,
+                      email,
+                      password,
+                      phone,
+                      cnic,
+                      licenseNumber,
+                    });
+                    navigation.navigate('ChauffeurPending', { email: email.trim() });
+                  } catch (e) {
+                    setError(e instanceof Error ? e.message : 'Signup failed');
+                  } finally {
+                    setSubmitting(false);
+                  }
                 }}
-                placeholder="Ali Khan"
-                placeholderTextColor={colors.muted}
-                style={styles.input}
               />
-            </Field>
-
-            <Field label="Email">
-              <TextInput
-                value={email}
-                onChangeText={(t) => {
-                  setEmail(t);
-                  if (error) setError(null);
-                }}
-                autoCapitalize="none"
-                autoCorrect={false}
-                keyboardType="email-address"
-                placeholder="driver@company.com"
-                placeholderTextColor={colors.muted}
-                style={styles.input}
-              />
-            </Field>
-
-            <Field label="Phone (optional)">
-              <TextInput
-                value={phone}
-                onChangeText={(t) => {
-                  setPhone(t);
-                  if (error) setError(null);
-                }}
-                keyboardType="phone-pad"
-                placeholder="+92 300 1234567"
-                placeholderTextColor={colors.muted}
-                style={styles.input}
-              />
-            </Field>
-
-            <Field label="CNIC (optional)">
-              <TextInput
-                value={cnic}
-                onChangeText={(t) => {
-                  setCnic(t);
-                  if (error) setError(null);
-                }}
-                keyboardType="number-pad"
-                placeholder="35202-1234567-1"
-                placeholderTextColor={colors.muted}
-                style={styles.input}
-              />
-            </Field>
-
-            <Field label="License Number (optional)">
-              <TextInput
-                value={licenseNumber}
-                onChangeText={(t) => {
-                  setLicenseNumber(t);
-                  if (error) setError(null);
-                }}
-                placeholder="DL-123456"
-                placeholderTextColor={colors.muted}
-                style={styles.input}
-              />
-            </Field>
-
-            <Field label="Password">
-              <TextInput
-                value={password}
-                onChangeText={(t) => {
-                  setPassword(t);
-                  if (error) setError(null);
-                }}
-                secureTextEntry
-                placeholder="••••••••"
-                placeholderTextColor={colors.muted}
-                style={styles.input}
-              />
-            </Field>
-
-            {error ? <Text style={styles.errorText}>{error}</Text> : null}
-
-            <CortButton
-              title="Submit Application"
-              variant="primary"
-              disabled={!canSubmit || submitting}
-              loading={submitting}
-              style={{ marginTop: 16 }}
-              onPress={async () => {
-                try {
-                  setSubmitting(true);
-                  setError(null);
-                  await mockApi.submitChauffeurApplication({
-                    name,
-                    email,
-                    password,
-                    phone,
-                    cnic,
-                    licenseNumber,
-                  });
-                  navigation.navigate('ChauffeurPending', { email: email.trim() });
-                } catch (e) {
-                  setError(e instanceof Error ? e.message : 'Signup failed');
-                } finally {
-                  setSubmitting(false);
-                }
-              }}
-            />
             </CortCard>
           </ScrollView>
         </View>

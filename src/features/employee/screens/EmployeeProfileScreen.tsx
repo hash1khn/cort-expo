@@ -4,14 +4,21 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 
 import { CortButton } from '../../../components';
-import { useAuthStore } from '../../../core/stores/useAuthStore';
+import { useAppDispatch, useAppSelector } from '../../../store/hooks';
+import { logOut } from '../../auth/store';
+import { logout } from '../../auth/services';
 import { colors, radii, typography } from '../../../core/theme';
 
 type Item = { key: string; label: string; icon: keyof typeof Ionicons.glyphMap };
 
 export function EmployeeProfileScreen() {
-  const user = useAuthStore((s) => s.user);
-  const logout = useAuthStore((s) => s.logout);
+  // TODO: User/role data needs to be handled separately (e.g., from API or separate store)
+  // The simplified auth state only tracks login status, not user details
+  const dispatch = useAppDispatch();
+  const handleLogout = async () => {
+    await logout();
+    dispatch(logOut());
+  };
 
   const items = useMemo<Item[]>(
     () => [
@@ -22,21 +29,16 @@ export function EmployeeProfileScreen() {
     []
   );
 
-  const initials = (user?.name ?? 'Sarah Jenkins')
-    .split(' ')
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((p) => p[0]?.toUpperCase())
-    .join('');
+  const initials = 'SJ'; // Placeholder - user data needs to be handled separately
 
   return (
     <SafeAreaView style={styles.root}>
       <View style={styles.header}>
         <View style={styles.avatar}>
-          <Text style={styles.avatarText}>{initials || 'SJ'}</Text>
+          <Text style={styles.avatarText}>{initials}</Text>
         </View>
         <Text style={styles.name} numberOfLines={1}>
-          {user?.name ?? 'Sarah Jenkins'}
+          Sarah Jenkins
         </Text>
         <View style={styles.roleBadge}>
           <Text style={styles.roleBadgeText}>Employee</Text>
@@ -55,7 +57,7 @@ export function EmployeeProfileScreen() {
         ))}
       </View>
 
-      <CortButton title="Log Out" variant="outline" onPress={logout} style={styles.logoutBtn} />
+      <CortButton title="Log Out" variant="outline" onPress={handleLogout} style={styles.logoutBtn} />
     </SafeAreaView>
   );
 }

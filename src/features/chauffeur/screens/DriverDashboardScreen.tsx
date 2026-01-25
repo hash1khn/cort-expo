@@ -14,7 +14,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { CortCard } from '../../../components';
 
 import { colors, radii, typography } from '../../../core/theme';
-import { useAuthStore } from '../../../core/stores/useAuthStore';
+import { useAppDispatch } from '../../../store/hooks';
+import { logOut } from '../../auth/store';
+import { logout } from '../../auth/services';
 
 const PURPLE_GRADIENT = ['#5B21B6', '#6D28D9', '#7C3AED'] as const;
 
@@ -33,7 +35,11 @@ export function DriverDashboardScreen({ driverName = 'Driver' }: Props) {
 
   const [isOnline, setIsOnline] = useState(false);
   const earningsToday = 245.75;
-  const logout = useAuthStore((s) => s.logout);
+  const dispatch = useAppDispatch();
+  const handleLogout = async () => {
+    await logout();
+    dispatch(logOut());
+  };
 
   // Bottom sheet slide-in
   const slide = useRef(new Animated.Value(0)).current;
@@ -115,7 +121,7 @@ export function DriverDashboardScreen({ driverName = 'Driver' }: Props) {
           </View>
 
           <View style={styles.actionRow}>
-            <Pressable onPress={logout} style={styles.logoutBtn} accessibilityRole="button">
+            <Pressable onPress={handleLogout} style={styles.logoutBtn} accessibilityRole="button">
               <Text style={styles.logoutText}>Logout</Text>
             </Pressable>
           </View>

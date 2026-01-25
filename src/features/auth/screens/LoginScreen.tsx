@@ -17,7 +17,10 @@ import { Ionicons } from '@expo/vector-icons';
 // Assuming these are your core components
 import { CortButton, CortCard } from '../../../components';
 import { colors, radii, typography } from '../../../core/theme';
-import { useAuthStore } from '../../../core/stores/useAuthStore';
+import { useAppDispatch } from '../../../store/hooks';
+import { logIn } from '../store';
+import { login as authLogin } from '../services';
+import { mockApi } from '../../../services/mockApi';
 
 export function LoginScreen() {
   const insets = useSafeAreaInsets();
@@ -29,7 +32,7 @@ export function LoginScreen() {
   // Focused state for inputs to add polish
   const [focusedField, setFocusedField] = useState<'email' | 'password' | null>(null);
 
-  const login = useAuthStore((s) => s.login);
+  const dispatch = useAppDispatch();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isBiometricLoading, setIsBiometricLoading] = useState(false);
 
@@ -39,14 +42,11 @@ export function LoginScreen() {
     try {
       setIsSubmitting(true);
       setError(null);
-      await login(email.trim(), password);
+      const { role } = await authLogin(email.trim(), password);
+      dispatch(logIn(role));
     } catch (e) {
-      const msg = e instanceof Error ? e.message : 'Login failed';
+      const msg = typeof e === 'string' ? e : e instanceof Error ? e.message : 'Login failed';
       setError(msg);
-      // Specific logic for pending chauffeurs
-      if (msg.toLowerCase().includes('pending admin approval')) {
-        navigation.navigate('ChauffeurPending', { email: email.trim() });
-      }
     } finally {
       setIsSubmitting(false);
     }
@@ -61,9 +61,10 @@ export function LoginScreen() {
       await new Promise(resolve => setTimeout(resolve, 1000));
 
       // Use mock employee credentials from mockData.ts
-      await login('employee@cort.com', '123456');
+      const user = await mockApi.login('employee@cort.com', '123456');
+      dispatch(logIn(user.role));
     } catch (e) {
-      const msg = e instanceof Error ? e.message : 'Biometric authentication failed';
+      const msg = typeof e === 'string' ? e : e instanceof Error ? e.message : 'Biometric authentication failed';
       setError(msg);
     } finally {
       setIsBiometricLoading(false);
@@ -161,7 +162,7 @@ export function LoginScreen() {
               <CortButton
                 title="Sign In"
                 variant="primary"
-                style={styles.loginBtn}
+
                 disabled={!canLogin || isSubmitting}
                 loading={isSubmitting}
                 onPress={handleLogin}
@@ -181,13 +182,15 @@ export function LoginScreen() {
                 styles.biometricBtn,
                 pressed && styles.biometricBtnPressed
               ]}
+
             >
               <Ionicons
                 name="finger-print-outline"
                 size={32}
                 color={colors.navy}
+                className="text-center"
               />
-              <Text style={styles.biometricText}>
+              <Text style={styles.biometricText} className="text-center">
                 {isBiometricLoading ? 'Verifying...' : 'Unlock with Face ID'}
               </Text>
             </Pressable>
@@ -204,7 +207,7 @@ export function LoginScreen() {
           </View>
         </View>
       </KeyboardAvoidingView>
-    </SafeAreaView>
+    </SafeAreaView >
   );
 }
 
@@ -348,6 +351,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   biometricBtn: {
+    display: 'flex',
+    flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 24,

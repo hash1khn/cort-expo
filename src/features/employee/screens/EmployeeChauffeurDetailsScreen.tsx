@@ -8,7 +8,7 @@ import { useNavigation } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 
 import { colors, radii, shadows, typography } from '../../../core/theme';
-import { activeRide, shuttleCoordinates, mockShuttlePolyline } from '../../../data/mockData';
+import { activeRide, shuttleCoordinates, mockShuttlePolyline } from '../../../services/mockData';
 
 export function EmployeeChauffeurDetailsScreen() {
     const navigation = useNavigation();
