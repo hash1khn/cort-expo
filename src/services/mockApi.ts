@@ -50,10 +50,21 @@ export const mockApi = {
     );
 
     if (user) {
-      // Return the user object (minus password)
+      // Return role and user object (minus password)
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { password: _pw, ...safeUser } = user;
-      return safeUser;
+      return {
+        role: safeUser.role,
+        user: {
+          id: safeUser.id,
+          email: safeUser.email,
+          full_name: safeUser.full_name,
+          phone: safeUser.phone,
+          company_id: safeUser.company_id,
+          account_status: safeUser.account_status,
+          enabled_services: safeUser.enabled_services,
+        },
+      };
     }
 
     // 2) Chauffeur applications (persisted)
@@ -69,11 +80,19 @@ export const mockApi = {
     }
 
     return {
-      id: app.id,
-      email: app.email,
-      name: app.name,
       role: 'CHAUFFEUR' as UserRole,
-      avatar: undefined,
+      user: {
+        id: app.id,
+        email: app.email,
+        full_name: app.name,
+        phone: app.phone || '+92300000000',
+        company_id: 1,
+        account_status: 'ACTIVE' as const,
+        enabled_services: {
+          shuttle: false,
+          chauffeur: true,
+        },
+      },
     };
   },
 

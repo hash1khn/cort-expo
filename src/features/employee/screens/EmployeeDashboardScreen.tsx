@@ -24,8 +24,9 @@ export function EmployeeDashboardScreen({
   const hasPrivateRide = false; // Placeholder - user data needs to be handled separately
 
   // Demo: Chauffeur context if user.hasPrivateRide is true
-  const activeChauffeurRide = hasPrivateRide ? activeRide : null;
-
+  const user = useAppSelector(state => state.auth.user)
+  const activeChauffeurRide = user?.enabled_services.chauffeur;
+  const activeShuttleService = user?.enabled_services.shuttle;
   const routePoints = useMemo(
     () => mockShuttlePolyline.map((p) => ({ latitude: p.latitude, longitude: p.longitude })),
     []
@@ -89,33 +90,48 @@ export function EmployeeDashboardScreen({
       <View pointerEvents="none" style={styles.mapOverlay} />
 
       <SafeAreaView pointerEvents="box-none" style={styles.safe}>
-        <View style={styles.topCard}>
+        {activeShuttleService && <View style={styles.topCard}>
           <Text style={styles.topLabel}>MY SHUTTLE ROUTE</Text>
           <Text className="text-2xl" numberOfLines={1}>
             Clifton ⇄ Tower Loop
           </Text>
           <Text style={styles.status}>Arriving in 5 min</Text>
-        </View>
+        </View>}
 
         {activeChauffeurRide ? (
-          <View pointerEvents="box-none" style={styles.sheetWrap}>
+          <View pointerEvents="box-none" className="absolute left-0 right-0 bottom-0">
             <Pressable
               onPress={onChauffeurPress}
-              style={({ pressed }) => [styles.sheet, pressed && { opacity: 0.96 }]}
+              className="bg-white rounded-t-[26px] pt-3 pb-5 px-4 flex-row active:opacity-96"
+              style={{
+                shadowColor: 'rgba(12, 34, 94, 0.22)',
+                shadowOpacity: 0.22,
+                shadowRadius: 18,
+                shadowOffset: { width: 0, height: -8 },
+                elevation: 10,
+              }}
             >
-              <View style={styles.sheetStrip} />
-              <View style={styles.sheetBody}>
-                <View style={styles.driverAvatar}>
-                  <Text style={styles.driverAvatarText}>
-                    {(activeChauffeurRide.driver.name ?? 'D').slice(0, 1).toUpperCase()}
-                  </Text>
+              {/* Accent Strip */}
+              <View className="w-1 rounded-full bg-purple-600 mr-3" />
+
+              {/* Content */}
+              <View className="flex-1 flex-row items-center gap-3 pr-1.5">
+                {/* Driver Avatar */}
+                <View className="w-12 h-12 rounded-full bg-navy-900/10 items-center justify-center">
+                  <Text className="font-semibold text-base text-navy-900">J</Text>
                 </View>
-                <View style={{ flex: 1, minWidth: 0 }}>
-                  <Text style={styles.carModel} numberOfLines={1}>
-                    {activeChauffeurRide.car.model}
+
+                {/* Info Section */}
+                <View className="flex-1 min-w-0">
+                  <Text className="font-semibold text-sm text-gray-900" numberOfLines={1}>
+                    Toyota Corolla
                   </Text>
-                  <Text style={styles.plate}>{activeChauffeurRide.car.plate}</Text>
-                  <Text style={styles.sheetStatus}>Your Chauffeur is waiting</Text>
+                  <Text className="font-medium text-xs text-gray-500 mt-0.5">
+                    KHI-2023
+                  </Text>
+                  <Text className="font-normal text-xs text-gray-500 mt-1.5">
+                    Your Chauffeur is waiting
+                  </Text>
                 </View>
               </View>
             </Pressable>
@@ -133,16 +149,6 @@ export function EmployeeDashboardScreen({
           </Pressable>
           <Text style={styles.fabLabel}>Scan to Board</Text>
 
-          {__DEV__ ? (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Preview boarding success screen"
-              onPress={onPreviewSuccessPress}
-              style={({ pressed }) => [styles.previewBtn, pressed && styles.previewBtnPressed]}
-            >
-              <Text style={styles.previewBtnText}>Preview success</Text>
-            </Pressable>
-          ) : null}
         </View>
       </SafeAreaView>
     </View>

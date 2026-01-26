@@ -7,6 +7,18 @@ export interface AuthState {
   shouldCreateAccount: boolean;
   hasCompletedOnboarding: boolean;
   role: UserRole | null;
+  user: {
+    id: string;
+    email: string;
+    phone: string;
+    full_name: string;
+    company_id: number;
+    account_status: 'ACTIVE' | 'INACTIVE' | 'SUSPENDED';
+    enabled_services: {
+      shuttle: boolean;
+      chauffeur: boolean;
+    };
+  } | null;
   _hasHydrated: boolean;
 }
 
@@ -15,6 +27,7 @@ const initialState: AuthState = {
   shouldCreateAccount: false,
   hasCompletedOnboarding: false,
   role: null,
+  user: null,
   _hasHydrated: false,
 };
 
@@ -22,13 +35,15 @@ const authSlice = createSlice({
   name: 'auth',
   initialState,
   reducers: {
-    logIn: (state, action: PayloadAction<UserRole>) => {
+    logIn: (state, action: PayloadAction<{ role: UserRole; user: AuthState['user'] }>) => {
       state.isLoggedIn = true;
-      state.role = action.payload;
+      state.role = action.payload.role;
+      state.user = action.payload.user;
     },
     logOut: (state) => {
       state.isLoggedIn = false;
       state.role = null;
+      state.user = null;
     },
     completeOnboarding: (state) => {
       state.hasCompletedOnboarding = true;
@@ -38,6 +53,11 @@ const authSlice = createSlice({
     },
     setHasHydrated: (state, action: PayloadAction<boolean>) => {
       state._hasHydrated = action.payload;
+    },
+    updateUserProfile: (state, action: PayloadAction<Partial<NonNullable<AuthState['user']>>>) => {
+      if (state.user) {
+        state.user = { ...state.user, ...action.payload };
+      }
     },
   },
   extraReducers: (builder) => {
@@ -55,5 +75,5 @@ const authSlice = createSlice({
   },
 });
 
-export const { logIn, logOut, completeOnboarding, resetOnboarding, setHasHydrated } = authSlice.actions;
+export const { logIn, logOut, completeOnboarding, resetOnboarding, setHasHydrated, updateUserProfile } = authSlice.actions;
 export default authSlice.reducer;

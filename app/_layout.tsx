@@ -37,7 +37,7 @@ function RootLayoutContent() {
 
   const role = useAppSelector((s) => s.auth.role);
   const hasHydrated = useAppSelector((s) => s.auth._hasHydrated);
-  
+
   // Handle both null and undefined, and wait for hydration
   // Use != null to check for both null and undefined
   const isLoggedIn = hasHydrated && (role != null);

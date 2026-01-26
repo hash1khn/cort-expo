@@ -42,8 +42,8 @@ export function LoginScreen() {
     try {
       setIsSubmitting(true);
       setError(null);
-      const { role } = await authLogin(email.trim(), password);
-      dispatch(logIn(role));
+      const { role, user } = await authLogin(email.trim(), password);
+      dispatch(logIn({ role, user }));
     } catch (e) {
       const msg = typeof e === 'string' ? e : e instanceof Error ? e.message : 'Login failed';
       setError(msg);
@@ -61,8 +61,8 @@ export function LoginScreen() {
       await new Promise(resolve => setTimeout(resolve, 1000));
 
       // Use mock employee credentials from mockData.ts
-      const user = await mockApi.login('employee@cort.com', '123456');
-      dispatch(logIn(user.role));
+      const { role, user } = await mockApi.login('employee@cort.com', '123456');
+      dispatch(logIn({ role, user }));
     } catch (e) {
       const msg = typeof e === 'string' ? e : e instanceof Error ? e.message : 'Biometric authentication failed';
       setError(msg);

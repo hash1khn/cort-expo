@@ -4,8 +4,15 @@ export type MockUser = {
   id: string;
   email: string;
   password: string;
-  name: string;
+  full_name: string;
+  phone: string;
   role: UserRole;
+  company_id: number;
+  account_status: 'ACTIVE' | 'INACTIVE' | 'SUSPENDED';
+  enabled_services: {
+    shuttle: boolean;
+    chauffeur: boolean;
+  };
   avatar?: string;
   rating?: number; // chauffeur only
   hasPrivateRide?: boolean; // employee only (demo)
@@ -71,8 +78,15 @@ export const mockUsers = [
     id: 'u_employee_1',
     email: 'employee@cort.com',
     password: '123456',
-    name: 'Sarah J.',
+    full_name: 'Sarah J.',
+    phone: '+923001234567',
     role: 'EMPLOYEE',
+    company_id: 1,
+    account_status: 'ACTIVE' as const,
+    enabled_services: {
+      shuttle: true,
+      chauffeur: true,
+    },
     avatar: undefined,
     hasPrivateRide: true,
   },
@@ -80,8 +94,15 @@ export const mockUsers = [
     id: 'u_driver_1',
     email: 'driver@cort.com',
     password: '123456',
-    name: 'Ali Hassan',
+    full_name: 'Ali Hassan',
+    phone: '+923009876543',
     role: 'CHAUFFEUR',
+    company_id: 1,
+    account_status: 'ACTIVE' as const,
+    enabled_services: {
+      shuttle: false,
+      chauffeur: true,
+    },
     avatar: undefined,
     rating: 4.9,
   },
@@ -89,8 +110,15 @@ export const mockUsers = [
     id: 'u_shuttle_1',
     email: 'shuttle@cort.com',
     password: '123456',
-    name: 'Mike T.',
+    full_name: 'Mike T.',
+    phone: '+923005555555',
     role: 'SHUTTLE_DRIVER',
+    company_id: 1,
+    account_status: 'ACTIVE' as const,
+    enabled_services: {
+      shuttle: true,
+      chauffeur: false,
+    },
     avatar: undefined,
   },
 ] as const satisfies readonly MockUser[];
