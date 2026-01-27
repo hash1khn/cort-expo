@@ -19,7 +19,7 @@ import { CortButton, CortCard } from '../../../components';
 import { colors, radii, typography } from '../../../core/theme';
 import { useAppDispatch } from '../../../store/hooks';
 import { logIn } from '../store';
-import { login as authLogin } from '../services';
+import { useLoginMutation } from '../services/authApi';
 import { mockApi } from '../../../services/mockApi';
 
 export function LoginScreen() {
@@ -33,22 +33,19 @@ export function LoginScreen() {
   const [focusedField, setFocusedField] = useState<'email' | 'password' | null>(null);
 
   const dispatch = useAppDispatch();
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [login, { isLoading: isSubmitting }] = useLoginMutation();
   const [isBiometricLoading, setIsBiometricLoading] = useState(false);
 
   const canLogin = useMemo(() => email.trim().length > 0 && password.length > 0, [email, password]);
 
   const handleLogin = async () => {
     try {
-      setIsSubmitting(true);
       setError(null);
-      const { role, user } = await authLogin(email.trim(), password);
-      dispatch(logIn({ role, user }));
-    } catch (e) {
-      const msg = typeof e === 'string' ? e : e instanceof Error ? e.message : 'Login failed';
+      const result = await login({ email: email.trim(), password }).unwrap();
+      dispatch(logIn({ role: result.role, user: result.user }));
+    } catch (e: any) {
+      const msg = e?.data?.message || e?.message || 'Login failed';
       setError(msg);
-    } finally {
-      setIsSubmitting(false);
     }
   };
 

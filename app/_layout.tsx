@@ -79,7 +79,7 @@ function RootLayoutContent() {
           </Stack.Protected>
 
           <Stack.Protected guard={isEmployee}>
-            <Stack.Screen name="(employee)" />
+            <Stack.Screen name="employee/(tabs)" />
           </Stack.Protected>
         </Stack.Protected>
 

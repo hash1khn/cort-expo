@@ -15,7 +15,7 @@ function roleLabel(role: string | null) {
   return 'Guest';
 }
 
-export function SettingsScreen() {
+export function ProfileScreen() {
   // TODO: User/role data needs to be handled separately (e.g., from API or separate store)
   // The simplified auth state only tracks login status, not user details
   const dispatch = useAppDispatch();

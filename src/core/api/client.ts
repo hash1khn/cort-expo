@@ -9,6 +9,10 @@ export function setOnUnauthorized(fn: OnUnauthorized | null): void {
   onUnauthorized = fn;
 }
 
+export function triggerOnUnauthorized(): void {
+  onUnauthorized?.();
+}
+
 const baseUrl = () => env.API_URL.replace(/\/$/, '');
 
 export type ApiRequestInit = RequestInit & { skipAuth?: boolean };

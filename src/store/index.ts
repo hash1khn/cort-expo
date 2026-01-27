@@ -2,10 +2,12 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { configureStore } from '@reduxjs/toolkit';
 import { persistStore, persistReducer } from 'redux-persist';
 import { rootReducer } from './rootReducer';
+import { baseApi } from '../core/api/baseApi';
 
 const persistConfig = {
   key: 'auth-store',
   storage: AsyncStorage,
+  whitelist: ['auth'], // Only persist auth slice, not RTK Query cache
 };
 
 const persistedReducer = persistReducer(persistConfig, rootReducer);
@@ -17,7 +19,7 @@ export const store = configureStore({
       serializableCheck: {
         ignoredActions: ['persist/PERSIST', 'persist/REHYDRATE'],
       },
-    }),
+    }).concat(baseApi.middleware),
 });
 
 export const persistor = persistStore(store, null, () => {
