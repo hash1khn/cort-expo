@@ -9,6 +9,7 @@ type ChauffeurBooking = {
   package_selected: string;
   trip_type: string;
   pickup_address?: string;
+  destination_cities?: string[];
   scheduled_for?: string;
   status: string;
   created_at: string;
@@ -39,15 +40,19 @@ type ChauffeurBooking = {
   };
 };
 
+// Shape of the *inner* data object returned by the backend
+// raw backend: { data: { data: ChauffeurBooking[]; pagination: {...} }, message, status }
+// we transformResponse to return only the inner { data, pagination }
 type ChauffeurBookingsResponse = {
   data: ChauffeurBooking[];
   pagination: {
     page: number;
+    pages: number;
     limit: number;
     total: number;
-    totalPages: number;
+    hasNext: boolean;
+    hasPrev: boolean;
   };
-  message?: string;
 };
 
 type GetChauffeurBookingsParams = {
@@ -72,6 +77,8 @@ export const bookingsApi = baseApi.injectEndpoints({
         }
         return `/companies/${companyId}/chauffeur-bookings?${params.toString()}`;
       },
+      // Unwrap the inner `data` object so hooks see { data, pagination }
+      transformResponse: (response: { data: ChauffeurBookingsResponse }) => response.data,
       providesTags: ['ChauffeurBooking'],
     }),
   }),

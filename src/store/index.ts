@@ -27,6 +27,6 @@ export const persistor = persistStore(store, null, () => {
   store.dispatch({ type: 'auth/setHasHydrated', payload: true });
 });
 
-// Infer the `RootState` and `AppDispatch` types from the store itself
-export type RootState = ReturnType<typeof store.getState>;
+// Infer the `RootState` from the rootReducer to avoid PersistPartial type issues
+export type RootState = ReturnType<typeof rootReducer>;
 export type AppDispatch = typeof store.dispatch;

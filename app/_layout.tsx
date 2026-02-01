@@ -17,10 +17,13 @@ import {
 
 import { Provider } from 'react-redux';
 import { PersistGate } from 'redux-persist/integration/react';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
 import { store, persistor } from '../src/store';
 import { useAppSelector } from '../src/store/hooks';
 import { logOut } from '../src/features/auth/store/auth.slice';
 import { setOnUnauthorized } from '../src/services/api';
+import { useSplashPrefetch } from '../src/features/employee/hooks/useSplashPrefetch';
 
 SplashScreen.preventAutoHideAsync().catch(() => {
   // no-op (can throw if called twice in dev)
@@ -36,6 +39,7 @@ function RootLayoutContent() {
   });
 
   const role = useAppSelector((s) => s.auth.role);
+  const user = useAppSelector((s) => s.auth.user);
   const hasHydrated = useAppSelector((s) => s.auth._hasHydrated);
 
   // Handle both null and undefined, and wait for hydration
@@ -45,47 +49,47 @@ function RootLayoutContent() {
   const isDriver = role === 'SHUTTLE_DRIVER';
   const isEmployee = role === 'EMPLOYEE';
 
-  useEffect(() => {
-    if (fontsLoaded && hasHydrated) {
-      SplashScreen.hideAsync().catch(() => { });
-    }
-  }, [fontsLoaded, hasHydrated]);
+  useSplashPrefetch(fontsLoaded, hasHydrated, isEmployee, user?.id, user?.company_id);
 
   useEffect(() => {
     setOnUnauthorized(() => store.dispatch(logOut()));
     return () => setOnUnauthorized(null);
   }, []);
 
-  // Wait for both fonts and hydration before rendering
+  
   if (!fontsLoaded || !hasHydrated) {
     return null;
   }
 
   return (
-    <SafeAreaProvider>
-      <StatusBar style="auto" />
-      <Stack screenOptions={{ headerShown: false }}>
-        <Stack.Protected guard={!isLoggedIn}>
-          <Stack.Screen name="(auth)" />
-        </Stack.Protected>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <SafeAreaProvider>
+        <BottomSheetModalProvider>
+          <StatusBar style="auto" />
+          <Stack screenOptions={{ headerShown: false }}>
+            <Stack.Protected guard={!isLoggedIn}>
+              <Stack.Screen name="(auth)" />
+            </Stack.Protected>
 
-        <Stack.Protected guard={isLoggedIn}>
-          <Stack.Protected guard={isChauffeur}>
-            <Stack.Screen name="(chauffeur)" />
-          </Stack.Protected>
+            <Stack.Protected guard={isLoggedIn}>
+              <Stack.Protected guard={isChauffeur}>
+                <Stack.Screen name="(chauffeur)" />
+              </Stack.Protected>
 
-          <Stack.Protected guard={isDriver}>
-            <Stack.Screen name="(shuttle)" />
-          </Stack.Protected>
+              <Stack.Protected guard={isDriver}>
+                <Stack.Screen name="(shuttle)" />
+              </Stack.Protected>
 
-          <Stack.Protected guard={isEmployee}>
-            <Stack.Screen name="employee/(tabs)" />
-          </Stack.Protected>
-        </Stack.Protected>
+              <Stack.Protected guard={isEmployee}>
+                <Stack.Screen name="employee" />
+              </Stack.Protected>
+            </Stack.Protected>
 
-        <Stack.Screen name="+not-found" />
-      </Stack>
-    </SafeAreaProvider>
+            <Stack.Screen name="+not-found" />
+          </Stack>
+        </BottomSheetModalProvider>
+      </SafeAreaProvider>
+    </GestureHandlerRootView>
   );
 }
 

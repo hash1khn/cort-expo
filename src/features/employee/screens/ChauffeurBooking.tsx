@@ -1,16 +1,14 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Linking, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
-import { SafeAreaInsetsContext, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import MapView, { Marker, Polyline } from 'react-native-maps';
-import { FontAwesome, FontAwesome6, Ionicons, MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { DrawerActions } from '@react-navigation/native';
 import { colors, radii, shadows, typography } from '../../../core/theme';
 import { useAppSelector } from '../../../store/hooks';
 import { activeRide, mockShuttlePolyline, shuttleCoordinates } from '../../../services/mockData';
 import { useNavigation } from 'expo-router';
 import BottomSheet, { BottomSheetView } from '@gorhom/bottom-sheet';
-import { ChauffeurDetails } from '../components/ChauffeurDetails';
-import { DefaultBottomSheet } from '../components/DefaultBottomSheet';
 
 type Props = {
   onScanPress?: () => void;
@@ -27,32 +25,18 @@ export function EmployeeDashboardScreen({
 }: Props) {
   const navigation=useNavigation();
   const bottomSheetRef = useRef<BottomSheet>(null);
-  const snapPoints = useMemo(() => ["55%","75%"], []);
-const insets=useSafeAreaInsets()
+  const snapPoints = useMemo(() => ['30%','75%'], []);
+
   // callbacks
   const handleSheetChanges = useCallback((index: number) => {
-   
     console.log('handleSheetChanges', index);
   }, []);
-
   // TODO: User data needs to be handled separately (e.g., from API or separate store)
   // The simplified auth state only tracks login status, not user details
   const user = useAppSelector(state => state.auth.user);
   const chauffeurRide = useAppSelector(state => state.employeeRide.chauffeurRide);
   const activeChauffeurRide = chauffeurRide;
   const activeShuttleService = user?.enabled_services.shuttle;
-  
-  const handleCallCaptain = useCallback(() => {
-    const phoneNumber = chauffeurRide?.driver?.phone;
-    if (phoneNumber) {
-      const phoneUrl = Platform.OS === 'ios' 
-        ? `telprompt:${phoneNumber}` 
-        : `tel:${phoneNumber}`;
-      Linking.openURL(phoneUrl).catch((err) => {
-        console.error('Error opening phone dialer:', err);
-      });
-    }
-  }, [chauffeurRide?.driver?.phone]);
   const routePoints = useMemo(
     () => mockShuttlePolyline.map((p) => ({ latitude: p.latitude, longitude: p.longitude })),
     []
@@ -75,7 +59,7 @@ const insets=useSafeAreaInsets()
   const busCoord = routePoints[Math.min(busIndex, routePoints.length - 1)];
 
   return (
-    <SafeAreaView style={styles.root} className='bg-[#f1f2f6]'>
+    <SafeAreaView style={styles.root}>
       
       <MapView
         style={styles.map}
@@ -113,10 +97,10 @@ const insets=useSafeAreaInsets()
           </Marker>
         ) : null}
       </MapView>
-      <Pressable className='absolute top-0 left-4 bg-white rounded-full p-2' hitSlop={{ top: 16, bottom: 16, left: 16, right: 16 }}  style={{marginTop:insets.top}} onPress={()=>navigation.dispatch(DrawerActions.openDrawer())}>
-        <Ionicons name="menu" size={24} color="black" />
-        </Pressable>
- {/* <Pressable className='absolute top-0 left-4 bg-white rounded-full p-2' onPress={()=>navigation.dispatch(DrawerActions.openDrawer())}>
+
+      <View pointerEvents="none" style={styles.mapOverlay} />
+
+        {/* <Pressable className='absolute top-0 left-4 bg-white rounded-full p-2' onPress={()=>navigation.dispatch(DrawerActions.openDrawer())}>
         <Ionicons name="menu" size={24} color="black" />
         </Pressable>
         {activeShuttleService && <View style={styles.topCard}>
@@ -126,32 +110,147 @@ const insets=useSafeAreaInsets()
         </Text>
         <Text style={styles.status}>Arriving in 5 min</Text>
         </View>} */}
-      <View pointerEvents="none" style={styles.mapOverlay} />
-
-       
         <BottomSheet
         ref={bottomSheetRef}
-        index={0}
-        enableDynamicSizing={false}
-        enablePanDownToClose={false}
+        index={1}
         snapPoints={snapPoints}
-        enableOverDrag={false}
+        enablePanDownToClose={false}
         onChange={handleSheetChanges}
-      
       >
-        <BottomSheetView className='flex-1 w-full '>
-        <ChauffeurDetails
-      chauffeurRideLoading={chauffeurRideLoading}
-      chauffeurRide={chauffeurRide}
-    />
-      {/* <DefaultBottomSheet
-      shuttle={{ routeName: 'Clifton ⇄ Tower Loop', status: 'Arriving in 5 min' }}
-      upcomingRide={{
-        from: 'Gulzar e hijri',
-        to: 'Karachi, Lahore, Islamabad',
-        scheduledOn: 'Jan 28, 2026 · 5:46 PM',
-      }}
-    /> */}
+        <BottomSheetView className='flex-1 rounded-lg'>
+        <SafeAreaView className='w-full h-full '>
+  {chauffeurRideLoading || activeChauffeurRide ? (
+    <View pointerEvents="box-none" >
+      
+        {/* Header Section */}
+        <View className="px-5 pb-4 -mt-8">
+          <Text className="text-3xl font-bold text-gray-900 mb-1">
+            Get ready, your chauffeur is on the way
+          </Text>
+        </View>
+
+        {/* Driver Info Section */}
+        <View className="px-5 pb-4 flex-row items-center">
+          {/* Driver Avatar */}
+          {chauffeurRideLoading ? (
+            <View className="w-14 h-14 rounded-full bg-gray-200 mr-4" />
+          ) : (
+            <View className="w-14 h-14 rounded-full bg-orange-500 items-center justify-center mr-4">
+              <Text className="font-bold text-xl text-white">
+                {chauffeurRide?.driver?.full_name?.charAt(0) ?? 'C'}
+              </Text>
+            </View>
+          )}
+
+          {/* Driver Details */}
+          <View className="flex-1">
+            {chauffeurRideLoading ? (
+              <>
+                <View className="h-4 w-32 bg-gray-200 rounded-full mb-2" />
+                <View className="h-3 w-48 bg-gray-200 rounded-full" />
+              </>
+            ) : (
+              <>
+                {/* Driver Name & Rating */}
+                <View className="flex-row items-center mb-1">
+                  <Text className="text-base font-semibold text-gray-900 mr-2">
+                    {chauffeurRide?.driver?.full_name ?? 'Your Captain'}
+                  </Text>
+                  {/* <Text className="text-sm font-medium text-gray-900 mr-1">4.6</Text>
+                  <Text className="text-yellow-500">★</Text> */}
+                </View>
+
+                {/* Vehicle Info */}
+                <View className="flex-row items-center flex-wrap">
+                  <Text className="text-sm text-gray-600 mr-2">
+                    {chauffeurRide?.vehicle?.color ?? 'White'}
+                  </Text>
+                  <Text className="text-sm text-gray-600 mr-2">
+                    {chauffeurRide?.vehicle
+                      ? `${chauffeurRide.vehicle.make} ${chauffeurRide.vehicle.model}`
+                      : 'Lexus ES350'}
+                  </Text>
+                  <Text className="text-sm text-gray-600">
+                    {chauffeurRide?.vehicle?.plate_number ?? 'L21758'}
+                  </Text>
+                </View>
+              </>
+            )}
+          </View>
+        </View>
+
+        {/* Safety Message */}
+        {!chauffeurRideLoading && (
+          <View className="px-5 pb-4">
+            <Text className="text-sm text-gray-600 leading-5">
+              Please ensure you verify the car's number plate before proceeding with the journey 
+            </Text>
+          </View>
+        )}
+
+        {/* Action Buttons */}
+        {!chauffeurRideLoading && (
+          <View className="px-5 pb-5 flex-row gap-3">
+            <Pressable
+              // onPress={}
+              className="flex-1 flex-row items-center justify-center bg-gray-100 rounded-xl py-3.5 active:bg-gray-200"
+            >
+              <Text className="text-sm font-semibold text-gray-900 mr-2">📞</Text>
+              <Text className="text-sm font-semibold text-gray-900">CALL CAPTAIN</Text>
+            </Pressable>
+
+            <Pressable
+              // onPress={}
+              className="flex-1 flex-row items-center justify-center bg-gray-100 rounded-xl py-3.5 active:bg-gray-200"
+            >
+              <Text className="text-sm font-semibold text-gray-900 mr-2">💬</Text>
+              <Text className="text-sm font-semibold text-gray-900">CHAT</Text>
+            </Pressable>
+          </View>
+        )}
+
+        {/* Trip Details Section */}
+        {!chauffeurRideLoading && (
+          <View className="border-t-8 border-gray-200 px-5 py-4">
+            <Text className="text-xs font-semibold text-gray-500 mb-3 uppercase tracking-wide">
+              Trip details
+            </Text>
+
+            {/* Pickup Location */}
+            <View className="flex-row mb-3">
+              <View className="items-center mr-3 pt-1">
+                <View className="w-3 h-3 rounded-full border-2 border-orange-500 bg-white" />
+                <View className="w-0.5 h-6 bg-gray-300 my-1" />
+              </View>
+              <View className="flex-1">
+                <Text className="text-base font-semibold text-gray-900 mb-0.5">
+                  {chauffeurRide?.pickupAddress?.split(',')[0] ?? 'Careem HQ'}
+                </Text>
+                <Text className="text-sm text-gray-500">
+                  {chauffeurRide?.pickupAddress?.split(',').slice(1).join(',').trim() ?? 
+                   'Shatha Tower, Media City - Dubai'}
+                </Text>
+              </View>
+            </View>
+
+            {/* Destination Location */}
+            <View className="flex-row">
+              <View className="items-center mr-3 pt-1">
+                <View className="w-3 h-3 rounded-full bg-orange-500" />
+              </View>
+              <View className="flex-1">
+                <Text className="text-base font-semibold text-gray-900">
+                 Nipa
+                </Text>
+              </View>
+            </View>
+          </View>
+        )}
+     
+    </View>
+  ) : null}
+</SafeAreaView>
+        
         </BottomSheetView>
       </BottomSheet>
 

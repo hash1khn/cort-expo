@@ -7,7 +7,7 @@ export default function EmployeeQrScannerRoute() {
   return (
     <EmployeeQrScannerScreen
       onClose={() => router.back()}
-      onSuccess={() => router.push('/(employee)/boarding-success')}
+      onSuccess={() => router.push('/employee')}
     />
   );
 }
