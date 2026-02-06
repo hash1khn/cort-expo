@@ -1,17 +1,22 @@
 import React, { useCallback, useMemo, useRef } from 'react';
-import { View, Text, Pressable, ScrollView,StyleSheet } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Ionicons, MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
-import BottomSheet, { BottomSheetView } from '@gorhom/bottom-sheet';
+import { View, Text, Pressable, ScrollView, StyleSheet } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Entypo, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import BottomSheet, {
+  BottomSheetBackdrop,
+  BottomSheetView,
+  type BottomSheetBackdropProps,
+} from '@gorhom/bottom-sheet';
 import { useAppSelector } from '../../../store/hooks';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { RideHistoryCard } from '../components/RideHistoryCard';
+import { RideHistoryCardNew } from '../components/RideHistoryCardNew';
+import { RideStatusBar } from '../components/RideStatusBar';
 
-const PROFILE_SHEET_SNAP = ['75%'];
+const PROFILE_SHEET_SNAP = ['65%'];
 
 export default function ShuttleEmployee() {
-  const insets = useSafeAreaInsets();
   const user = useAppSelector((state) => state.auth.user);
   const firstName = user?.full_name?.split(' ')?.[0] ?? '';
   const fullName = user?.full_name ?? 'Guest';
@@ -38,18 +43,29 @@ export default function ShuttleEmployee() {
   const handleSheetChange = useCallback((index: number) => {
     // optional: track open/close
   }, []);
-
+  const renderBackdrop = useCallback(
+    (props: BottomSheetBackdropProps) => (
+      <BottomSheetBackdrop
+        {...props}
+        disappearsOnIndex={-1}
+        appearsOnIndex={0}
+        opacity={0.5} // Adjust darkness (0-1)
+      />
+    ),
+    []
+  );
+  
   return (
     <SafeAreaView
       style={{ flex: 1 }}
-      className="bg-[#171717] flex-1 h-full flex flex-col border-2"
+      className="bg-background flex-1 h-full flex flex-col border-2 "
     >
         <View className="flex-row justify-between px-4 mt-4">
           <View className="flex-1">
-            <Text className="text-white text-3xl font-bold mb-1">
+            <Text className="text-text-primary text-3xl font-bold mb-1">
               Hey there{firstName ? `, ${firstName}` : ''}
             </Text>
-            <Text className="text-gray-400 text-xl mt-1">
+            <Text className="text-text-muted text-xl mt-1">
               Where do you want to go?
             </Text>
           </View>
@@ -68,38 +84,14 @@ export default function ShuttleEmployee() {
       
 
         {/* Bento cards */}
-        <View className="px-4 mt-6 gap-3">
-       
-          <LinearGradient
-            colors={['#7e6aec', '#8b76f6']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={[styles.container, { minHeight: 140 }]}
-
-          >
-            <View className="flex-1 justify-center">
-              <View className="flex-row items-center">
-                <Text className="text-white text-4xl font-bold">Clifton</Text>
-                <Ionicons name="swap-horizontal" size={20} color="#fff" style={{ marginHorizontal: 4 }} />
-                <Text className="text-white text-4xl font-bold">Tower</Text>
-              </View>
-              <Text className='text-white text-base font-semibold mt-1'>Driver:Sajjad</Text>
-              <View className="flex-row items-center bg-black/10 px-2.5 py-1.5 rounded-full self-start mt-2.5 gap-1.5">
-                <Ionicons name="time-outline" size={14} color="#fff" />
-                <Text className="text-white text-base font-semibold">Next Shuttle: 08:30 AM</Text>
-              </View>
-            </View>
-            <View className="w-20 h-20 rounded-full bg-white/20 items-center justify-center">
-              <Ionicons name="bus-outline" size={42} color="#fff" />
-            </View>
-          </LinearGradient>
+        <View className="px-4 mt-6 gap-4 h-[42%] flex-col">
+          <RideStatusBar enableDevToggle />
    
-        {/* Top row: two cards side by side */}
-        <View className="flex-row flex gap-3">
-          <LinearGradient
-            colors={['#379d63', '#88be54']}
-            start={{ x: 0, y: 1 }}
-            end={{ x: 1, y: 0 }}
+        {/* Top row: two cards - flex-1 takes remaining space when status bar shrinks */}
+        <View className="flex-row flex-1 gap-4 min-h-0">
+          
+            <View
+            className='bg-[#379d63]'
             style={[styles.callDriverCard, { minHeight: 110 }]}
           >
             <Text className="text-white/90 text-[0.8rem] font-medium mb-2">Queries about shuttle?</Text>
@@ -113,38 +105,69 @@ export default function ShuttleEmployee() {
                 </Pressable>
             </View>
 
-          </LinearGradient>
-          <LinearGradient
-            colors={['#faaf02', '#fdd967']}
-            start={{ x: 0, y: 1 }}
-            end={{ x: 1, y: 0 }}
+          </View>
+          <View
+            className='bg-[#ffa00a]'
             style={[styles.scanQrCard, { minHeight: 110 }]}
           >
-            <View className="flex-row justify-between items-end">
+            <Text className="text-white/90 text-[0.8rem] font-medium mb-2">Shuttle is here?</Text>
+
+            <View className="flex-row justify-between ">
               <View>
                 <Text className="text-white text-2xl font-bold">Scan</Text>
                 <Text className="text-white text-2xl font-bold">QR code</Text>
               </View>
-              <View className="w-20 h-20 rounded-full items-center justify-center">
+              <View className="flex-1 w-full items-center justify-center">
               <MaterialCommunityIcons name="qrcode-scan" size={45} color="white" /> 
               </View>
            
             </View>
-          </LinearGradient> 
+          </View> 
         </View>
         {/* Bottom: Promo card - lavender */}
        
       </View>
 
         {/* Recent Rides section */}
-        <View className="px-4 mt-8 flex-grow  ">
-          <View className="flex-row items-center justify-between mb-4">
-            <Text className="text-white text-xl font-bold">Recent Rides</Text>
-            <Pressable onPress={()=>{router.push('/employee/(home)/rides')}}>
-              <Text className="text-[#f5c542] text-sm font-medium">View history</Text>
-            </Pressable>
-          </View>
-          <View className="gap-4 flex-1">
+        <View className="px-6 mt-8 flex-grow  ">
+          <Pressable onPress={()=>{router.push('/employee/(home)/rides')}} hitSlop={8}>
+            <View className="flex-row items-center gap-2 mb-4">
+              <Text className="text-white text-2xl font-bold">Recent Rides</Text>
+              <Entypo name="chevron-right" size={24} color="#8b8a8f" />
+              {/* <Pressable onPress={()=>{router.push('/employee/(home)/rides')}} hitSlop={8}>
+                <Text className="text-text-muted text-sm font-medium">View history</Text>
+              </Pressable> */}
+            </View>
+          </Pressable>
+          <View className="gap-4 flex-1" >
+            {/* <RideHistoryCardNew
+              pickup="Clifton"
+              destination="Tower"
+              status="completed"
+              timeOfRide="Today, 08:30 AM"
+              rideType="shuttle"
+              description="Sajjad, White Toyota Hiace"
+              onPress={() =>
+                router.push({
+                  pathname: '/employee/(home)/ride-details',
+                  params: { rideId: 'PO123RT' },
+                })
+              }
+            />
+            <RideHistoryCardNew
+              pickup="Tower"
+              destination="Clifton"
+              status="missed"
+              timeOfRide="Yesterday, 04:15 PM"
+              rideType="chauffeur"
+              description="Nadir, Black Toyota Camry"
+              onPress={() =>
+                router.push({
+                  pathname: '/employee/(home)/ride-details',
+                  params: { rideId: 'RO213KS' },
+                })
+              }
+            /> */}
             <RideHistoryCard
               rideId="PO123RT"
               driverName="Sajjad"
@@ -181,19 +204,20 @@ export default function ShuttleEmployee() {
         ref={bottomSheetRef}
         index={-1}
         snapPoints={snapPoints}
+        backdropComponent={renderBackdrop}
         enablePanDownToClose
         onChange={handleSheetChange}
-        backgroundStyle={{ backgroundColor: '#252525' }}
-        handleIndicatorStyle={{ backgroundColor: '#252525' }}
+        backgroundStyle={{ backgroundColor: '#151517' }}
+        handleIndicatorStyle={{ backgroundColor: '#151517' }}
       >
-        <BottomSheetView style={{ flex: 1, backgroundColor: '#252525' }}>
-          <ScrollView
-            className="flex-1"
-            contentContainerStyle={{ paddingBottom: 32 }}
-            showsVerticalScrollIndicator={false}
+        <BottomSheetView style={{ flex: 1, backgroundColor: '#151517' }}>
+          <View
+            className="flex-1 "
+            style={{ paddingBottom: 32 }}
+        
           >
             {/* Close button - top right */}
-            <View className="flex-row justify-end px-4 pt-2">
+            <View className="absolute top-0 right-0 px-4 pt-2">
               <Pressable
                 onPress={closeProfileSheet}
                 className="w-10 h-10 rounded-full bg-white/10 items-center justify-center"
@@ -203,61 +227,46 @@ export default function ShuttleEmployee() {
             </View>
 
             {/* Avatar & name */}
-            <View className="items-center mt-2">
+            <View className="items-center mt-0">
               <View className="w-24 h-24 rounded-full bg-white/20 items-center justify-center">
                 <Text className="text-white text-3xl font-bold">{initials}</Text>
               </View>
               <Text className="text-white text-2xl font-bold mt-3">
                 {fullName}
               </Text>
-              <Text className="text-gray-400 text-sm mt-1">Employee</Text>
+              {/* <Text className="text-gray-400 text-sm mt-1">Employee</Text> */}
             </View>
-
-            {/* Key info row */}
-            <View className="flex-row justify-center gap-6 mt-6 px-4">
+{/* 
+            Key info - joined date
+            <View className="flex-row justify-center mt-6 px-4">
               <View className="items-center">
                 <MaterialCommunityIcons
                   name="calendar"
                   size={22}
                   color="rgba(255,255,255,0.8)"
                 />
-                <Text className="text-gray-300 text-sm mt-1">1/09/2024</Text>
+                <Text className="text-gray-300 text-sm mt-1">Joined 1/09/2024</Text>
               </View>
-              <View className="items-center">
-                <MaterialCommunityIcons
-                  name="account-group"
-                  size={22}
-                  color="rgba(255,255,255,0.8)"
-                />
-                <Text className="text-gray-300 text-sm mt-1">15</Text>
-              </View>
-              <View className="items-center">
-                <View className="w-8 h-8 rounded-full bg-white/10 items-center justify-center">
-                  <Ionicons name="arrow-up" size={16} color="#fff" />
-                </View>
-                <Text className="text-gray-300 text-sm mt-1">$100 / mnth</Text>
-              </View>
-            </View>
-
-            {/* Next payment banner */}
-          
+            </View> */}
 
             {/* Detail list */}
-            <View className="mt-6 px-4">
-              <InfoRow label="Group name" value="Hawaii Vacation" />
-              <InfoRow label="Pickup date" value="1/07/2025" />
-              <InfoRow label="Amount contributed" value="$100" />
-              <InfoRow
-                label="Contribution status"
-                value="Paid"
-                valueClassName="text-green-400"
-              />
+            <View className='mt-6 mb-4  mx-4 '>
+              <Text className='text-text-muted ml-4 mb-2'>Details</Text>
+              <View className="rounded-xl py-1 bg-surface-light">
+                <InfoRow label="Email" value={user?.email ?? '—'} hasBorder={true}/>
+                <InfoRow label="Status" value={'Employee'} hasBorder={true}/>
+                
+                <InfoRow label="Shuttle Route" value="101" hasBorder={false}/>
+              
+              </View>
             </View>
-            <Pressable className="mx-10 mt-6 rounded-2xl px-4 py-3 bg-red-400 flex-row items-center justify-center ">
-              <Text className='text-white text-xl font-bold mr-4'>Logout</Text>
-              <MaterialCommunityIcons name="logout" size={24} color="white" />
-            </Pressable>
-          </ScrollView>
+            <Pressable className="py-4 rounded-2xl w-[90%] mx-auto items-center active:opacity-90">
+          <Text className="text-red-600 text-base font-semibold">
+            Log out
+          </Text>
+              
+        </Pressable>
+          </View>
         </BottomSheetView>
       </BottomSheet>
     </SafeAreaView>
@@ -268,15 +277,17 @@ function InfoRow({
   label,
   value,
   valueClassName = 'text-white',
+  hasBorder
 }: {
   label: string;
   value: string;
   valueClassName?: string;
+  hasBorder:boolean
 }) {
   return (
-    <View className="flex-row justify-between items-center py-3 border-b border-white/10">
-      <Text className="text-gray-400 text-sm">{label}</Text>
-      <Text className={`text-sm font-medium ${valueClassName}`}>{value}</Text>
+    <View className="flex-row justify-between items-center py-3 px-4 border-white/10" style={{borderBottomWidth:hasBorder?2:0}}>
+      <Text className="text-text-primary text-xl">{label}</Text>
+      <Text className={`text-xl text-text-muted font-medium `}>{value}</Text>
     </View>
   );
 }
@@ -290,17 +301,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,   // px-4
     paddingVertical: 16,     // py-4
   },
-  statusBarGradient: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    top: 0,
-    zIndex: 1000,
-  },
   callDriverCard: {
     flex: 1,
     minWidth: 0,
-    borderRadius: 32,
+    borderRadius: 20,
     overflow: 'hidden',
     padding: 16,
     justifyContent: 'flex-end',
@@ -308,7 +312,7 @@ const styles = StyleSheet.create({
   scanQrCard: {
     flex: 1,
     minWidth: 0,
-    borderRadius: 32,
+    borderRadius: 20,
     overflow: 'hidden',
     padding: 16,
     justifyContent: 'flex-end',

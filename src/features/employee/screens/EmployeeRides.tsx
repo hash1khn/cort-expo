@@ -58,62 +58,60 @@ export default function EmployeeRides() {
   });
 
   return (
-    <SafeAreaView className="flex-1 bg-[#171717]" edges={['top']}>
+    <SafeAreaView className="flex-1 bg-background" edges={['top']}>
       {/* Header */}
-      <View className="flex-row items-center px-4 py-3 ">
+      <View className="flex-row items-center justify-center px-4 py-3 ">
         <Pressable
           onPress={() => router.back()}
-          className="w-10 h-10 rounded-full bg-white/10 items-center justify-center mr-2"
+          className="rounded-full flex-row items-center justify-center mr-2 absolute left-2"
         >
-          <Ionicons name="chevron-back" size={24} color="#fff" />
+          <Ionicons name="chevron-back" size={26} color="#9c5af2" />
+          <Text className='text-primary text-lg font-medium'>Home</Text>
         </Pressable>
-        <Text className="flex-1 text-white text-xl font-bold text-center">Ride History</Text>
-        <View className="w-10" />
+        <Text className=" text-text-primary text-xl font-bold text-center">Ride History</Text>
+        
       </View>
 
       {/* Filter - segmented control */}
-      <View className="px-4 pb-6">
-        <View className="flex-row bg-[#2c2b30] rounded-xl p-1 py-0">
+      <View className="px-6 pb-6 mt-5">
+        <View className="flex-row bg-surface-background rounded-lg  py-0">
           <Pressable
             onPress={() => setActiveFilter('all')}
+            hitSlop={20}
             className={`flex-1 rounded-lg items-center justify-center ${
-              activeFilter === 'all' ? 'bg-[#4d4d4f]' : ''
+              activeFilter === 'all' ? 'bg-segmented' : ''
             }`}
           >
             <Text
-              className={`text-base font-semibold ${
-                activeFilter === 'all' ? 'text-[#faaf02]' : 'text-white'
-              }`}
+              className={`text-base font-semibold text-white`}
             >
               All
             </Text>
           </Pressable>
-          <View className="w-px bg-white/20 self-stretch" />
+          <View className=" bg-white/20 " />
           <Pressable
             onPress={() => setActiveFilter('shuttle')}
+            hitSlop={20}
             className={`flex-1 rounded-lg items-center justify-center ${
-              activeFilter === 'shuttle' ? 'bg-[#4d4d4f]' : ''
+              activeFilter === 'shuttle' ? 'bg-segmented' : ''
             }`}
           >
             <Text
-              className={`text-base font-semibold ${
-                activeFilter === 'shuttle' ? 'text-[#faaf02]' : 'text-white'
-              }`}
+              className={`text-base font-semibold text-white`}
             >
               Shuttle
             </Text>
           </Pressable>
-          <View className="w-px bg-white/20 self-stretch" />
+          {/* <View className="w-px bg-white/20 self-stretch" /> */}
           <Pressable
             onPress={() => setActiveFilter('chauffeur')}
-            className={`flex-1 py-2 prounded-lg items-center justify-center ${
-              activeFilter === 'chauffeur' ? 'bg-[#4d4d4f]' : ''
+            hitSlop={20}
+            className={`flex-1 py-2 rounded-lg items-center justify-center ${
+              activeFilter === 'chauffeur' ? 'bg-segmented' : ''
             }`}
           >
             <Text
-              className={`text-base font-semibold ${
-                activeFilter === 'chauffeur' ? 'text-[#faaf02]' : 'text-white'
-              }`}
+              className={`text-base font-semibold text-white`}
             >
               Chauffeur
             </Text>

@@ -38,7 +38,7 @@ export function RideHistoryCard({
   return (
     <Pressable
       onPress={onPress}
-      className="rounded-[1.25rem] overflow-hidden bg-[#252525] p-4 active:opacity-90"
+      className="rounded-[1.25rem] overflow-hidden bg-white/10 p-4 active:opacity-90"
     >
       {/* Top section: avatar, name, ride ID | status, arrow */}
       <View className="flex-row justify-between items-start mb-5">

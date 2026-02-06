@@ -138,14 +138,15 @@ export default function RideDetails() {
   return (
     <SafeAreaView className="flex-1 bg-[#171717]" edges={['top']}>
       {/* Header */}
-      <View className="flex-row items-center px-4 py-3 bg-[#171717]">
-        <Pressable
+      <View className="flex-row relative items-center justify-center px-4 py-3 bg-[#171717]">
+      <Pressable
           onPress={() => router.back()}
-          className="w-10 h-10 rounded-full bg-white/10 items-center justify-center mr-2"
+          className="rounded-full flex-row items-center justify-center mr-2 absolute left-2"
         >
-          <Ionicons name="chevron-back" size={24} color="#fff" />
+          <Ionicons name="chevron-back" size={26} color="#9c5af2" />
+          <Text className='text-primary text-lg font-medium'>Back</Text>
         </Pressable>
-        <Text className="flex-1 text-white text-xl font-bold text-center">
+        <Text className="flex-1 text-white text-center text-xl font-bold">
           {details.bookingDate}
         </Text>
         <View className="w-10" />

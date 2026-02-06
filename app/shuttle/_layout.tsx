@@ -3,7 +3,7 @@ import { Stack } from 'expo-router';
 export default function ShuttleLayout() {
   return (
     <Stack screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="(tabs)" />
+      <Stack.Screen name="(home)" />
       <Stack.Screen name="route" />
       <Stack.Screen name="route-overview" />
       <Stack.Screen name="qr-scanner" />
