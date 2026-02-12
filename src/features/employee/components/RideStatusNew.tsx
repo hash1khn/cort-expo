@@ -3,7 +3,6 @@ import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SharedValue } from 'react-native-reanimated';
-import { router } from 'expo-router';
 
 export type RideStatus = 'idle' | 'started' | 'arrived';
 
@@ -51,8 +50,11 @@ export function RideStatusBar({
 
   if (status === 'started') {
     return (
-      <Pressable onLongPress={cycleStatus} >
-        <View style={styles.container}>
+      <Pressable onLongPress={cycleStatus}>
+        <View
+          style={styles.container}
+          className='bg-primary'
+        >
           <View className="flex-1">
             <View className="flex-row items-center mb-2">
               <View className="w-12 h-12 rounded-full bg-white/20 items-center justify-center mr-3">
@@ -73,7 +75,7 @@ export function RideStatusBar({
                 />
               </View>
               <View className="flex-row justify-between">
-                <Text className="text-white/80 text-xs">Left</Text>
+                <Text className="text-white/80 text-xs">Dispatched</Text>
                 <Text className="text-white/80 text-xs">Arriving</Text>
               </View>
             </View>
@@ -86,7 +88,10 @@ export function RideStatusBar({
   if (status === 'arrived') {
     return (
       <Pressable onLongPress={cycleStatus}>
-        <View style={styles.container}>
+        <View
+          style={styles.container}
+          className='bg-primary'
+        >
           <View className="flex-1 justify-between">
             <View className="flex-row items-center mb-2">
               <View className="w-12 h-12 rounded-full bg-white/20 items-center justify-center mr-3">
@@ -117,8 +122,11 @@ export function RideStatusBar({
 
   // idle
   return (
-    <Pressable onLongPress={cycleStatus} onPress={()=>router.push('/employee/(home)/ride-active')}>
-      <View style={styles.container}>
+    <Pressable onLongPress={cycleStatus}>
+      <View
+          style={styles.container}
+          className='bg-primary '
+        >
         <View className="flex-1 gap-1 justify-center">
           <View className="flex-row items-center">
             <Text className="text-white text-4xl font-bold">Clifton</Text>
@@ -144,22 +152,14 @@ export function RideStatusBar({
   );
 }
 
-const PURPLE_CARD = '#7e6aec';
-
 const styles = StyleSheet.create({
   container: {
-    borderRadius: 16,
+    borderRadius: 20,
     overflow: 'hidden',
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 16,
-    minHeight: 170,
-    backgroundColor: PURPLE_CARD,
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 6,
+    minHeight:170
   },
 });

@@ -39,12 +39,12 @@ const EmployeeHome = () => {
       <View className="px-6">
         {/* Greeting and Stats */}
         <View className="mb-8">
-          <Text className="text-3xl font-bold text-black ">
+          <Text className="text-2xl font-bold text-black ">
             Hi {userName},
           </Text>
-          <Text className="text-3xl font-bold text-black">
-            Your next ride is scheduled for{' '}
-            <Text className="text-[#f47f00]">8:45 PM</Text>
+          <Text className="text-2xl font-bold text-black">
+            Your next ride is scheduled {'\n'} for
+            <Text className="text-[#f47f00]"> 8:45 PM</Text>
             {' '}tomorrow{' '}
           </Text>
         </View>
@@ -52,10 +52,10 @@ const EmployeeHome = () => {
 
         {/* Goal Section */}
         <View className="mb-4">
-          <Text className="text-2xl font-bold text-black mb-4">Upcoming</Text>
+          <Text className="text-[17px] font-bold text-black mb-4">Upcoming</Text>
           
           <Pressable 
-            className="rounded-3xl overflow-hidden"
+            className="rounded-2xl overflow-hidden"
           >
             <ImageBackground
               source={require('@/../assets/bannerbg.png')}
@@ -105,7 +105,7 @@ const EmployeeHome = () => {
           </Pressable>
         </View>
         <Pressable
-                
+                onPress={()=>router.push('/employee/(home)/ride-active')}
                 className="flex-row items-center bg-gray-100 rounded-2xl p-4 mb-4"
               >
                 <View className="w-16 h-16 rounded-2xl bg-white overflow-hidden mr-4">
@@ -128,7 +128,7 @@ const EmployeeHome = () => {
         {/* Quick Access Section */}
         <View className="mb-6">
           <View className="flex-row justify-between items-center mb-4">
-            <Text className="text-2xl font-bold text-black">Recent</Text>
+            <Text className="text-[17px] font-bold text-black">Recent</Text>
             <Pressable>
               <Text className="text-[#f47f00] text-base font-semibold">See all</Text>
             </Pressable>

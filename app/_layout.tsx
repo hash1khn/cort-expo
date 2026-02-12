@@ -67,16 +67,18 @@ function RootLayoutContent() {
         <BottomSheetModalProvider>
           <StatusBar style="auto" />
           <Stack screenOptions={{ headerShown: false }}>
-              <Stack.Screen name="shuttle" />
+              {/* <Stack.Protected guard={!isLoggedIn}> */}
+               <Stack.Screen name="shuttle" />
+                {/* </Stack.Protected> */}
 
             <Stack.Protected guard={isLoggedIn}>
               <Stack.Protected guard={isChauffeur}>
                 <Stack.Screen name="(chauffeur)" />
-              </Stack.Protected>
+             </Stack.Protected>
 {/* 
               <Stack.Protected guard={isDriver}>
                 <Stack.Screen name="(shuttle)" />
-              </Stack.Protected> */}
+              </Stack.Protected>  */}
 
               <Stack.Protected guard={isEmployee}>
                 <Stack.Screen name="employee" />

@@ -7,10 +7,11 @@ export default function Layout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="index" />
-        {/* <Stack.Screen name="chauffeur-details" />
-        <Stack.Screen name="qr-scanner" /> */}
+        <Stack.Screen name="qr-scanner" />
         <Stack.Screen name="rides" />
         <Stack.Screen name="ride-details" />
+        <Stack.Screen name="ride-active" />
+        
       </Stack>
     </GestureHandlerRootView>
   );

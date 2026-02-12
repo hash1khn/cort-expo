@@ -10,6 +10,8 @@ type ShuttleState = {
 
   mode: ShuttleMode;
   rideStarted: boolean;
+  /** True after returning from RideInProgress (outbound Clifton→Tower completed) */
+  outboundRideCompleted: boolean;
 
   stops: readonly ShuttleStop[];
   activeStopId: string | null;
@@ -19,6 +21,7 @@ type ShuttleState = {
   setMode: (mode: ShuttleMode) => void;
   startRide: () => void;
   resetRide: () => void;
+  setOutboundRideCompleted: (completed: boolean) => void;
 
   markBoarded: (passengerId: string, at?: Date) => void;
   markAbsent: (passengerId: string, reason: AbsentReason, at?: Date) => void;
@@ -51,6 +54,7 @@ export const useShuttleStore = create<ShuttleState>((set) => ({
 
   mode: 'DROPOFF',
   rideStarted: false,
+  outboundRideCompleted: false,
 
   stops: demoStops,
   activeStopId: null,
@@ -72,6 +76,8 @@ export const useShuttleStore = create<ShuttleState>((set) => ({
       activeStopId: null,
       passengers: demoPassengers,
     }),
+
+  setOutboundRideCompleted: (completed) => set({ outboundRideCompleted: completed }),
 
   markBoarded: (passengerId, at = new Date()) =>
     set((state) => ({

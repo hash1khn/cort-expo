@@ -16,7 +16,7 @@ export const colors = {
   border: 'rgba(12, 34, 94, 0.10)',
   shadowNavy: 'rgba(12, 34, 94, 0.20)',
   iconBg: '#EEF2F7',
-  iconFg: '#9c5af2',
+  iconFg: '#7e6aec',
 } as const;
 
 

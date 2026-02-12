@@ -5,6 +5,7 @@ export default function ShuttleHomeLayout() {
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="index" />
       <Stack.Screen name="ride" />
+      <Stack.Screen name="return" />
       <Stack.Screen name="profile" />
       <Stack.Screen name="settings" />
       <Stack.Screen name="shuttle-driver" />

@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { RideHistoryCard, type RideStatus } from '../components/RideHistoryCard';
+import { colors } from '@/core/theme';
 
 type FilterType = 'all' | 'shuttle' | 'chauffeur';
 
@@ -65,7 +66,7 @@ export default function EmployeeRides() {
           onPress={() => router.back()}
           className="rounded-full flex-row items-center justify-center mr-2 absolute left-2"
         >
-          <Ionicons name="chevron-back" size={26} color="#9c5af2" />
+          <Ionicons name="chevron-back" size={26} color={colors.iconFg} />
           <Text className='text-primary text-lg font-medium'>Home</Text>
         </Pressable>
         <Text className=" text-text-primary text-xl font-bold text-center">Ride History</Text>

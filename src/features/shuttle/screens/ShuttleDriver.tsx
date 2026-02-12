@@ -1,12 +1,19 @@
-import { useState } from 'react';
 import { Pressable, Text, View, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather, Ionicons } from '@expo/vector-icons';
-import { colors } from '@/core/theme';
-import { router, useRouter } from 'expo-router';
+import { router } from 'expo-router';
+import { useShuttleStore } from '../store';
 
 export function ShuttleDriver() {
-  const [rideStarted, setRideStarted] = useState(false);
+  const outboundRideCompleted = useShuttleStore((s) => s.outboundRideCompleted);
+
+  const handleCliftonTowerPress = () => {
+    if (outboundRideCompleted) {
+      router.push('/shuttle/(home)/return');
+    } else {
+      router.push('/shuttle/(home)/ride');
+    }
+  };
 
   // Updated Data structure for the Information section
   const routeDetails = {
@@ -16,7 +23,6 @@ export function ShuttleDriver() {
     start: "08:30 AM",
     end: "09:30 AM"
   };
-const router=useRouter();
   // Helper component for the info rows to keep code DRY
   const InfoRow = ({ label, value, isLast = false }: { label: string, value: string, isLast?: boolean }) => (
     <View 
@@ -49,7 +55,7 @@ const router=useRouter();
         </View>
 
         {/* ACTIVE TRIP CARD */}
-        <View className="rounded-[32px] p-6 bg-[#8B5CF6] mb-6 shadow-xl">
+        <View className="rounded-3xl p-6 bg-[#8B5CF6] mb-6 shadow-xl">
           <View className="flex-row items-center justify-between mb-6">
             <View className="flex-row items-center gap-3">
               <View className="p-2 bg-white/20 rounded-xl">
@@ -73,11 +79,11 @@ const router=useRouter();
 
      
             <Pressable
-              onPress={() => router.push('/shuttle/(home)/ride')}
+              onPress={handleCliftonTowerPress}
               className="flex-row items-center justify-center gap-2 py-4 rounded-2xl bg-white active:scale-[0.98]"
             >
               <Ionicons name="play-sharp" size={20} color={'#8B5CF6'} />
-              <Text className="text-lg font-bold text-[#8B5CF6]">Start Trip</Text>
+              <Text className="text-2xl font-bold text-[#8B5CF6]"> شروع کریں</Text>
             </Pressable>
          
 

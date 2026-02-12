@@ -14,8 +14,8 @@ import { scheduleOnUI } from 'react-native-worklets';
 import { colors } from '@/core/theme';
 import { scheduleOnRN } from 'react-native-worklets';
 
-const THUMB_SIZE = 52;
-const TRACK_HEIGHT = 56;
+const THUMB_SIZE = 65;
+const TRACK_HEIGHT = 65;
 const SPRING_CONFIG = {
   damping: 20,
   stiffness: 300,
@@ -86,7 +86,7 @@ export function SlideToStartTrip({ label = 'Slide to start trip', onComplete }: 
   return (
     <View style={styles.wrapper} onLayout={onLayout}>
       <GestureDetector gesture={panGesture}>
-        <View style={styles.track}>
+        <View style={styles.track} className='bg-surface-light'>
           <Animated.View style={[styles.progressFill, progressStyle]} />
           <Text style={styles.label} pointerEvents="none">
             {label}
@@ -107,7 +107,7 @@ const styles = StyleSheet.create({
   track: {
     height: TRACK_HEIGHT,
     borderRadius: TRACK_HEIGHT / 2,
-    backgroundColor: '#28282a',
+   
     justifyContent: 'center',
     overflow: 'hidden',
     position: 'relative',

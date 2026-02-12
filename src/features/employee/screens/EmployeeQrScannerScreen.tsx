@@ -63,7 +63,7 @@ export function EmployeeQrScannerScreen({ onClose, onSuccess }: Props) {
   }
 
   return (
-    <View style={styles.root}>
+    <SafeAreaView style={styles.root}>
       <CameraView
         style={StyleSheet.absoluteFill}
         facing="back"
@@ -110,7 +110,7 @@ export function EmployeeQrScannerScreen({ onClose, onSuccess }: Props) {
           </View>
         ) : null}
       </SafeAreaView>
-    </View>
+    </SafeAreaView>
   );
 }
 

@@ -1,7 +1,6 @@
 import React, { useEffect } from 'react';
 import { useNavigation } from '@react-navigation/native';
 
-import { EmployeeDashboardScreen } from './EmployeeDashboardScreen';
 import { useRouter } from 'expo-router';
 import { useAppDispatch, useAppSelector } from '../../../store/hooks';
 import { useGetChauffeurBookingsQuery } from '../services/bookingsApi';
@@ -54,12 +53,12 @@ export function EmployeeHomeScreen() {
     }
   }, [data, dispatch]);
 
-  return (
-    <EmployeeDashboardScreen
-      onScanPress={() => navigation.navigate('EmployeeQrScanner')}
-      onPreviewSuccessPress={() => navigation.navigate('BoardingSuccess')}
-      onChauffeurPress={() => router.push('/employee/(home)/chauffeur-details')}
-      chauffeurRideLoading={isLoading}
-    />
+  return (<></>
+    // <EmployeeDashboardScreen
+    //   onScanPress={() => navigation.navigate('EmployeeQrScanner')}
+    //   onPreviewSuccessPress={() => navigation.navigate('BoardingSuccess')}
+    //   onChauffeurPress={() => router.push('/employee/(home)/chauffeur-details')}
+    //   chauffeurRideLoading={isLoading}
+    // />
   );
 }
