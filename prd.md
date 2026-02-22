@@ -74,7 +74,7 @@ Credential Export: Admin downloads a "User Credentials Sheet" to email to the Cl
 A.4 Financial Configuration (Contracts)
 Global Fuel Price: Input current Petrol/Diesel price (e.g., 280 PKR).
 Fuel Consumption Master: Define km/L for every car type (e.g., Corolla = 10km/L).
-Vendor Contracts (Chauffeur):
+Vendor Contracts chauffeur:
 Contract %: The agreed revision percentage (e.g., 0.1).
 Base Fuel Price: The price at which the contract was signed.
 Auto-Revision: If Global Fuel Price changes, system auto-updates rates based on Contract %.

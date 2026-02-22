@@ -31,7 +31,7 @@ Global Fuel Configuration:
 Input: Current Fuel Price (e.g., 280.50 PKR).
 Action: "Update Price" button.
 Trigger: When updated, system checks all Client Contracts for "Auto-Revision" logic.
-Create Client Contract (Chauffeur):
+Create Client Contract chauffeur:
 Prerequisite: Company must have "Chauffeur Service" enabled.
 Base Rates Table: Grid input for each Whitelisted Vehicle.
 Columns: Vehicle Type, 5Hr Rate, 10Hr Rate, 24Hr Rate, Monthly (10hr), Monthly (24hr).

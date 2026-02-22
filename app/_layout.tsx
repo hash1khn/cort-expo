@@ -1,4 +1,4 @@
-import { Stack } from 'expo-router';
+import { Stack, usePathname, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -49,7 +49,33 @@ function RootLayoutContent() {
   const isDriver = role === 'SHUTTLE_DRIVER';
   const isEmployee = role === 'EMPLOYEE';
 
-  useSplashPrefetch(fontsLoaded, hasHydrated, isEmployee, user?.id, user?.company_id);
+  const pathname = usePathname();
+  const segments = useSegments();
+
+  // Debug: log where the app is and which guards are active
+  useEffect(() => {
+    const activeStack = !hasHydrated
+      ? '(waiting hydration)'
+      : !isLoggedIn
+        ? '(auth)'
+        : isChauffeur
+          ? '(chauffeur)'
+          : isDriver
+            ? '(shuttle)'
+            : isEmployee
+              ? 'employee'
+              : '(none)';
+    console.log('[ROUTE]', {
+      pathname,
+      segments: segments.slice(),
+      hasHydrated,
+      isLoggedIn,
+      role: role ?? 'null',
+      activeStack,
+    });
+  }, [pathname, segments, hasHydrated, isLoggedIn, role]);
+
+  useSplashPrefetch(fontsLoaded, hasHydrated);
 
   useEffect(() => {
     setOnUnauthorized(() => store.dispatch(logOut()));
@@ -60,25 +86,24 @@ function RootLayoutContent() {
   if (!fontsLoaded || !hasHydrated) {
     return null;
   }
-
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
         <BottomSheetModalProvider>
           <StatusBar style="auto" />
           <Stack screenOptions={{ headerShown: false }}>
-              {/* <Stack.Protected guard={!isLoggedIn}> */}
-               <Stack.Screen name="shuttle" />
-                {/* </Stack.Protected> */}
+            <Stack.Protected guard={!isLoggedIn}> 
+               <Stack.Screen name="(auth)" />
+               </Stack.Protected> 
 
             <Stack.Protected guard={isLoggedIn}>
               <Stack.Protected guard={isChauffeur}>
-                <Stack.Screen name="(chauffeur)" />
+                <Stack.Screen name="chauffeur" />
              </Stack.Protected>
-{/* 
+
               <Stack.Protected guard={isDriver}>
-                <Stack.Screen name="(shuttle)" />
-              </Stack.Protected>  */}
+                <Stack.Screen name="shuttle" />
+              </Stack.Protected> 
 
               <Stack.Protected guard={isEmployee}>
                 <Stack.Screen name="employee" />
@@ -102,4 +127,3 @@ export default function RootLayout() {
     </Provider>
   );
 }
-
