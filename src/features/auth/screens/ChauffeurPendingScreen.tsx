@@ -65,7 +65,7 @@ export function ChauffeurPendingScreen() {
 
         <CortButton
           title="Go to Login"
-          style={{ marginTop: 12 }}
+        
           onPress={() => navigation.navigate('Login')}
         />
       </CortCard>

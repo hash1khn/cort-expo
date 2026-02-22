@@ -105,7 +105,7 @@ const EmployeeHome = () => {
           </Pressable>
         </View>
         <Pressable
-                onPress={()=>router.push('/employee/(home)/ride-active')}
+                onPress={()=>router.push('/employee/ride-active')}
                 className="flex-row items-center bg-gray-100 rounded-2xl p-4 mb-4"
               >
                 <View className="w-16 h-16 rounded-2xl bg-white overflow-hidden mr-4">
@@ -140,7 +140,7 @@ const EmployeeHome = () => {
               <Pressable
                 key={item.id}
                 className="flex-row items-center bg-gray-100 rounded-2xl p-4"
-                onPress={()=>router.push('/employee/(home)/ride-details')}
+                onPress={()=>router.push('/employee/ride-details')}
               >
                 <View className="w-16 h-16 rounded-2xl bg-white overflow-hidden mr-4">
                   <Image 

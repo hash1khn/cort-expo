@@ -7,23 +7,44 @@ import { router } from 'expo-router';
 
 export type RideStatus = 'idle' | 'started' | 'arrived';
 
+/** Upcoming/latest shuttle trip info for the status bar (from API). */
+export type UpcomingShuttleInfo = {
+  routeName: string;
+  driverName: string;
+  nextShuttleTime: string;
+};
+
 type RideStatusBarProps = {
   /** Controlled mode: pass status from parent. When undefined, uses internal state. */
   status?: RideStatus;
   onStatusChange?: (status: RideStatus) => void;
   /** Enable long-press to cycle through states (for dev/demo) */
   enableDevToggle?: boolean;
-
+  /** Latest/upcoming shuttle trip for this employee's route. When provided, replaces hardcoded labels. */
+  upcomingShuttle?: UpcomingShuttleInfo | null;
+  /** When true, show skeleton loaders instead of content (e.g. while shuttle data is fetching). */
+  isLoading?: boolean;
 };
+
+const DEFAULT_ROUTE_LABEL = 'Nazimabad ↔ Tower';
+const DEFAULT_DRIVER = 'Sajjad';
+const DEFAULT_NEXT_TIME = '08:30 AM';
+
+const SKELETON_BG = 'rgba(255,255,255,0.35)';
 
 export function RideStatusBar({
   status: controlledStatus,
   onStatusChange,
   enableDevToggle = true,
-
+  upcomingShuttle,
+  isLoading = false,
 }: RideStatusBarProps) {
   const [internalStatus, setInternalStatus] = useState<RideStatus>('idle');
   const status = controlledStatus ?? internalStatus;
+
+  const routeLabel = upcomingShuttle?.routeName ?? DEFAULT_ROUTE_LABEL;
+  const driverName = upcomingShuttle?.driverName ?? DEFAULT_DRIVER;
+  const nextShuttleTime = upcomingShuttle?.nextShuttleTime ?? DEFAULT_NEXT_TIME;
 
   const setStatus = useCallback(
     (next: RideStatus) => {
@@ -49,6 +70,23 @@ export function RideStatusBar({
   const gradientStart = { x: 0 as const, y: 0 as const };
   const gradientEnd = { x: 1 as const, y: 0 as const };
 
+  if (isLoading) {
+    return (
+      <View style={styles.container}>
+        <View className="flex-1 gap-1 justify-center">
+          <View style={[styles.skeleton, { width: '70%', height: 36, borderRadius: 8 }]} />
+          <View style={[styles.skeleton, { width: 140, height: 18, borderRadius: 6, marginTop: 6 }]} />
+          <View
+            style={[
+              styles.skeleton,
+              { width: 180, height: 36, borderRadius: 12, marginTop: 12 },
+            ]}
+          />
+        </View>
+      </View>
+    );
+  }
+
   if (status === 'started') {
     return (
       <Pressable onLongPress={cycleStatus} >
@@ -60,7 +98,7 @@ export function RideStatusBar({
               </View>
               <View>
                 <Text className="text-white text-xl font-bold">Ride is on the way</Text>
-                <Text className="text-text-primary text-sm">Clifton ↔ Tower</Text>
+                <Text className="text-text-primary font-medium text-sm">{routeLabel}</Text>
               </View>
             </View>
             <Text className="text-white/90 text-sm mb-1">ETA:</Text>
@@ -94,7 +132,7 @@ export function RideStatusBar({
               </View>
               <View>
                 <Text className="text-white text-xl font-bold">Shuttle has arrived</Text>
-                <Text className="text-white/80 text-sm">Clifton ↔ Tower</Text>
+                <Text className="text-white/80 text-sm">{routeLabel}</Text>
               </View>
             </View>
             <View className="flex-row items-end justify-between">
@@ -117,34 +155,27 @@ export function RideStatusBar({
 
   // idle
   return (
-    <Pressable onLongPress={cycleStatus} onPress={()=>router.push('/employee/(home)/ride-active')}>
+    <Pressable onLongPress={cycleStatus} onPress={()=>router.push('/employee/ride-active')}>
       <View style={styles.container}>
         <View className="flex-1 gap-1 justify-center">
-          <View className="flex-row items-center">
-            <Text className="text-white text-4xl font-bold">Clifton</Text>
-            <Ionicons
-              name="swap-horizontal"
-              size={20}
-              color="#fff"
-              style={{ marginHorizontal: 4 }}
-            />
-            <Text className="text-white text-4xl font-bold">Tower</Text>
+          <View className="flex-row items-center flex-wrap">
+            <Text className="text-white text-4xl font-bold">{routeLabel}</Text>
           </View>
-          <Text className="text-white text-base font-semibold mt-1">Driver: Sajjad</Text>
+          <Text className="text-white text-base font-semibold mt-1">Driver: {driverName}</Text>
           <View className="flex-row items-center bg-white px-2.5 py-1.5 rounded-xl self-start mt-2.5 gap-1.5">
-            <Ionicons name="time-outline" size={14} color="#9c5af2" />
-            <Text className="text-primary text-base font-bold">Next Shuttle: 08:30 AM</Text>
+            <Ionicons name="time-outline" size={14} color="black" />
+            <Text className="text-black text-base font-bold">Next Shuttle: {nextShuttleTime}</Text>
           </View>
         </View>
-        <View className="w-20 h-20 rounded-full bg-white/20 items-center justify-center">
+        {/* <View className="w-20 h-20 rounded-full bg-white/20 items-center justify-center">
           <Ionicons name="bus-outline" size={42} color="#fff" />
-        </View>
+        </View> */}
       </View>
     </Pressable>
   );
 }
 
-const PURPLE_CARD = '#7e6aec';
+const PURPLE_CARD = '#f47f00';
 
 const styles = StyleSheet.create({
   container: {
@@ -154,12 +185,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 16,
-    minHeight: 170,
+    minHeight: 150,
     backgroundColor: PURPLE_CARD,
     elevation: 4,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.2,
     shadowRadius: 6,
+  },
+  skeleton: {
+    backgroundColor: SKELETON_BG,
   },
 });

@@ -7,12 +7,12 @@ export type MockUser = {
   full_name: string;
   phone: string;
   role: UserRole;
-  company_id: number;
+  company_id: number | null;
   account_status: 'ACTIVE' | 'INACTIVE' | 'SUSPENDED';
   enabled_services: {
     shuttle: boolean;
     chauffeur: boolean;
-  };
+  } | null;
   avatar?: string;
   rating?: number; // chauffeur only
   hasPrivateRide?: boolean; // employee only (demo)

@@ -21,18 +21,19 @@ const baseQuery = fetchBaseQuery({
 
 const baseQueryWithReauth = async (args: any, api: any, extraOptions: any) => {
   let result = await baseQuery(args, api, extraOptions);
-  
+
   if (result.error && result.error.status === 401) {
     await tokenStorage.clearTokens();
     triggerOnUnauthorized();
   }
-  
+
   return result;
 };
 
 export const baseApi = createApi({
   reducerPath: 'api',
   baseQuery: baseQueryWithReauth,
-  tagTypes: ['Auth', 'Booking', 'ChauffeurBooking'],
+  tagTypes: ['Auth', 'Booking', 'ChauffeurBooking', 'ShuttleTrip', 'Attendance'],
   endpoints: () => ({}),
 });
+

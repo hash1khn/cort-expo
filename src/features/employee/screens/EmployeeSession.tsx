@@ -14,8 +14,8 @@ export function EmployeeHomeScreen() {
 
   const { data, isLoading } = useGetChauffeurBookingsQuery(
     {
-      companyId: user?.company_id!,
-      employeeId: user?.id!,
+      companyId: (user?.company_id ?? 0) as number,
+      employeeId: (user?.id ?? '') as string,
     },
     {
       skip: !user?.company_id || !user?.id,

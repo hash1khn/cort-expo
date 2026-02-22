@@ -17,10 +17,12 @@ import { Ionicons } from '@expo/vector-icons';
 // Assuming these are your core components
 import { CortButton, CortCard } from '../../../components';
 import { colors, radii, typography } from '../../../core/theme';
+import { useRouter } from 'expo-router';
 import { useAppDispatch } from '../../../store/hooks';
 import { logIn } from '../store';
 import { useLoginMutation } from '../services/authApi';
 import { mockApi } from '../../../services/mockApi';
+import { getHomePathForRole } from '../utils/getHomePathForRole';
 
 export function LoginScreen() {
   const insets = useSafeAreaInsets();
@@ -33,6 +35,7 @@ export function LoginScreen() {
   const [focusedField, setFocusedField] = useState<'email' | 'password' | null>(null);
 
   const dispatch = useAppDispatch();
+  const router = useRouter();
   const [login, { isLoading: isSubmitting }] = useLoginMutation();
   const [isBiometricLoading, setIsBiometricLoading] = useState(false);
 
@@ -43,6 +46,7 @@ export function LoginScreen() {
       setError(null);
       const result = await login({ email: email.trim(), password }).unwrap();
       dispatch(logIn({ role: result.role, user: result.user }));
+      router.replace(getHomePathForRole(result.role) as Parameters<typeof router.replace>[0]);
     } catch (e: any) {
       const msg = e?.data?.message || e?.message || 'Login failed';
       setError(msg);
@@ -60,6 +64,7 @@ export function LoginScreen() {
       // Use mock employee credentials from mockData.ts
       const { role, user } = await mockApi.login('employee@cort.com', '123456');
       dispatch(logIn({ role, user }));
+      router.replace(getHomePathForRole(role) as Parameters<typeof router.replace>[0]);
     } catch (e) {
       const msg = typeof e === 'string' ? e : e instanceof Error ? e.message : 'Biometric authentication failed';
       setError(msg);

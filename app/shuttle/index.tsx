@@ -1,5 +1,5 @@
 import { ShuttleDriver } from '@/features/shuttle/screens/ShuttleDriver';
 
-export default function ShuttleDriverRoute() {
+export default function ShuttleHomeRoute() {
   return <ShuttleDriver />;
 }

@@ -31,30 +31,30 @@ export function RideHistoryCard({
     .toUpperCase();
 
   const statusColor =
-    status === 'completed' ? '#22c55e' : status === 'missed' ? '#f59e0b' : '#ef4444';
+    status === 'completed' ? '#f59e0b' : status === 'missed' ? '#f59e0b' : '#ef4444';
   const statusLabel =
     status === 'completed' ? 'Completed' : status === 'missed' ? 'Missed' : 'Cancelled';
 
   return (
     <Pressable
       onPress={onPress}
-      className="rounded-[1.25rem] overflow-hidden bg-white/10 p-4 active:opacity-90"
+      className="rounded-[1.25rem] overflow-hidden bg-[#F5F5F5] p-4 active:opacity-90 "
     >
       {/* Top section: avatar, name, ride ID | status, arrow */}
       <View className="flex-row justify-between items-start mb-5">
         <View className="flex-row items-center flex-1 min-w-0">
-          <View className="w-12 h-12 rounded-full bg-[#1a1a1a] items-center justify-center mr-3">
-            <Text className="text-white text-base font-bold">{initials}</Text>
+          <View className="w-12 h-12 rounded-full bg-white items-center justify-center mr-3">
+            <Text className="text-gray-500 text-base font-bold">{initials}</Text>
           </View>
           <View className="flex-1 min-w-0">
-            <Text className="text-white text-lg font-bold">{driverName}</Text>
-            <Text className="text-gray-400 text-sm mt-0.5">{rideId}</Text>
-          </View>
+            <Text className="text-black text-lg font-bold">{driverName}</Text>
+            <Text className="text-gray-400 text-xs mt-0.5">{dateTime}</Text>
+            </View>
         </View>
         <View className="flex-row items-center gap-1">
-          <Text style={{ color: statusColor }} className="text-sm font-medium">
+          {/* <Text style={{ color: statusColor }} className="text-sm font-medium">
             {statusLabel}
-          </Text>
+          </Text> */}
           <Ionicons name="chevron-forward" size={18} color="#9ca3af" />
         </View>
       </View>
@@ -65,7 +65,7 @@ export function RideHistoryCard({
           <Text className="text-gray-500 text-[10px] font-medium uppercase tracking-wider">
             Pick-up
           </Text>
-          <Text className="text-white text-base font-bold mt-1">{pickup}</Text>
+          <Text className="text-black text-base font-bold mt-1">{pickup}</Text>
         </View>
         <View
           style={{
@@ -81,10 +81,10 @@ export function RideHistoryCard({
           <Text className="text-gray-500 text-[10px] font-medium uppercase tracking-wider">
             Destination
           </Text>
-          <Text className="text-white text-base font-bold mt-1">{destination}</Text>
+          <Text className="text-black text-base font-bold mt-1">{destination}</Text>
         </View>
       </View>
-      <Text className="text-gray-400 text-xs mt-0.5">{dateTime}</Text>
+      {/* <Text className="text-gray-400 text-xs mt-0.5">{dateTime}</Text> */}
 
     </Pressable>
   );

@@ -1,28 +1,37 @@
-import React, { useCallback, useMemo, useRef, useState } from 'react';
-import { Linking, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
-import MapView, { Marker, Polyline } from 'react-native-maps';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import BottomSheet, { BottomSheetBackdrop, BottomSheetModal, BottomSheetView } from '@gorhom/bottom-sheet';
-import {
-  shuttleCoordinates,
-  mockShuttlePolyline,
-} from '@/services/mockData';
-import { colors, radii, shadows } from '@/core/theme';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Linking, Platform, Pressable, StyleSheet, Text, View, ScrollView } from 'react-native';
+import { Entypo, Ionicons } from '@expo/vector-icons';
+import { colors } from '@/core/theme';
 import { SlideToStartTrip } from '../components';
-import { useShuttleStore } from '../store';
 import { router } from 'expo-router';
-
-const FIRST_STOP = { name: 'Office', address: 'Clifton Campus, Building A' };
+import { SafeAreaView } from 'react-native-safe-area-context';
+import {
+  BottomSheetBackdrop,
+  BottomSheetModal,
+  BottomSheetView,
+} from '@gorhom/bottom-sheet';
+import { useLanguage } from '@/features/shared/context/LanguageContext';
+import {
+  useGetTodayTripQuery,
+  useGetTripEmployeesQuery,
+  useGetTripAttendanceQuery,
+  useScanPassengerMutation,
+  useMarkPassengerAbsentMutation,
+  ShuttleTrip,
+  TripEmployee,
+} from '../services/shuttleApi';
 
 type EmployeeStatus = 'present' | 'absent';
 
 type StopEmployee = { id: string; name: string; number: string; status: EmployeeStatus };
 
-const STOP_EMPLOYEES: StopEmployee[] = [
-  { id: '1', name: 'Saleem Ali', number: '+92 300 1234567', status: 'present' },
-  { id: '2', name: 'Sajid Ahmed', number: '+92 300 9876543', status: 'absent' },
-  { id: '3', name: 'Haroon Ali', number: '+92 300 5551234', status: 'present' },
-];
+type Stop = {
+  id: number;
+  name: string;
+  eta: string;
+  lat: number;
+  lng: number;
+};
 
 function getInitials(name: string) {
   return name
@@ -34,28 +43,89 @@ function getInitials(name: string) {
 }
 
 export default function RideInProgress() {
-  const bottomSheetRef = useRef<BottomSheet>(null);
-  const actionSheetRef = useRef<BottomSheetModal>(null);
-  const snapPoints = useMemo(() => ['50%', '65%', '75%'], []);
-  const actionSnapPoints = useMemo(() => ['35%'], []);
-  const [rideStarted, setRideStarted] = useState(false);
-  const [stopArrived, setStopArrived] = useState(false);
-  const [employees, setEmployees] = useState<StopEmployee[]>(STOP_EMPLOYEES);
-  const [selectedEmployee, setSelectedEmployee] = useState<StopEmployee | null>(null);
+  const { language } = useLanguage();
+  const isUrdu = language === 'ur';
 
-  React.useEffect(() => {
+  const { data: todayTrips = [], isLoading: isTripsLoading } = useGetTodayTripQuery();
+  const activeTrip: ShuttleTrip | null = todayTrips.length > 0 ? todayTrips[0] : null;
+  const tripId = activeTrip?.id;
+  const { data: tripEmployeesRaw = [], isLoading: isEmployeesLoading } = useGetTripEmployeesQuery(
+    tripId as number,
+    { skip: !tripId },
+  );
+
+  const { data: tripAttendance = [], isFetching: isAttendanceFetching } = useGetTripAttendanceQuery(
+    tripId as number,
+    { skip: !tripId },
+  );
+
+  const [scanPassenger, { isLoading: isScanning }] = useScanPassengerMutation();
+  const [markPassengerAbsent, { isLoading: isMarkingAbsent }] =
+    useMarkPassengerAbsentMutation();
+
+  // Single source of truth: derive present/absent from server manifest only.
+  const attendanceStatusByEmployeeId = useMemo(() => {
+    const map: Record<string, EmployeeStatus> = {};
+    tripAttendance.forEach((log) => {
+      const normalized = log.status?.toUpperCase();
+      map[log.employeeId] =
+        normalized === 'PRESENT' || normalized === 'BOARDED' ? 'present' : 'absent';
+    });
+    return map;
+  }, [tripAttendance]);
+
+  const stops: Stop[] = useMemo(() => {
+    if (!activeTrip?.routes) return [];
+    const routeStops = [...activeTrip.routes.route_stops].sort(
+      (a, b) => a.sequence_order - b.sequence_order,
+    );
+
+    const formatEta = (stop: any): string => {
+      const raw =
+        activeTrip.direction === 'MORNING' ? stop.morning_eta ?? null : stop.evening_eta ?? null;
+      if (!raw) return '—';
+      if (raw.includes('T')) {
+        const d = new Date(raw);
+        if (Number.isNaN(d.getTime())) return '—';
+        return d.toLocaleTimeString(undefined, {
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: true,
+        });
+      }
+      const [hStr, mStr = '00'] = raw.split(':');
+      const hour24 = Number.parseInt(hStr, 10);
+      if (Number.isNaN(hour24)) return raw;
+      const minutes = mStr.padStart(2, '0');
+      const suffix = hour24 >= 12 ? 'PM' : 'AM';
+      const hour12 = ((hour24 + 11) % 12) + 1;
+      return `${hour12}:${minutes} ${suffix}`;
+    };
+
+    return routeStops.map((stop) => ({
+      id: stop.id,
+      name: stop.name,
+      eta: formatEta(stop),
+      lat: stop.lat ?? 0,
+      lng: stop.lng ?? 0,
+    }));
+  }, [activeTrip]);
+
+  const [currentStopIndex, setCurrentStopIndex] = useState(0);
+  const [rideStarted, setRideStarted] = useState(false);
+
+  // Bottom sheet for actions on a specific employee
+  const [selectedEmployee, setSelectedEmployee] = useState<StopEmployee | null>(null);
+  const actionSheetRef = useRef<BottomSheetModal>(null);
+  const actionSheetSnapPoints = useMemo(() => ['35%'], []);
+
+  useEffect(() => {
     if (selectedEmployee) {
       actionSheetRef.current?.present();
+    } else {
+      actionSheetRef.current?.dismiss();
     }
   }, [selectedEmployee]);
-
-  const handleToggleStatus = useCallback((employeeId: string, status: EmployeeStatus) => {
-    setEmployees((prev) =>
-      prev.map((e) => (e.id === employeeId ? { ...e, status } : e))
-    );
-    actionSheetRef.current?.dismiss();
-    setSelectedEmployee(null);
-  }, []);
 
   const handleCall = useCallback((phone?: string) => {
     if (phone) {
@@ -64,258 +134,583 @@ export default function RideInProgress() {
     }
   }, []);
 
-  const handleMarkAsArrived = useCallback(() => {
-    setStopArrived(true);
-    bottomSheetRef.current?.snapToIndex(1);
+  const openInMaps = useCallback((stop: Stop) => {
+    const appleUrl = `http://maps.google.com/?daddr=${stop.lat},${stop.lng}&dirflg=d`;
+    const androidUrl = `geo:0,0?q=${stop.lat},${stop.lng}(${encodeURIComponent(stop.name)})`;
+    const url = Platform.OS === 'ios' ? appleUrl : androidUrl;
+
+    Linking.openURL(url).catch(() => {
+      // swallow error; we don't want to block the UI if maps isn't available
+    });
   }, []);
 
-  const setOutboundRideCompleted = useShuttleStore((s) => s.setOutboundRideCompleted);
-
-  const handleProceedToNextStop = useCallback(() => {
-    setOutboundRideCompleted(true);
-    router.push('/shuttle/(home)');
-  }, [setOutboundRideCompleted]);
-
-  const routePoints = useMemo(
-    () =>
-      mockShuttlePolyline.map((p) => ({
-        latitude: p.latitude,
-        longitude: p.longitude,
-      })),
-    []
+  const currentStop = useMemo(
+    () => (stops.length > 0 ? stops[Math.min(currentStopIndex, stops.length - 1)] : null),
+    [stops, currentStopIndex],
   );
+  const isLastStop = stops.length > 0 && currentStopIndex === stops.length - 1;
 
-  const [busIndex, setBusIndex] = useState(0);
-  React.useEffect(() => {
-    const t = setInterval(() => {
-      setBusIndex((i) => (i + 1) % routePoints.length);
-    }, 1500);
-    return () => clearInterval(t);
-  }, [routePoints.length]);
+  const employeesAtCurrentStop: StopEmployee[] = useMemo(() => {
+    if (!currentStop) return [];
+    const list = tripEmployeesRaw.filter((emp: TripEmployee) => emp.pickupStopId === currentStop.id);
+    return list.map((emp) => ({
+      id: emp.id,
+      name: emp.fullName,
+      number: emp.phone ?? '',
+      status: attendanceStatusByEmployeeId[emp.id] ?? 'absent',
+    }));
+  }, [currentStop, tripEmployeesRaw, attendanceStatusByEmployeeId]);
 
-  const busCoord = routePoints[Math.min(busIndex, routePoints.length - 1)];
+  const slideLabel = rideStarted
+    ? isLastStop
+      ? 'Slide to complete trip'
+      : 'Slide to mark as arrived'
+    : 'Slide to start trip';
 
-  const handleSheetChanges = useCallback((index: number) => {}, []);
+  const slideKey = rideStarted
+    ? isLastStop
+      ? `complete-${currentStop?.id ?? 'none'}`
+      : `arrived-${currentStop?.id ?? 'none'}`
+    : `start-${currentStop?.id ?? 'none'}`;
+
+  const handleSlideComplete = useCallback(() => {
+    if (!currentStop || !stops.length) {
+      return;
+    }
+
+    if (!rideStarted) {
+      // First slide: start trip and navigate to first stop
+      setRideStarted(true);
+      openInMaps(currentStop);
+      return;
+    }
+
+    if (!isLastStop) {
+      // Mark current stop as arrived and navigate to next stop
+      const nextIndex = currentStopIndex + 1;
+      const nextStop = stops[nextIndex];
+      setCurrentStopIndex(nextIndex);
+      openInMaps(nextStop);
+    } else {
+      // Final stop: complete trip and return home
+      router.push('/shuttle');
+    }
+  }, [rideStarted, isLastStop, currentStop, currentStopIndex, openInMaps]);
 
   return (
-    <View style={styles.root}>
-      <MapView
-        style={styles.map}
-        initialRegion={{
-          latitude: shuttleCoordinates.latitude,
-          longitude: shuttleCoordinates.longitude,
-          latitudeDelta: 0.01,
-          longitudeDelta: 0.01,
-        }}
-        toolbarEnabled={false}
-        showsMyLocationButton={false}
-        showsUserLocation
-        userInterfaceStyle='dark'
+    <SafeAreaView style={styles.root}>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
       >
-        <Polyline
-          coordinates={routePoints}
-          strokeWidth={4}
-          strokeColor="rgba(12, 34, 94, 0.65)"
-        />
-        {busCoord ? (
-          <Marker coordinate={busCoord} anchor={{ x: 0.5, y: 0.5 }}>
-            <View style={styles.busMarker}>
-              <MaterialCommunityIcons name="bus" size={18} color={colors.white} />
-            </View>
-          </Marker>
-        ) : null}
-      </MapView>
+        {/* Header */}
+        <View style={styles.header}>
+          <Text style={styles.titleText}>
+            {rideStarted ? 'Trip In Progress' : 'Ready to go'}
+          </Text>
+          <Text style={styles.subtitleText}>Black Hiace • ABR 986</Text>
+        </View>
 
-      <BottomSheet
-        ref={bottomSheetRef}
-        index={0}
-        snapPoints={snapPoints}
-        enablePanDownToClose={false}
-        onChange={handleSheetChanges}
-       
-        backgroundStyle={{ backgroundColor: '#1F1F1D'}}
-        handleIndicatorStyle={{ backgroundColor: 'rgba(255,255,255,0.4)' }}
-      >
-        <BottomSheetView style={styles.sheetContent}>
-          <View className="px-5 pb-8">
-            {!rideStarted ? (
+        {/* Next stop card */}
+        <View style={styles.cardOuter}>
+          <View style={styles.cardInner}>
+            {currentStop && (
               <>
-                <Text className="text-text-primary text-2xl font-bold mb-1">
-                  Ready to go
-                </Text>
-                <Text className="text-text-muted text-sm mb-5">
-                  HIACE - ABR 986 
-                </Text>
-
-                <View
-                  className="rounded-2xl p-4 mb-5 flex-row"
-                  style={{ backgroundColor: '#28282a' }}
-                >
-                  <View
-                    className="w-10 h-10 rounded-xl items-center justify-center mr-3"
-                    style={{ backgroundColor: '#3a3a3d' }}
-                  >
-                    <Ionicons name="location" size={22} color="#856ff6" />
-                  </View>
-                  <View className="flex-1">
-                    <Text className="text-white text-base font-semibold mb-0.5">
-                      First stop
-                    </Text>
-                   
-                    <Text className="text-text-muted text-sm mt-0.5">
-                      {FIRST_STOP.address}
-                    </Text>
-                  </View>
-                </View>
-
-                <SlideToStartTrip onComplete={() => setRideStarted(true)} />
-              </>
-            ) : stopArrived ? (
-              <View className="flex-1">
-                <Text className="text-text-primary text-2xl font-bold mb-1">
-                  Stop arrived
-                </Text>
-                <Text className="text-text-muted text-xs font-semibold uppercase tracking-wider mb-2 mt-4 ml-3">
-                  Employees
-                </Text>
-
-                <View className="mb-6 rounded-xl bg-[#2c2c2e] overflow-hidden">
-                  {employees.map((emp) => (
-                    <View
-                      key={emp.id}
-                      className="flex-row items-center py-4 px-3 border-b-white/10 border-b-[1px]"
-                    >
-                      <View
-                        className="w-12 h-12 rounded-xl items-center justify-center mr-3 bg-sheet"
-                      >
-                        <Text className="text-white font-semibold text-sm">
-                          {getInitials(emp.name)}
-                        </Text>
-                      </View>
-                      <View className="flex-1 min-w-0">
-                        <Text className="text-white font-bold text-base" numberOfLines={1}>
-                          {emp.name}
-                        </Text>
-                        <Text className="text-text-muted text-sm mt-0.5" numberOfLines={1}>
-                          {emp.status === 'present' ? 'Present' : 'Absent'}
-                        </Text>
-                      </View>
-                      <Pressable
-                        hitSlop={8}
-                        onPress={() => setSelectedEmployee(emp)}
-                        className="w-8 h-8 items-center justify-center active:opacity-70"
-                      >
-                        <Ionicons
-                          name="ellipsis-horizontal"
-                          size={20}
-                          color="rgba(255,255,255,0.7)"
-                        />
-                      </Pressable>
+                <View style={styles.cardHeaderRow}>
+                  <View style={styles.cardHeaderLeft}>
+                    <View style={styles.iconPill}>
+                      <Ionicons name="location" size={20} color="#000000" />
                     </View>
-                  ))}
+                    <View>
+                      <Text style={styles.cardLabel}>Next stop</Text>
+                      <Text style={styles.cardTitle}>{currentStop.name}</Text>
+                    </View>
+                  </View>
+                  <View style={styles.etaPill}>
+                    <Text style={styles.etaText}>{currentStop.eta}</Text>
+                  </View>
                 </View>
-
-                <Pressable
-                  onPress={handleProceedToNextStop}
-                  className="py-3 rounded-xl bg-white items-center justify-center active:opacity-90"
-                >
-                  <Text className="text-black font-semibold text-base">Proceed to next stop</Text>
-                </Pressable>
-              </View>
-            ) : (
-              <View>
-                <Text className="text-text-muted text-lg ">Next Stop</Text>
-
-                <Text className="text-text-primary text-2xl font-bold mb-1">
-                  National Incubation Centre
-                </Text>
-                <Text className="text-text-muted font-bold text-xl  mb-4">5:45PM ETA</Text>
-                <Pressable
-                  onPress={handleMarkAsArrived}
-                  className="py-3 rounded-xl bg-white items-center justify-center active:opacity-90 mb-4"
-                >
-                  <Text className="text-black font-semibold text-base">Mark as arrived</Text>
-                </Pressable>
-              </View>
+              </>
             )}
           </View>
-        </BottomSheetView>
-      </BottomSheet>
+        </View>
 
+        {/* Employees list */}
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionHeaderLabel}>
+            Employees at this stop
+          </Text>
+        </View>
+
+        <View style={styles.employeesCard}>
+          {isEmployeesLoading ? (
+            <>
+              {[1, 2, 3, 4, 5].map((i) => (
+                <View
+                  // eslint-disable-next-line react/no-array-index-key
+                  key={i}
+                  style={[
+                    styles.employeeRow,
+                    i < 5 && styles.employeeRowDivider,
+                  ]}
+                >
+                  <View
+                    style={[
+                      styles.employeeAvatar,
+                      { backgroundColor: '#E5E7EB' },
+                    ]}
+                  />
+                  <View style={styles.employeeInfo}>
+                    <View
+                      style={{
+                        height: 14,
+                        width: 140,
+                        borderRadius: 999,
+                        backgroundColor: '#E5E7EB',
+                        marginBottom: 6,
+                      }}
+                    />
+                    <View
+                      style={{
+                        height: 10,
+                        width: 90,
+                        borderRadius: 999,
+                        backgroundColor: '#E5E7EB',
+                      }}
+                    />
+                  </View>
+                  <View
+                    style={[
+                      styles.employeeAction,
+                      {
+                        backgroundColor: '#E5E7EB',
+                        borderRadius: 999,
+                      },
+                    ]}
+                  />
+                </View>
+              ))}
+            </>
+          ) : (
+            employeesAtCurrentStop.map((emp, index) => (
+              <View
+                key={emp.id}
+                style={[
+                  styles.employeeRow,
+                  index < employeesAtCurrentStop.length - 1 && styles.employeeRowDivider,
+                ]}
+              >
+                <View style={styles.employeeAvatar}>
+                  <Text style={styles.employeeAvatarText}>
+                    {getInitials(emp.name)}
+                  </Text>
+                </View>
+                <View style={styles.employeeInfo}>
+                  <Text style={styles.employeeName} numberOfLines={1}>
+                    {emp.name}
+                  </Text>
+                  {rideStarted && (
+                    <Text style={styles.employeeStatus} numberOfLines={1}>
+                      {emp.status === 'present' ? 'Present' : 'Absent'}
+                    </Text>
+                  )}
+                </View>
+                {rideStarted && (
+                  <Pressable
+                    hitSlop={8}
+                    onPress={() => setSelectedEmployee(emp)}
+                    style={styles.employeeAction}
+                  >
+                    <Entypo name="dots-three-horizontal" size={20} color="black" />
+                  </Pressable>
+                )}
+              </View>
+            ))
+          )}
+        </View>
+
+        {/* Slide control */}
+        <View style={styles.slideWrapper}>
+          <SlideToStartTrip
+            key={slideKey}
+            label={slideLabel}
+            onComplete={handleSlideComplete}
+          />
+        </View>
+      </ScrollView>
+
+      {/* Action bottom sheet for selected employee */}
       <BottomSheetModal
         ref={actionSheetRef}
-        snapPoints={actionSnapPoints}
+        snapPoints={actionSheetSnapPoints}
         enablePanDownToClose
         onDismiss={() => setSelectedEmployee(null)}
         backdropComponent={(props) => (
-          <BottomSheetBackdrop {...props} disappearsOnIndex={-1} appearsOnIndex={0} />
+          <BottomSheetBackdrop
+            {...props}
+            disappearsOnIndex={-1}
+            appearsOnIndex={0}
+          />
         )}
-        backgroundStyle={{ backgroundColor: '#1F1F1D' }}
-        handleIndicatorStyle={{ backgroundColor: 'rgba(255,255,255,0.4)' }}
+        backgroundStyle={{ backgroundColor: '#FFFFFF' }}
+        handleIndicatorStyle={{ backgroundColor: 'rgba(55,65,81,0.25)' }}
       >
-        <BottomSheetView style={styles.actionSheetContent}>
-          <View className="px-5 pb-8">
-            <Text className="text-text-primary text-lg font-bold mb-1">
-              Update status
-            </Text>
-            <Text className="text-text-muted text-sm mb-5">
-              {selectedEmployee?.name}
-            </Text>
-
+        <BottomSheetView style={{ flex: 1 }}>
+          {/* Header */}
+          <View
+            style={{
+              paddingHorizontal: 20,
+              paddingTop: 12,
+              paddingBottom: 8,
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+            }}
+          >
+            <View style={{ flex: 1 }} >
+             
+              {!!selectedEmployee && (
+               <View className='flex flex-row items-center'>
+               <View style={styles.employeeAvatarSecond}>
+                <Text style={styles.employeeAvatarText}>
+                  {getInitials(selectedEmployee.name)}
+                </Text>
+              </View>
+              <View style={styles.employeeInfo}>
+                <Text className='text-2xl font-semibold' numberOfLines={1}>
+                  {selectedEmployee.name}
+                </Text>
+                <Text className='text-base text-gray-600 ' numberOfLines={1}>
+                  {selectedEmployee.status === 'present' ? 'Present' : 'Absent'}
+                </Text>
+              </View>
+               </View>
+              )}
+            </View>
             <Pressable
-              onPress={() => selectedEmployee && handleToggleStatus(selectedEmployee.id, 'present')}
-              className="py-3 rounded-xl items-center justify-center active:opacity-90 mb-3"
+              onPress={() => setSelectedEmployee(null)}
+              hitSlop={10}
               style={{
-                backgroundColor: 'rgba(34, 197, 94, 0.2)',
-                borderWidth: 1,
-                borderColor: 'rgba(34, 197, 94, 0.5)',
+                width: 28,
+                height: 28,
+                borderRadius: 14,
+                alignItems: 'center',
+                justifyContent: 'center',
               }}
             >
-              <Text className="text-base font-semibold" style={{ color: '#22c55e' }}>
-                Mark as Present
-              </Text>
-            </Pressable>
-
-            <Pressable
-              onPress={() => selectedEmployee && handleToggleStatus(selectedEmployee.id, 'absent')}
-              className="py-3 rounded-xl items-center justify-center active:opacity-90"
-              style={{
-                backgroundColor: 'rgba(239, 68, 68, 0.2)',
-                borderWidth: 1,
-                borderColor: 'rgba(239, 68, 68, 0.5)',
-              }}
-            >
-              <Text className="text-base font-semibold" style={{ color: '#ef4444' }}>
-                Mark as Absent
-              </Text>
+              <Ionicons name="close" size={18} color="#6B7280" />
             </Pressable>
           </View>
+
+          {/* Divider */}
+          <View
+            style={{
+              height: StyleSheet.hairlineWidth,
+              backgroundColor: 'rgba(229,231,235,1)',
+              marginHorizontal: 20,
+              marginBottom: 4,
+            }}
+          />
+
+          {/* Mark as present / absent (localized); present triggers API, refetch updates UI */}
+          {(() => {
+            const currentStatus =
+              selectedEmployee != null
+                ? attendanceStatusByEmployeeId[selectedEmployee.id] ?? 'absent'
+                : 'absent';
+            const isPresent = currentStatus === 'present';
+            const primaryLabel = isUrdu
+              ? isPresent
+                ? 'غیر حاضر نشان زد کریں'
+                : 'حاضری لگائیں'
+              : isPresent
+                ? 'Mark as absent'
+                : 'Mark as present';
+            const isBusy = isScanning || isMarkingAbsent || isAttendanceFetching;
+
+            return (
+              <Pressable
+                onPress={() => {
+                  if (!selectedEmployee) {
+                    setSelectedEmployee(null);
+                    return;
+                  }
+                  if (isPresent && activeTrip) {
+                    markPassengerAbsent({
+                      shuttleTripId: activeTrip.id,
+                      employeeId: selectedEmployee.id,
+                    })
+                      .unwrap()
+                      .then(() => setSelectedEmployee(null))
+                      .catch(() => {});
+                  } else if (!isPresent && activeTrip) {
+                    scanPassenger({
+                      shuttleTripId: activeTrip.id,
+                      employeeId: selectedEmployee.id,
+                      status: 'PRESENT',
+                    })
+                      .unwrap()
+                      .then(() => setSelectedEmployee(null))
+                      .catch(() => {});
+                  }
+                }}
+                disabled={isBusy}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  paddingHorizontal: 20,
+                  paddingVertical: 10,
+                  opacity: isBusy ? 0.6 : 1,
+                }}
+              >
+                <View
+                  style={{
+                    width: 28,
+                    height: 28,
+                    borderRadius: 14,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    marginRight: 12,
+                  }}
+                >
+                  <Ionicons name="checkmark-circle-outline" size={24} color="black" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 14, fontWeight: '600', color: '#111827' }}>
+                    {isBusy ? (isUrdu ? 'لوڈ ہو رہا ہے…' : 'Loading…') : primaryLabel}
+                  </Text>
+                </View>
+              </Pressable>
+            );
+          })()}
+
+          {/* Call passenger / فون کریں */}
+          <Pressable
+            onPress={() => {
+              if (selectedEmployee) {
+                handleCall(selectedEmployee.number);
+              }
+              setSelectedEmployee(null);
+            }}
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              paddingHorizontal: 20,
+              paddingVertical: 10,
+            }}
+          >
+            <View
+              style={{
+                width: 28,
+                height: 28,
+                borderRadius: 14,
+                backgroundColor: '#F3F4F6',
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginRight: 12,
+              }}
+            >
+              <Ionicons name="call-outline" size={18} color="#2563EB" />
+            </View>
+            <View style={{ flex: 1 }} >
+              <Text style={{ fontSize: 14, fontWeight: '600', color: '#111827' }}>
+                {isUrdu ? 'فون کریں' : 'Call passenger'}
+              </Text>
+            </View>
+          </Pressable>
+
+          {/* Divider before destructive action */}
+          <View
+            style={{
+              height: StyleSheet.hairlineWidth,
+              backgroundColor: 'rgba(229,231,235,1)',
+              marginHorizontal: 20,
+              marginVertical: 8,
+            }}
+          />
+
+          {/* Cancel / پیچھے جائیں (red row) */}
+          <Pressable
+            onPress={() => setSelectedEmployee(null)}
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              paddingHorizontal: 20,
+              paddingVertical: 10,
+            }}
+          >
+            <View
+              style={{
+                width: 28,
+                height: 28,
+                borderRadius: 14,
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginRight: 12,
+              }}
+            >
+              <Ionicons name="close-circle-outline" size={18} color="#DC2626" />
+            </View>
+            <Text style={{ fontSize: 14, fontWeight: '600', color: '#DC2626' }}>
+              {isUrdu ? 'پیچھے جائیں' : 'Cancel'}
+            </Text>
+          </Pressable>
         </BottomSheetView>
       </BottomSheetModal>
-    </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.white },
-  map: { ...StyleSheet.absoluteFillObject },
-  busMarker: {
-    width: 34,
-    height: 34,
-    borderRadius: radii.pill,
-    backgroundColor: colors.navy,
+  root: {
+    flex: 1,
+    backgroundColor: colors.white,
+  },
+  scroll: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 24,
+  },
+  header: {
+    marginBottom: 16,
+  },
+  titleText: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: '#000000',
+  },
+  subtitleText: {
+    marginTop: 4,
+    fontSize: 14,
+    color: '#6B7280',
+  },
+  cardOuter: {
+    marginBottom: 20,
+  },
+  cardInner: {
+    borderRadius: 24,
+    backgroundColor: '#EDEDEB',
+    padding: 16,
+  },
+  cardHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  cardHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  iconPill: {
+    padding: 8,
+    borderRadius: 16,
+    backgroundColor: '#FFFFFF',
+  },
+  cardLabel: {
+    fontSize: 11,
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+    color: '#6B7280',
+    fontWeight: '600',
+  },
+  cardTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#000000',
+    marginTop: 2,
+  },
+  etaPill: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: '#000000',
+  },
+  etaText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  addressText: {
+    marginTop: 4,
+    fontSize: 13,
+    color: '#4B5563',
+  },
+  sectionHeader: {
+    marginBottom: 8,
+  },
+  sectionHeaderLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#6B7280',
+    textTransform: 'uppercase',
+  },
+  employeesCard: {
+    borderRadius: 20,
+    backgroundColor: '#F5F5F2',
+    marginBottom: 24,
+    overflow: 'hidden',
+  },
+  employeeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  employeeRowDivider: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(156, 163, 175, 0.4)',
+  },
+  employeeAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: colors.white,
-    ...shadows.floating,
+    marginRight: 10,
   },
-  sheetContent: {
-    flex: 1,
-    backgroundColor: '#1F1F1D',
+  employeeAvatarSecond: {
+    width: 55,
+    height: 55,
+    borderRadius: 12,
+    backgroundColor: "#a3a3a3",
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
   },
-  actionSheetContent: {
+  employeeAvatarText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#111827',
+  },
+  employeeInfo: {
     flex: 1,
-    backgroundColor: '#1F1F1D',
+    minWidth: 0,
+  },
+  employeeName: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#000000',
+  },
+  employeeStatus: {
+    marginTop: 2,
+    fontSize: 12,
+    color: '#6B7280',
+  },
+  employeeAction: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  slideWrapper: {
+    marginTop: 4,
   },
 });

@@ -6,10 +6,17 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import BottomSheet, { BottomSheetScrollView } from '@gorhom/bottom-sheet';
 import { shuttleCoordinates, mockShuttlePolyline } from '@/services/mockData';
 import { router } from 'expo-router';
+import { useAppDispatch, useAppSelector } from '../../../store/hooks';
+import { setIsOutstationDev } from '../store';
 
 const DRIVER_PHONE = '03162211320';
 
 export default function RideActive() {
+  const dispatch = useAppDispatch();
+  const isWaitingForDriverResponse = useAppSelector(
+    (state) => state.employeeRide.isWaitingForDriverResponse,
+  );
+
   const bottomSheetRef = useRef<BottomSheet>(null);
   const snapPoints = useMemo(() => ['42%', '85%'], []);
 
@@ -21,6 +28,11 @@ export default function RideActive() {
   const handleScanQR = useCallback(() => {
     router.push('/employee/qr-scanner');
   }, []);
+
+  const handleDevMarkOutstation = useCallback(() => {
+    // Dev-only toggle: mark this as an outstation flow.
+    dispatch(setIsOutstationDev(true));
+  }, [dispatch]);
 
   const routePoints = useMemo(
     () =>
@@ -86,7 +98,11 @@ export default function RideActive() {
         >
           {/* Header: ETA */}
           <View style={styles.header}>
-            <Text style={styles.headerTitle}>Driver is arriving in ~6 min</Text>
+            <Text style={styles.headerTitle}>
+              {isWaitingForDriverResponse
+                ? 'Waiting for driver to respond...'
+                : 'Driver is arriving in ~6 min'}
+            </Text>
             <Text style={styles.headerSubtitle}>Black Hiace </Text>
           </View>
 
@@ -155,6 +171,15 @@ export default function RideActive() {
             <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
           </Pressable>
 
+          {/* Dev-only: mark this chauffeur ride as outstation */}
+          <Pressable
+            style={styles.devButton}
+            onPress={handleDevMarkOutstation}
+            android_ripple={{ color: '#4B556320' }}
+          >
+            <Text style={styles.devButtonText}>Dev: Mark as outstation ride</Text>
+          </Pressable>
+
           {/* Trip Details */}
           <View style={styles.tripDetails}>
             <View style={styles.tripHeader}>
@@ -183,7 +208,11 @@ export default function RideActive() {
                 </View>
                 <View style={styles.locationInfo}>
                   <Text style={styles.locationLabel}>Dropoff</Text>
-                  <Text style={styles.locationAddress}>Clifton</Text>
+                  <Text style={styles.locationAddress}>
+                    {isWaitingForDriverResponse
+                      ? 'Dropoff submitted, waiting for driver'
+                      : 'Clifton'}
+                  </Text>
                 </View>
               </View>
             </View>
@@ -421,6 +450,21 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     borderWidth: 1,
     borderColor: '#1F1F1F',
+  },
+  devButton: {
+    marginTop: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    backgroundColor: '#111827',
+    borderWidth: 1,
+    borderColor: '#4B5563',
+    alignItems: 'center',
+  },
+  devButtonText: {
+    fontSize: 13,
+    color: '#E5E7EB',
+    fontWeight: '500',
   },
   notesIcon: {
     width: 36,

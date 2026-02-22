@@ -138,7 +138,7 @@ export default function EmployeeRides() {
               dateTime={ride.dateTime}
               onPress={() =>
                 router.push({
-                  pathname: '/employee/(home)/ride-details',
+                  pathname: '/employee/ride-details',
                   params: { rideId: ride.rideId },
                 })
               }

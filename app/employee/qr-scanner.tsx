@@ -1,6 +1,6 @@
 import { useRouter } from 'expo-router';
+import { EmployeeQrScannerScreen } from '@/features/employee/screens/EmployeeQrScannerScreen';
 
-import { EmployeeQrScannerScreen } from '@/features/employee/screens/EmployeeQrScannerScreen'
 export default function EmployeeQrScannerRoute() {
   const router = useRouter();
 
@@ -11,4 +11,3 @@ export default function EmployeeQrScannerRoute() {
     />
   );
 }
-

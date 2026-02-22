@@ -3,9 +3,12 @@ import { tokenStorage } from '../utils/tokenStorage';
 import type { UserRole } from '../../../core/types/navigation';
 
 type BackendRole = 'SUPER_ADMIN' | 'COMPANY_ADMIN' | 'EMPLOYEE' | 'DRIVER';
+type BackendDriverType = 'SHUTTLE' | 'CHAUFFEUR';
 
-function mapRole(backend: BackendRole): UserRole {
-  if (backend === 'DRIVER') return 'CHAUFFEUR';
+function mapRole(backend: BackendRole, driverType?: BackendDriverType): UserRole {
+  if (backend === 'DRIVER') {
+    return driverType === 'SHUTTLE' ? 'SHUTTLE_DRIVER' : 'CHAUFFEUR';
+  }
   if (backend === 'EMPLOYEE') return 'EMPLOYEE';
   return 'EMPLOYEE';
 }
@@ -18,12 +21,13 @@ type LoginResponse = {
       full_name?: string;
       phone?: string;
       role?: BackendRole;
-      company_id?: number;
+      company_id?: number | null;
       account_status?: 'ACTIVE' | 'INACTIVE' | 'SUSPENDED';
+      driver_type?: BackendDriverType;
       enabled_services?: {
         shuttle: boolean;
         chauffeur: boolean;
-      };
+      } | null;
     };
     session?: { access_token?: string; refresh_token?: string };
   };
@@ -36,12 +40,12 @@ export type LoginResult = {
     email: string;
     full_name: string;
     phone: string;
-    company_id: number;
+    company_id: number | null;
     account_status: 'ACTIVE' | 'INACTIVE' | 'SUSPENDED';
     enabled_services: {
       shuttle: boolean;
       chauffeur: boolean;
-    };
+    } | null;
   };
   role: UserRole;
 };
@@ -71,9 +75,7 @@ export async function login(email: string, password: string): Promise<LoginResul
     !user?.email ||
     !user?.full_name ||
     !user?.phone ||
-    user?.company_id === undefined ||
     !user?.account_status ||
-    !user?.enabled_services ||
     !session?.access_token ||
     !session?.refresh_token
   ) {
@@ -88,11 +90,11 @@ export async function login(email: string, password: string): Promise<LoginResul
       email: user.email,
       full_name: user.full_name,
       phone: user.phone,
-      company_id: user.company_id,
+      company_id: user.company_id ?? null,
       account_status: user.account_status,
-      enabled_services: user.enabled_services,
+      enabled_services: user.enabled_services ?? null,
     },
-    role: mapRole(user.role as BackendRole),
+    role: mapRole(user.role as BackendRole, user.driver_type),
   };
 }
 

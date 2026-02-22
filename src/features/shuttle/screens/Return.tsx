@@ -1,11 +1,16 @@
-import React, { useCallback, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { BottomSheetBackdrop, BottomSheetModal, BottomSheetView } from '@gorhom/bottom-sheet';
 import { SlideToStartTrip } from '../components';
-import { useShuttleStore } from '../store';
+import {
+  useGetTodayTripQuery,
+  useGetTripEmployeesQuery,
+  ShuttleTrip,
+  TripEmployee,
+} from '../services/shuttleApi';
 
 type EmployeeStatus = 'present' | 'absent';
 type AbsentReason = 'SELF_COMMUTE' | 'LATE' | 'SICK';
@@ -17,13 +22,6 @@ type ReturnEmployee = {
   status: EmployeeStatus;
   absentReason?: AbsentReason;
 };
-
-const RETURN_EMPLOYEES: ReturnEmployee[] = [
-  { id: '1', name: 'Saleem Ali', number: '+92 300 1234567', status: 'present' },
-  { id: '2', name: 'Sajid Ahmed', number: '+92 300 9876543', status: 'absent' },
-  { id: '3', name: 'Haroon Ali', number: '+92 300 5551234', status: 'present' },
-  { id: '4', name: 'Fatima Khan', number: '+92 300 7771234', status: 'absent' },
-];
 
 const ABSENT_REASONS: { value: AbsentReason; label: string }[] = [
   { value: 'SELF_COMMUTE', label: 'Self commute' },
@@ -47,14 +45,38 @@ function getAbsentReasonLabel(reason: AbsentReason): string {
 export default function Return() {
   const absentSheetRef = useRef<BottomSheetModal>(null);
   const absentSnapPoints = useMemo(() => ['40%'], []);
-  const [employees, setEmployees] = useState<ReturnEmployee[]>(RETURN_EMPLOYEES);
+  const { data: todayTrips = [], isLoading: isTripsLoading } = useGetTodayTripQuery();
+  const activeTrip: ShuttleTrip | null = todayTrips.length > 0 ? todayTrips[0] : null;
+  const tripId = activeTrip?.id;
+  const { data: tripEmployeesRaw = [], isLoading: isEmployeesLoading } = useGetTripEmployeesQuery(
+    tripId as number,
+    { skip: !tripId },
+  );
+
+  // Track present/absent per employee for the return trip; default is absent.
+  const [employees, setEmployees] = useState<ReturnEmployee[]>([]);
   const [employeeForAbsent, setEmployeeForAbsent] = useState<ReturnEmployee | null>(null);
-  const setOutboundRideCompleted = useShuttleStore((s) => s.setOutboundRideCompleted);
+  const [sliderKey, setSliderKey] = useState(0);
+
+  useEffect(() => {
+    if (!tripEmployeesRaw.length) return;
+    setEmployees((prev) => {
+      // Initialize only once when we get data for this trip
+      if (prev.length > 0) return prev;
+      return tripEmployeesRaw.map((emp: TripEmployee) => ({
+        id: emp.id,
+        name: emp.fullName,
+        number: emp.phone ?? '',
+        status: 'absent' as const,
+      }));
+    });
+  }, [tripEmployeesRaw]);
 
   const handleCompleteReturnTrip = useCallback(() => {
-    setOutboundRideCompleted(false);
-    router.push('/shuttle/(home)');
-  }, [setOutboundRideCompleted]);
+    // Force the slide control to remount so it isn't "stuck" next time
+    setSliderKey((k) => k + 1);
+    router.push('/shuttle');
+  }, []);
 
   React.useEffect(() => {
     if (employeeForAbsent) {
@@ -92,40 +114,46 @@ export default function Return() {
   }, []);
 
   return (
-    <SafeAreaView className="flex-1 bg-background" edges={['top']}>
+    <SafeAreaView className="flex-1 bg-[#FFFFFF]" edges={['top']}>
       <ScrollView className="flex-1 px-5" showsVerticalScrollIndicator={false}>
-        {/* Header */}
-       
-
         {/* Title */}
         <View className="mb-6">
-          <Text className="text-[34px] font-bold text-white">Return trip</Text>
-          <Text className="text-white/50 text-xl font-medium mt-1">Tower → Clifton</Text>
+          <Text className="text-[34px] font-bold text-black">Return trip</Text>
+          <Text className="text-base font-medium text-[#6B7280] mt-1">
+            Tower → Clifton
+          </Text>
         </View>
 
         {/* Attendance section */}
         <View className="mb-6">
-          <Text className="text-white text-xl px-2 font-bold mb-4">Mark attendance</Text>
-          <Text className="text-white/50 text-sm px-2 mb-4">
+          <Text className="text-xl px-2 font-bold mb-1 text-black">
+            Mark attendance
+          </Text>
+          <Text className="text-sm px-2 mb-4 text-[#6B7280]">
             Mark employees as present or absent for the return trip
           </Text>
 
-          <View className="rounded-xl bg-surface-background overflow-hidden">
-            {employees.map((emp) => (
+          <View className="rounded-2xl bg-[#F5F5F2] overflow-hidden">
+            {employees.map((emp, index) => (
               <View
                 key={emp.id}
-                className="flex-row items-center py-4 px-4 border-b border-white/5 last:border-b-0"
+                className="flex-row items-center py-4 px-4"
+                style={
+                  index < employees.length - 1
+                    ? { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: 'rgba(156,163,175,0.35)' }
+                    : undefined
+                }
               >
-                <View className="w-12 h-12 rounded-xl items-center justify-center mr-3 bg-sheet">
-                  <Text className="text-white font-semibold text-sm">
+                <View className="w-12 h-12 rounded-xl items-center justify-center mr-3 bg-white">
+                  <Text className="text-black font-semibold text-sm">
                     {getInitials(emp.name)}
                   </Text>
                 </View>
                 <View className="flex-1 min-w-0">
-                  <Text className="text-white font-bold text-base" numberOfLines={1}>
+                  <Text className="text-black font-bold text-base" numberOfLines={1}>
                     {emp.name}
                   </Text>
-                  <Text className="text-white/50 text-sm mt-0.5" numberOfLines={1}>
+                  <Text className="text-[#6B7280] text-sm mt-0.5" numberOfLines={1}>
                     {emp.status === 'absent' && emp.absentReason
                       ? getAbsentReasonLabel(emp.absentReason)
                       : emp.number}
@@ -137,18 +165,18 @@ export default function Return() {
                     className="px-3 py-2 rounded-lg active:opacity-80"
                     style={{
                       backgroundColor:
-                        emp.status === 'present' ? 'rgba(34, 197, 94, 0.25)' : 'rgba(255,255,255,0.08)',
+                        emp.status === 'present' ? 'rgba(34, 197, 94, 0.12)' : '#FFFFFF',
                       borderWidth: 1,
                       borderColor:
                         emp.status === 'present'
-                          ? 'rgba(34, 197, 94, 0.6)'
-                          : 'rgba(255,255,255,0.15)',
+                          ? 'rgba(34, 197, 94, 0.7)'
+                          : 'rgba(209, 213, 219, 1)',
                     }}
                   >
                     <Text
                       className="text-sm font-semibold"
                       style={{
-                        color: emp.status === 'present' ? '#22c55e' : 'rgba(255,255,255,0.6)',
+                        color: emp.status === 'present' ? '#16a34a' : '#4B5563',
                       }}
                     >
                       Present
@@ -159,18 +187,18 @@ export default function Return() {
                     className="px-3 py-2 rounded-lg active:opacity-80"
                     style={{
                       backgroundColor:
-                        emp.status === 'absent' ? 'rgba(239, 68, 68, 0.25)' : 'rgba(255,255,255,0.08)',
+                        emp.status === 'absent' ? 'rgba(239, 68, 68, 0.10)' : '#FFFFFF',
                       borderWidth: 1,
                       borderColor:
                         emp.status === 'absent'
-                          ? 'rgba(239, 68, 68, 0.6)'
-                          : 'rgba(255,255,255,0.15)',
+                          ? 'rgba(239, 68, 68, 0.7)'
+                          : 'rgba(209, 213, 219, 1)',
                     }}
                   >
                     <Text
                       className="text-sm font-semibold"
                       style={{
-                        color: emp.status === 'absent' ? '#ef4444' : 'rgba(255,255,255,0.6)',
+                        color: emp.status === 'absent' ? '#b91c1c' : '#4B5563',
                       }}
                     >
                       Absent
@@ -185,6 +213,7 @@ export default function Return() {
         {/* Slide to complete */}
         <View className="mb-8">
           <SlideToStartTrip
+            key={sliderKey}
             label="Slide to complete return trip"
             onComplete={handleCompleteReturnTrip}
           />
@@ -200,13 +229,17 @@ export default function Return() {
         backdropComponent={(props) => (
           <BottomSheetBackdrop {...props} disappearsOnIndex={-1} appearsOnIndex={0} />
         )}
-        backgroundStyle={{ backgroundColor: '#1F1F1D' }}
-        handleIndicatorStyle={{ backgroundColor: 'rgba(255,255,255,0.4)' }}
+        backgroundStyle={{ backgroundColor: '#FFFFFF' }}
+        handleIndicatorStyle={{ backgroundColor: 'rgba(55,65,81,0.25)' }}
       >
         <BottomSheetView style={styles.absentSheetContent}>
           <View className="px-5 pb-8">
-            <Text className="text-white text-lg font-bold mb-1">Why is this person absent?</Text>
-            <Text className="text-white/50 text-sm mb-6">{employeeForAbsent?.name}</Text>
+            <Text className="text-lg font-bold mb-1 text-black">
+              Why is this person absent?
+            </Text>
+            <Text className="text-sm mb-6 text-[#6B7280]">
+              {employeeForAbsent?.name}
+            </Text>
 
             {ABSENT_REASONS.map((reason) => (
               <Pressable
@@ -214,12 +247,14 @@ export default function Return() {
                 onPress={() => handleSelectAbsentReason(reason.value)}
                 className="py-3 rounded-xl items-center justify-center active:opacity-90 mb-3"
                 style={{
-                  backgroundColor: 'rgba(255,255,255,0.08)',
+                  backgroundColor: '#F5F5F2',
                   borderWidth: 1,
-                  borderColor: 'rgba(255,255,255,0.15)',
+                  borderColor: 'rgba(209,213,219,1)',
                 }}
               >
-                <Text className="text-base font-semibold text-white">{reason.label}</Text>
+                <Text className="text-base font-semibold text-black">
+                  {reason.label}
+                </Text>
               </Pressable>
             ))}
           </View>
@@ -232,6 +267,6 @@ export default function Return() {
 const styles = StyleSheet.create({
   absentSheetContent: {
     flex: 1,
-    backgroundColor: '#1F1F1D',
+    backgroundColor: '#FFFFFF',
   },
 });

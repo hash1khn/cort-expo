@@ -12,12 +12,12 @@ export interface AuthState {
     email: string;
     phone: string;
     full_name: string;
-    company_id: number;
+    company_id: number | null;
     account_status: 'ACTIVE' | 'INACTIVE' | 'SUSPENDED';
     enabled_services: {
       shuttle: boolean;
       chauffeur: boolean;
-    };
+    } | null;
   } | null;
   _hasHydrated: boolean;
 }
