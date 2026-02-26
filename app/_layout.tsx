@@ -1,6 +1,6 @@
 import { Stack, usePathname, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { useFonts } from 'expo-font';
@@ -24,6 +24,10 @@ import { useAppSelector } from '../src/store/hooks';
 import { logOut } from '../src/features/auth/store/auth.slice';
 import { setOnUnauthorized } from '../src/services/api';
 import { useSplashPrefetch } from '../src/features/employee/hooks/useSplashPrefetch';
+import { useSocketConnection } from '../src/hooks/useSocketConnection';
+import { useAppLaunchRideCheck } from '../src/hooks/useAppLaunchRideCheck';
+import { tokenStorage } from '../src/features/auth/utils/tokenStorage';
+import { router } from 'expo-router';
 
 SplashScreen.preventAutoHideAsync().catch(() => {
   // no-op (can throw if called twice in dev)
@@ -82,7 +86,26 @@ function RootLayoutContent() {
     return () => setOnUnauthorized(null);
   }, []);
 
-  
+  // Load token once auth is hydrated and user is logged in
+  const [authToken, setAuthToken] = useState<string | null>(null);
+  useEffect(() => {
+    if (!isLoggedIn) return;
+    tokenStorage.getAccessToken().then((t) => setAuthToken(t ?? null));
+  }, [isLoggedIn]);
+
+  // Manage socket connection lifecycle (foreground/background)
+  useSocketConnection(authToken);
+
+  // Safety net: if a ride started while the app was closed, navigate to it
+  useAppLaunchRideCheck(user?.id, (rideData) => {
+    if (rideData.role === 'driver') {
+      router.push('/shuttle/ride');
+    } else {
+      router.push({ pathname: '/employee/ride-active', params: { tripId: rideData.tripId } });
+    }
+  });
+
+
   if (!fontsLoaded || !hasHydrated) {
     return null;
   }
@@ -92,18 +115,18 @@ function RootLayoutContent() {
         <BottomSheetModalProvider>
           <StatusBar style="auto" />
           <Stack screenOptions={{ headerShown: false }}>
-            <Stack.Protected guard={!isLoggedIn}> 
-               <Stack.Screen name="(auth)" />
-               </Stack.Protected> 
+            <Stack.Protected guard={!isLoggedIn}>
+              <Stack.Screen name="(auth)" />
+            </Stack.Protected>
 
             <Stack.Protected guard={isLoggedIn}>
               <Stack.Protected guard={isChauffeur}>
                 <Stack.Screen name="chauffeur" />
-             </Stack.Protected>
+              </Stack.Protected>
 
               <Stack.Protected guard={isDriver}>
                 <Stack.Screen name="shuttle" />
-              </Stack.Protected> 
+              </Stack.Protected>
 
               <Stack.Protected guard={isEmployee}>
                 <Stack.Screen name="employee" />

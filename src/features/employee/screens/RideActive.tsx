@@ -1,13 +1,14 @@
-import React, { useCallback, useMemo, useRef } from 'react';
-import { Image as RNImage, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { useCallback, useMemo, useRef, useState, useEffect } from 'react';
+import { Image as RNImage, Linking, Pressable, StyleSheet, Text, View, Alert } from 'react-native';
 import { Image } from 'expo-image';
 import MapView, { Marker, Polyline } from 'react-native-maps';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import BottomSheet, { BottomSheetScrollView } from '@gorhom/bottom-sheet';
-import { shuttleCoordinates, mockShuttlePolyline } from '@/services/mockData';
-import { router } from 'expo-router';
+import { mockShuttlePolyline } from '@/services/mockData';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useAppDispatch, useAppSelector } from '../../../store/hooks';
 import { setIsOutstationDev } from '../store';
+import { useRideSocket } from '../../../hooks/useRideSocket';
 
 const DRIVER_PHONE = '03162211320';
 
@@ -16,6 +17,38 @@ export default function RideActive() {
   const isWaitingForDriverResponse = useAppSelector(
     (state) => state.employeeRide.isWaitingForDriverResponse,
   );
+  const userId = useAppSelector((state) => state.auth.user?.id ?? '');
+
+  // tripId is passed as a route param from ShuttleEmployee / _layout launch check
+  const { tripId: tripIdParam } = useLocalSearchParams<{ tripId?: string }>();
+  const activeTripId = tripIdParam ? Number(tripIdParam) : 0;
+
+  // Real-time driver location coordinate
+  const [driverCoord, setDriverCoord] = useState<{ latitude: number; longitude: number } | null>(null);
+
+  const handleLocationUpdate = useCallback(
+    (data: { lat: number; lng: number }) => {
+      setDriverCoord({ latitude: data.lat, longitude: data.lng });
+    },
+    [],
+  );
+
+  const handleRideEnded = useCallback(() => {
+    Alert.alert('Ride Completed', 'Your ride has ended.', [
+      { text: 'OK', onPress: () => router.replace('/employee') },
+    ]);
+    const timer = setTimeout(() => router.replace('/employee'), 3000);
+    return () => clearTimeout(timer);
+  }, []);
+
+  useRideSocket({
+    tripId: activeTripId,
+    userId,
+    role: 'employee',
+    onLocationUpdate: handleLocationUpdate,
+    onRideEnded: handleRideEnded,
+  });
+
 
   const bottomSheetRef = useRef<BottomSheet>(null);
   const snapPoints = useMemo(() => ['42%', '85%'], []);
@@ -49,8 +82,8 @@ export default function RideActive() {
       <MapView
         style={styles.map}
         initialRegion={{
-          latitude: shuttleCoordinates.latitude,
-          longitude: shuttleCoordinates.longitude,
+          latitude: driverCoord?.latitude ?? 24.8607,
+          longitude: driverCoord?.longitude ?? 67.0104,
           latitudeDelta: 0.02,
           longitudeDelta: 0.02,
         }}
@@ -67,9 +100,12 @@ export default function RideActive() {
           lineCap="round"
           lineJoin="round"
         />
-        
-        {/* Shuttle Marker */}
-        <Marker coordinate={shuttleCoordinates} anchor={{ x: 0.5, y: 0.5 }}>
+
+        {/* Shuttle Marker — real-time position from WebSocket */}
+        <Marker
+          coordinate={driverCoord ?? { latitude: 24.8607, longitude: 67.0104 }}
+          anchor={{ x: 0.5, y: 0.5 }}
+        >
           <View style={styles.vehicleMarker}>
             <MaterialCommunityIcons name="bus-side" size={22} color="white" />
           </View>
@@ -92,7 +128,7 @@ export default function RideActive() {
         handleIndicatorStyle={styles.sheetHandle}
         backgroundStyle={styles.sheetBackground}
       >
-        <BottomSheetScrollView 
+        <BottomSheetScrollView
           style={styles.sheetContent}
           showsVerticalScrollIndicator={false}
         >
@@ -115,9 +151,9 @@ export default function RideActive() {
                   style={styles.avatar}
                   contentFit="cover"
                 />
-               
+
               </View>
-              
+
               <View style={styles.driverDetails}>
                 <Text style={styles.driverName}>Faisal Ali</Text>
                 <Text style={styles.vehicleInfo}>Black Toyota Hiace</Text>
@@ -139,7 +175,7 @@ export default function RideActive() {
 
           {/* Action Buttons */}
           <View style={styles.actions}>
-            <Pressable 
+            <Pressable
               style={styles.actionButton}
               onPress={handleContactDriver}
               android_ripple={{ color: '#f47f0030' }}
@@ -150,7 +186,7 @@ export default function RideActive() {
               <Text style={styles.actionLabel}>Contact driver</Text>
             </Pressable>
 
-            <Pressable 
+            <Pressable
               style={styles.actionButton}
               onPress={handleScanQR}
               android_ripple={{ color: '#10B98130' }}
@@ -185,7 +221,7 @@ export default function RideActive() {
             <View style={styles.tripHeader}>
               <Text style={styles.tripHeaderText}>Trip details</Text>
             </View>
-            
+
             <View style={styles.tripContent}>
               {/* Pickup */}
               <View style={styles.locationRow}>

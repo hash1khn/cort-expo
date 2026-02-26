@@ -30,6 +30,7 @@ import {
   setOutstationDropoff,
   setChauffeurRide,
 } from '../store';
+import { useRideStartListener } from '../../../hooks/useRideStartListener';
 
 const PROFILE_SHEET_SNAP = ['65%'];
 const DROPOFF_SHEET_SNAP = ['45%'];
@@ -81,19 +82,19 @@ export default function NewHome() {
           id: first.id,
           driver: first.users_chauffeur_bookings_driver_idTousers
             ? {
-                id: first.users_chauffeur_bookings_driver_idTousers.id,
-                full_name: first.users_chauffeur_bookings_driver_idTousers.full_name,
-                phone: first.users_chauffeur_bookings_driver_idTousers.phone,
-              }
+              id: first.users_chauffeur_bookings_driver_idTousers.id,
+              full_name: first.users_chauffeur_bookings_driver_idTousers.full_name,
+              phone: first.users_chauffeur_bookings_driver_idTousers.phone,
+            }
             : undefined,
           vehicle: first.vehicles
             ? {
-                plate_number: first.vehicles.plate_number,
-                make: first.vehicles.make,
-                model: first.vehicles.model,
-                year: first.vehicles.year,
-                color: first.vehicles.color,
-              }
+              plate_number: first.vehicles.plate_number,
+              make: first.vehicles.make,
+              model: first.vehicles.model,
+              year: first.vehicles.year,
+              color: first.vehicles.color,
+            }
             : undefined,
           pickupAddress: first.pickup_address ?? null,
           destinationCities: first.destination_cities ?? null,
@@ -103,15 +104,16 @@ export default function NewHome() {
       dispatch(setChauffeurRide(null));
     }
   }, [chauffeurBookingsData, dispatch]);
+
   const firstName = user?.full_name?.split(' ')?.[0] ?? '';
   const fullName = user?.full_name ?? 'Guest';
   const initials = user?.full_name
     ? user.full_name
-        .split(' ')
-        .map((n) => n[0])
-        .join('')
-        .slice(0, 2)
-        .toUpperCase()
+      .split(' ')
+      .map((n) => n[0])
+      .join('')
+      .slice(0, 2)
+      .toUpperCase()
     : '?';
 
   const profileSheetRef = useRef<BottomSheet>(null);
@@ -120,6 +122,14 @@ export default function NewHome() {
   const dropoffSnapPoints = useMemo(() => DROPOFF_SHEET_SNAP, []);
   const [dropoffValue, setDropoffValue] = useState('');
   const router = useRouter();
+
+  // Navigate to active ride screen when driver starts a trip while this screen is open
+  useRideStartListener(
+    useCallback((data) => {
+      router.push({ pathname: '/employee/ride-active', params: { tripId: data.tripId } });
+    }, [router]),
+  );
+
   const openProfileSheet = useCallback(() => {
     profileSheetRef.current?.snapToIndex(0);
   }, []);
@@ -146,7 +156,7 @@ export default function NewHome() {
     closeDropoffSheet();
     router.push('/employee/ride-active');
   }, [closeDropoffSheet, dispatch, dropoffValue, router]);
-  const insets=useSafeAreaInsets();
+  const insets = useSafeAreaInsets();
   const handleSheetChange = useCallback((index: number) => {
     // optional: track open/close
   }, []);
@@ -214,7 +224,7 @@ export default function NewHome() {
             <Text className="text-black text-3xl font-bold mb-1">
               Hey there, {firstName ? `${firstName}` : ' Muhammad'}
             </Text>
-            
+
             {/* <Text className="text-text-muted text-xl mt-1">
               Where do you want to go?
             </Text> */}
@@ -223,7 +233,7 @@ export default function NewHome() {
             onPress={openProfileSheet}
             className="w-12 h-12 rounded-full items-center justify-center ml-3"
           >
-           <AntDesign name="align-right" size={24} color="black" />
+            <AntDesign name="align-right" size={24} color="black" />
           </Pressable>
         </View>
 
@@ -260,17 +270,17 @@ export default function NewHome() {
                 <Text className="text-white text-lg font-bold">
                   chauffeur ride card
                 </Text>
-               {isOutstationDev && <Text className="text-white/90 text-sm mt-1">
+                {isOutstationDev && <Text className="text-white/90 text-sm mt-1">
                   Tap to add your dropoff location and start the ride.
                 </Text>}
-                
+
               </View>
               <Entypo name="chevron-right" size={24} color="#fff" />
             </View>
           </Pressable>
         </View>
 
-    
+
 
         {/* Circular action buttons: Call Driver, Scan QR, Help
         <View className="px-4 mt-8 flex-row justify-between">
@@ -310,7 +320,7 @@ export default function NewHome() {
 
         {/* Recent Rides section */}
         <View className="px-4 mt-6">
-          <Pressable onPress={()=>{router.push('/employee/rides')}} hitSlop={8}>
+          <Pressable onPress={() => { router.push('/employee/rides') }} hitSlop={8}>
             <View className="flex-row items-center justify-between gap-0 px-1 mb-3">
               <Text className="text-black text-2xl font-bold">Recent Rides</Text>
               <Text className='text-amber-500 text-sm font-bold'>View all</Text>
@@ -395,7 +405,7 @@ export default function NewHome() {
                     </Text>
                   </View>
                   <View className="flex-row items-center mt-3">
-                   
+
                   </View>
                 </View>
               </ImageBackground>
@@ -463,7 +473,7 @@ export default function NewHome() {
               </Text>
               {/* <Text className="text-gray-400 text-sm mt-1">Employee</Text> */}
             </View>
-{/* 
+            {/* 
             Key info - joined date
             <View className="flex-row justify-center mt-6 px-4">
               <View className="items-center">
@@ -480,11 +490,11 @@ export default function NewHome() {
             <View className='mt-6 mb-4  mx-4 '>
               <Text className='text-text-muted ml-4 mb-2'>Details</Text>
               <View className="rounded-xl py-1 bg-surface-light">
-                <InfoRow label="Email" value={user?.email ?? '—'} hasBorder={true}/>
-                <InfoRow label="Status" value={'Employee'} hasBorder={true}/>
-                
-                <InfoRow label="Shuttle Route" value="101" hasBorder={false}/>
-              
+                <InfoRow label="Email" value={user?.email ?? '—'} hasBorder={true} />
+                <InfoRow label="Status" value={'Employee'} hasBorder={true} />
+
+                <InfoRow label="Shuttle Route" value="101" hasBorder={false} />
+
               </View>
             </View>
             <Pressable
@@ -552,10 +562,10 @@ function InfoRow({
   label: string;
   value: string;
   valueClassName?: string;
-  hasBorder:boolean
+  hasBorder: boolean
 }) {
   return (
-    <View className="flex-row justify-between items-center py-3 px-4 border-white/10" style={{borderBottomWidth:hasBorder?2:0}}>
+    <View className="flex-row justify-between items-center py-3 px-4 border-white/10" style={{ borderBottomWidth: hasBorder ? 2 : 0 }}>
       <Text className="text-text-primary text-xl">{label}</Text>
       <Text className={`text-xl text-text-muted font-medium `}>{value}</Text>
     </View>

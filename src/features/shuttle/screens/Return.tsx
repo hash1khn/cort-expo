@@ -1,16 +1,17 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Linking, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { BottomSheetBackdrop, BottomSheetModal, BottomSheetView } from '@gorhom/bottom-sheet';
 import { SlideToStartTrip } from '../components';
 import {
-  useGetTodayTripQuery,
   useGetTripEmployeesQuery,
-  ShuttleTrip,
+  useSubmitReturnAttendanceMutation,
+  useCompleteTripMutation,
   TripEmployee,
 } from '../services/shuttleApi';
+import { useActiveTrip, type Stop } from '../hooks/useActiveTrip';
 
 type EmployeeStatus = 'present' | 'absent';
 type AbsentReason = 'SELF_COMMUTE' | 'LATE' | 'SICK';
@@ -45,18 +46,19 @@ function getAbsentReasonLabel(reason: AbsentReason): string {
 export default function Return() {
   const absentSheetRef = useRef<BottomSheetModal>(null);
   const absentSnapPoints = useMemo(() => ['40%'], []);
-  const { data: todayTrips = [], isLoading: isTripsLoading } = useGetTodayTripQuery();
-  const activeTrip: ShuttleTrip | null = todayTrips.length > 0 ? todayTrips[0] : null;
-  const tripId = activeTrip?.id;
+  const { activeTrip, tripId, stops, isLoading: isTripsLoading } = useActiveTrip();
   const { data: tripEmployeesRaw = [], isLoading: isEmployeesLoading } = useGetTripEmployeesQuery(
     tripId as number,
     { skip: !tripId },
   );
+  const [submitReturnAttendance, { isLoading: isSubmitting }] = useSubmitReturnAttendanceMutation();
+  const [completeTrip, { isLoading: isCompletingTrip }] = useCompleteTripMutation();
 
   // Track present/absent per employee for the return trip; default is absent.
   const [employees, setEmployees] = useState<ReturnEmployee[]>([]);
   const [employeeForAbsent, setEmployeeForAbsent] = useState<ReturnEmployee | null>(null);
   const [sliderKey, setSliderKey] = useState(0);
+  const [returnTripStarted, setReturnTripStarted] = useState(false);
 
   useEffect(() => {
     if (!tripEmployeesRaw.length) return;
@@ -72,11 +74,86 @@ export default function Return() {
     });
   }, [tripEmployeesRaw]);
 
-  const handleCompleteReturnTrip = useCallback(() => {
-    // Force the slide control to remount so it isn't "stuck" next time
-    setSliderKey((k) => k + 1);
-    router.push('/shuttle');
+  const openStopsInMaps = useCallback((tripStops: Stop[]) => {
+    if (!tripStops.length) return;
+
+    const validStops = tripStops.filter(
+      (stop) =>
+        typeof stop.lat === 'number' &&
+        typeof stop.lng === 'number' &&
+        !(stop.lat === 0 && stop.lng === 0),
+    );
+    if (!validStops.length) return;
+
+    const coords = validStops.map((s) => `${s.lat},${s.lng}`);
+    const origin = coords[0];
+    const destination = coords[coords.length - 1];
+    const waypoints =
+      coords.length > 2 ? coords.slice(1, coords.length - 1).join('|') : '';
+
+    let url = 'https://www.google.com/maps/dir/?api=1&travelmode=driving';
+    if (origin) url += `&origin=${encodeURIComponent(origin)}`;
+    if (destination) url += `&destination=${encodeURIComponent(destination)}`;
+    if (waypoints) url += `&waypoints=${encodeURIComponent(waypoints)}`;
+
+    Linking.openURL(url).catch(() => {
+      // Swallow error; we don't want to block the UI if maps isn't available
+    });
   }, []);
+
+  const handleSlideReturnTrip = useCallback(async () => {
+    if (!tripId) {
+      router.push('/shuttle');
+      return;
+    }
+
+    // First slide: submit bulk return attendance and open maps with all stops
+    if (!returnTripStarted) {
+      if (!employees.length) {
+        router.push('/shuttle');
+        return;
+      }
+      try {
+        await submitReturnAttendance({
+          shuttleTripId: tripId,
+          entries: employees.map((emp) => ({
+            employee_id: emp.id,
+            status: emp.status === 'present' ? 'PRESENT' : 'ABSENT',
+            ...(emp.status === 'absent' &&
+              emp.absentReason && { absent_reason: emp.absentReason }),
+          })),
+        }).unwrap();
+        setReturnTripStarted(true);
+        setSliderKey((k) => k + 1);
+        openStopsInMaps(stops);
+      } catch {
+        // On error, remount slider so user can retry; stay on screen
+        setSliderKey((k) => k + 1);
+      }
+      return;
+    }
+
+    // Second slide: complete the trip, invalidate caches via RTKQ tags, and go home
+    try {
+      await completeTrip({
+        tripId,
+        total_distance: 0,
+      }).unwrap();
+      setSliderKey((k) => k + 1);
+      router.push('/shuttle');
+    } catch {
+      // On error, remount slider so user can retry; stay on screen
+      setSliderKey((k) => k + 1);
+    }
+  }, [
+    tripId,
+    employees,
+    returnTripStarted,
+    submitReturnAttendance,
+    completeTrip,
+    openStopsInMaps,
+    stops,
+  ]);
 
   React.useEffect(() => {
     if (employeeForAbsent) {
@@ -214,8 +291,8 @@ export default function Return() {
         <View className="mb-8">
           <SlideToStartTrip
             key={sliderKey}
-            label="Slide to complete return trip"
-            onComplete={handleCompleteReturnTrip}
+            label={returnTripStarted ? 'Slide to complete trip' : 'Slide to begin trip'}
+            onComplete={handleSlideReturnTrip}
           />
         </View>
       </ScrollView>

@@ -1,5 +1,14 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Linking, Platform, Pressable, StyleSheet, Text, View, ScrollView } from 'react-native';
+import {
+  Alert,
+  Linking,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { Entypo, Ionicons } from '@expo/vector-icons';
 import { colors } from '@/core/theme';
 import { SlideToStartTrip } from '../components';
@@ -12,26 +21,25 @@ import {
 } from '@gorhom/bottom-sheet';
 import { useLanguage } from '@/features/shared/context/LanguageContext';
 import {
-  useGetTodayTripQuery,
   useGetTripEmployeesQuery,
   useGetTripAttendanceQuery,
   useScanPassengerMutation,
   useMarkPassengerAbsentMutation,
-  ShuttleTrip,
+  useStartTripMutation,
+  useArriveAtStopMutation,
+  useCompleteTripMutation,
   TripEmployee,
+  shuttleApi,
 } from '../services/shuttleApi';
+import { useActiveTrip, type Stop } from '../hooks/useActiveTrip';
+import { useRideSocket } from '@/hooks/useRideSocket';
+import { useAppSelector } from '@/store/hooks';
+import * as Location from 'expo-location';
+import { store } from '@/store';
 
 type EmployeeStatus = 'present' | 'absent';
 
 type StopEmployee = { id: string; name: string; number: string; status: EmployeeStatus };
-
-type Stop = {
-  id: number;
-  name: string;
-  eta: string;
-  lat: number;
-  lng: number;
-};
 
 function getInitials(name: string) {
   return name
@@ -46,9 +54,87 @@ export default function RideInProgress() {
   const { language } = useLanguage();
   const isUrdu = language === 'ur';
 
-  const { data: todayTrips = [], isLoading: isTripsLoading } = useGetTodayTripQuery();
-  const activeTrip: ShuttleTrip | null = todayTrips.length > 0 ? todayTrips[0] : null;
-  const tripId = activeTrip?.id;
+  const {
+    activeTrip,
+    tripId,
+    stops,
+    currentStop,
+    nextStopAfterCurrent,
+    nextStopIndex,
+    isLastStop,
+    rideStarted,
+    isLoading: isTripsLoading,
+  } = useActiveTrip();
+
+  const userId = useAppSelector((s) => s.auth.user?.id ?? '');
+
+  // Patch attendance cache in real time when server broadcasts an update
+  const handleAttendanceMarked = useCallback(
+    (data: { employeeId: string; employeeName: string; markedBy: string; timestamp: string }) => {
+      if (!tripId) return;
+      store.dispatch(
+        shuttleApi.util.updateQueryData('getTripAttendance', tripId as number, (draft) => {
+          const i = draft.findIndex((e) => e.employeeId === data.employeeId);
+          const status = 'PRESENT';
+          if (i !== -1) {
+            draft[i].status = status;
+          } else {
+            draft.push({
+              employeeId: data.employeeId,
+              fullName: data.employeeName,
+              phone: null,
+              department: null,
+              status,
+              scannedAt: data.timestamp,
+            });
+          }
+        }),
+      );
+    },
+    [tripId],
+  );
+
+  const { sendLocation } = useRideSocket({
+    tripId: tripId ?? 0,
+    userId,
+    role: 'driver',
+    onAttendanceMarked: handleAttendanceMarked,
+  });
+
+  // Stream GPS location while ride is active
+  const locationSubscriptionRef = useRef<Location.LocationSubscription | null>(null);
+  useEffect(() => {
+    if (!rideStarted || !tripId) return;
+
+    let active = true;
+    Location.requestForegroundPermissionsAsync().then(({ status }) => {
+      if (status !== 'granted' || !active) return;
+      Location.watchPositionAsync(
+        { accuracy: Location.Accuracy.High, timeInterval: 4000, distanceInterval: 5 },
+        (loc) => {
+          sendLocation({
+            lat: loc.coords.latitude,
+            lng: loc.coords.longitude,
+            heading: loc.coords.heading ?? 0,
+            speed: loc.coords.speed ?? 0,
+          });
+        },
+      ).then((sub) => {
+        if (active) {
+          locationSubscriptionRef.current = sub;
+        } else {
+          sub.remove();
+        }
+      });
+    });
+
+    return () => {
+      active = false;
+      locationSubscriptionRef.current?.remove();
+      locationSubscriptionRef.current = null;
+    };
+  }, [rideStarted, tripId, sendLocation]);
+
   const { data: tripEmployeesRaw = [], isLoading: isEmployeesLoading } = useGetTripEmployeesQuery(
     tripId as number,
     { skip: !tripId },
@@ -62,6 +148,12 @@ export default function RideInProgress() {
   const [scanPassenger, { isLoading: isScanning }] = useScanPassengerMutation();
   const [markPassengerAbsent, { isLoading: isMarkingAbsent }] =
     useMarkPassengerAbsentMutation();
+  const [startTrip] = useStartTripMutation();
+  const [arriveAtStop, { isLoading: isArrivingAtStop }] = useArriveAtStopMutation();
+  const [completeTrip, { isLoading: isCompletingTrip }] = useCompleteTripMutation();
+
+  // Increment after successful API so the slider remounts and does not get stuck
+  const [slideKeyVersion, setSlideKeyVersion] = React.useState(0);
 
   // Single source of truth: derive present/absent from server manifest only.
   const attendanceStatusByEmployeeId = useMemo(() => {
@@ -73,46 +165,6 @@ export default function RideInProgress() {
     });
     return map;
   }, [tripAttendance]);
-
-  const stops: Stop[] = useMemo(() => {
-    if (!activeTrip?.routes) return [];
-    const routeStops = [...activeTrip.routes.route_stops].sort(
-      (a, b) => a.sequence_order - b.sequence_order,
-    );
-
-    const formatEta = (stop: any): string => {
-      const raw =
-        activeTrip.direction === 'MORNING' ? stop.morning_eta ?? null : stop.evening_eta ?? null;
-      if (!raw) return '—';
-      if (raw.includes('T')) {
-        const d = new Date(raw);
-        if (Number.isNaN(d.getTime())) return '—';
-        return d.toLocaleTimeString(undefined, {
-          hour: '2-digit',
-          minute: '2-digit',
-          hour12: true,
-        });
-      }
-      const [hStr, mStr = '00'] = raw.split(':');
-      const hour24 = Number.parseInt(hStr, 10);
-      if (Number.isNaN(hour24)) return raw;
-      const minutes = mStr.padStart(2, '0');
-      const suffix = hour24 >= 12 ? 'PM' : 'AM';
-      const hour12 = ((hour24 + 11) % 12) + 1;
-      return `${hour12}:${minutes} ${suffix}`;
-    };
-
-    return routeStops.map((stop) => ({
-      id: stop.id,
-      name: stop.name,
-      eta: formatEta(stop),
-      lat: stop.lat ?? 0,
-      lng: stop.lng ?? 0,
-    }));
-  }, [activeTrip]);
-
-  const [currentStopIndex, setCurrentStopIndex] = useState(0);
-  const [rideStarted, setRideStarted] = useState(false);
 
   // Bottom sheet for actions on a specific employee
   const [selectedEmployee, setSelectedEmployee] = useState<StopEmployee | null>(null);
@@ -130,7 +182,7 @@ export default function RideInProgress() {
   const handleCall = useCallback((phone?: string) => {
     if (phone) {
       const url = Platform.OS === 'ios' ? `telprompt:${phone}` : `tel:${phone}`;
-      Linking.openURL(url).catch(() => {});
+      Linking.openURL(url).catch(() => { });
     }
   }, []);
 
@@ -143,12 +195,6 @@ export default function RideInProgress() {
       // swallow error; we don't want to block the UI if maps isn't available
     });
   }, []);
-
-  const currentStop = useMemo(
-    () => (stops.length > 0 ? stops[Math.min(currentStopIndex, stops.length - 1)] : null),
-    [stops, currentStopIndex],
-  );
-  const isLastStop = stops.length > 0 && currentStopIndex === stops.length - 1;
 
   const employeesAtCurrentStop: StopEmployee[] = useMemo(() => {
     if (!currentStop) return [];
@@ -173,29 +219,74 @@ export default function RideInProgress() {
       : `arrived-${currentStop?.id ?? 'none'}`
     : `start-${currentStop?.id ?? 'none'}`;
 
-  const handleSlideComplete = useCallback(() => {
+  const handleSlideComplete = useCallback(async () => {
     if (!currentStop || !stops.length) {
       return;
     }
 
     if (!rideStarted) {
-      // First slide: start trip and navigate to first stop
-      setRideStarted(true);
-      openInMaps(currentStop);
+      // First slide: call start trip API, then open maps
+      const routeId = activeTrip?.route_id;
+      const direction = activeTrip?.direction;
+      if (routeId != null && direction) {
+        try {
+          await startTrip({ route_id: routeId, direction }).unwrap();
+          setSlideKeyVersion((v) => v + 1);
+          openInMaps(currentStop);
+        } catch {
+          // Optionally show error; slider stays
+        }
+      } else {
+        openInMaps(currentStop);
+      }
       return;
     }
 
+    if (!activeTrip) return;
+
     if (!isLastStop) {
-      // Mark current stop as arrived and navigate to next stop
-      const nextIndex = currentStopIndex + 1;
-      const nextStop = stops[nextIndex];
-      setCurrentStopIndex(nextIndex);
-      openInMaps(nextStop);
-    } else {
-      // Final stop: complete trip and return home
-      router.push('/shuttle');
+      try {
+        await arriveAtStop({
+          tripId: activeTrip.id,
+          current_stop_id: currentStop.id,
+        }).unwrap();
+        setSlideKeyVersion((v) => v + 1);
+        if (nextStopAfterCurrent) {
+          openInMaps(nextStopAfterCurrent);
+        }
+      } catch {
+        setSlideKeyVersion((v) => v + 1);
+        Alert.alert(
+          'Error',
+          'Failed to mark as arrived. Please try again.',
+          [{ text: 'OK' }],
+        );
+      }
+      return;
     }
-  }, [rideStarted, isLastStop, currentStop, currentStopIndex, openInMaps]);
+
+    try {
+      await completeTrip({
+        tripId: activeTrip.id,
+        total_distance: 0,
+      }).unwrap();
+      setSlideKeyVersion((v) => v + 1);
+    } catch {
+      // Optionally show error
+    }
+    router.push('/shuttle');
+  }, [
+    rideStarted,
+    isLastStop,
+    currentStop,
+    activeTrip,
+    nextStopAfterCurrent,
+    openInMaps,
+    startTrip,
+    arriveAtStop,
+    completeTrip,
+    stops.length,
+  ]);
 
   return (
     <SafeAreaView style={styles.root}>
@@ -333,7 +424,7 @@ export default function RideInProgress() {
         {/* Slide control */}
         <View style={styles.slideWrapper}>
           <SlideToStartTrip
-            key={slideKey}
+            key={`${slideKey}-${slideKeyVersion}`}
             label={slideLabel}
             onComplete={handleSlideComplete}
           />
@@ -369,23 +460,23 @@ export default function RideInProgress() {
             }}
           >
             <View style={{ flex: 1 }} >
-             
+
               {!!selectedEmployee && (
-               <View className='flex flex-row items-center'>
-               <View style={styles.employeeAvatarSecond}>
-                <Text style={styles.employeeAvatarText}>
-                  {getInitials(selectedEmployee.name)}
-                </Text>
-              </View>
-              <View style={styles.employeeInfo}>
-                <Text className='text-2xl font-semibold' numberOfLines={1}>
-                  {selectedEmployee.name}
-                </Text>
-                <Text className='text-base text-gray-600 ' numberOfLines={1}>
-                  {selectedEmployee.status === 'present' ? 'Present' : 'Absent'}
-                </Text>
-              </View>
-               </View>
+                <View className='flex flex-row items-center'>
+                  <View style={styles.employeeAvatarSecond}>
+                    <Text style={styles.employeeAvatarText}>
+                      {getInitials(selectedEmployee.name)}
+                    </Text>
+                  </View>
+                  <View style={styles.employeeInfo}>
+                    <Text className='text-2xl font-semibold' numberOfLines={1}>
+                      {selectedEmployee.name}
+                    </Text>
+                    <Text className='text-base text-gray-600 ' numberOfLines={1}>
+                      {selectedEmployee.status === 'present' ? 'Present' : 'Absent'}
+                    </Text>
+                  </View>
+                </View>
               )}
             </View>
             <Pressable
@@ -413,7 +504,7 @@ export default function RideInProgress() {
             }}
           />
 
-          {/* Mark as present / absent (localized); present triggers API, refetch updates UI */}
+          {/* Mark as present / absent; cache updated from response, no refetch */}
           {(() => {
             const currentStatus =
               selectedEmployee != null
@@ -429,6 +520,16 @@ export default function RideInProgress() {
                 : 'Mark as present';
             const isBusy = isScanning || isMarkingAbsent || isAttendanceFetching;
 
+            const showErrorAndClose = () => {
+              Alert.alert(
+                isUrdu ? 'خرابی' : 'Error',
+                isUrdu
+                  ? 'حاضری کی تازہ کاری نہیں ہو سکی۔ دوبارہ کوشش کریں۔'
+                  : "Couldn't update attendance. Please try again.",
+              );
+              setSelectedEmployee(null);
+            };
+
             return (
               <Pressable
                 onPress={() => {
@@ -443,7 +544,7 @@ export default function RideInProgress() {
                     })
                       .unwrap()
                       .then(() => setSelectedEmployee(null))
-                      .catch(() => {});
+                      .catch(showErrorAndClose);
                   } else if (!isPresent && activeTrip) {
                     scanPassenger({
                       shuttleTripId: activeTrip.id,
@@ -452,7 +553,7 @@ export default function RideInProgress() {
                     })
                       .unwrap()
                       .then(() => setSelectedEmployee(null))
-                      .catch(() => {});
+                      .catch(showErrorAndClose);
                   }
                 }}
                 disabled={isBusy}
