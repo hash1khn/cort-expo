@@ -73,6 +73,7 @@ export default function RideActive() {
   const [driverCoord, setDriverCoord] = useState<{ latitude: number; longitude: number } | null>(null);
   const [polylineOrigin, setPolylineOrigin] = useState<{ lat: number; lng: number } | undefined>(undefined);
 
+
   /**
    * currentStopId: the stop ID the driver has most recently arrived at.
    * Set by the `stop:arrived` WebSocket event.
