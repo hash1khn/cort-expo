@@ -4,11 +4,11 @@ import MapView, { Marker, Polyline } from 'react-native-maps';
 import { Ionicons, MaterialCommunityIcons, Octicons } from '@expo/vector-icons';
 import BottomSheet, { BottomSheetView } from '@gorhom/bottom-sheet';
 import Animated, { useSharedValue, useAnimatedStyle, interpolate } from 'react-native-reanimated';
-import { mockShuttlePolyline } from '@/services/mockData';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useAppDispatch, useAppSelector } from '../../../store/hooks';
 import { setIsOutstationDev } from '../store';
 import { useRideSocket } from '../../../hooks/useRideSocket';
+import { useGetShuttlePolylineQuery } from '../services/employeeShuttleApi';
 import { fontFamily } from '@/core/theme';
 import { useScanBoardingMutation } from '../services/boardingApi';
 import { useToast } from '@/shared/ui/molecules/Toast';
@@ -71,6 +71,8 @@ export default function RideActive() {
 
   // ── Real-time state ──────────────────────────────────────────────────────
   const [driverCoord, setDriverCoord] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [polylineOrigin, setPolylineOrigin] = useState<{ lat: number; lng: number } | undefined>(undefined);
+
   /**
    * currentStopId: the stop ID the driver has most recently arrived at.
    * Set by the `stop:arrived` WebSocket event.
@@ -84,10 +86,27 @@ export default function RideActive() {
   const [scanBoarding, { isLoading: isBoardingLoading, isSuccess: isBoardingSuccess }] =
     useScanBoardingMutation();
 
+  // ── Polyline query (re-fetches when driver moves ~50m) ──────────────────
+  const { data: polylineData } = useGetShuttlePolylineQuery(
+    { tripId: activeTripId, driverLat: polylineOrigin?.lat, driverLng: polylineOrigin?.lng },
+    { skip: activeTripId === 0 },
+  );
+
   // ── Socket callbacks ──────────────────────────────────────────────────────
   const handleLocationUpdate = useCallback(
     (data: { lat: number; lng: number }) => {
       setDriverCoord({ latitude: data.lat, longitude: data.lng });
+      // Re-fetch polyline with updated driver position; throttled by ~50m threshold
+      setPolylineOrigin((prev) => {
+        if (!prev) return { lat: data.lat, lng: data.lng };
+        const deltaLat = Math.abs(data.lat - prev.lat);
+        const deltaLng = Math.abs(data.lng - prev.lng);
+        // ~50m threshold (0.00045 degrees ≈ 50m)
+        if (deltaLat > 0.00045 || deltaLng > 0.00045) {
+          return { lat: data.lat, lng: data.lng };
+        }
+        return prev;
+      });
     },
     [],
   );
@@ -214,12 +233,8 @@ export default function RideActive() {
   }, [dispatch]);
 
   const routePoints = useMemo(
-    () =>
-      mockShuttlePolyline.map((p) => ({
-        latitude: p.latitude,
-        longitude: p.longitude,
-      })),
-    [],
+    () => polylineData?.points.map((p) => ({ latitude: p.lat, longitude: p.lng })) ?? [],
+    [polylineData],
   );
 
   // ── Status text logic ─────────────────────────────────────────────────────
