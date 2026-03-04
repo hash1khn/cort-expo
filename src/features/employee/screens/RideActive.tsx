@@ -8,7 +8,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useAppDispatch, useAppSelector } from '../../../store/hooks';
 import { setIsOutstationDev } from '../store';
 import { useRideSocket } from '../../../hooks/useRideSocket';
-import { useGetShuttlePolylineQuery } from '../services/employeeShuttleApi';
+import { useGetShuttlePolylineQuery, useGetShuttleTripsForEmployeeQuery } from '../services/employeeShuttleApi';
 import { fontFamily } from '@/core/theme';
 import { useScanBoardingMutation } from '../services/boardingApi';
 import { useToast } from '@/shared/ui/molecules/Toast';
@@ -18,6 +18,32 @@ const Text = (props: React.ComponentProps<typeof RNText>) => {
   return <RNText {...props} style={[{ fontFamily }, props.style]} />;
 };
 
+// ── Geometry helpers (from EmployeeHomeMap) ───────────────────────────────────
+type LatLng = { latitude: number; longitude: number };
+
+function distanceSq(a: LatLng, b: LatLng): number {
+  const dLat = a.latitude - b.latitude;
+  const dLng = a.longitude - b.longitude;
+  return dLat * dLat + dLng * dLng;
+}
+
+/**
+ * Returns the index of the point in `points` that is geometrically closest
+ * to `target`. Used to snap a stop coordinate onto the polyline.
+ */
+function findClosestIndex(points: LatLng[], target: LatLng): number {
+  if (!points.length) return 0;
+  let bestIdx = 0;
+  let bestDist = distanceSq(points[0], target);
+  for (let i = 1; i < points.length; i += 1) {
+    const d = distanceSq(points[i], target);
+    if (d < bestDist) {
+      bestDist = d;
+      bestIdx = i;
+    }
+  }
+  return bestIdx;
+}
 
 export default function RideActive() {
   const dispatch = useAppDispatch();
@@ -25,6 +51,7 @@ export default function RideActive() {
     (state) => state.employeeRide.isWaitingForDriverResponse,
   );
   const userId = useAppSelector((state) => state.auth.user?.id ?? '');
+  const user = useAppSelector((state) => state.auth.user);
   const toast = useToast();
 
   /**
@@ -69,10 +96,29 @@ export default function RideActive() {
     .slice(0, 2)
     .toUpperCase();
 
-  // ── Real-time state ──────────────────────────────────────────────────────
-  const [driverCoord, setDriverCoord] = useState<{ latitude: number; longitude: number } | null>(null);
-  const [polylineOrigin, setPolylineOrigin] = useState<{ lat: number; lng: number } | undefined>(undefined);
+  // ── Fetch trip data to get route stops ───────────────────────────────────
+  const companyId = (user?.company_id ?? 0) as number;
+  const employeeId = (user?.id ?? '') as string;
+  const { data: shuttleTrips = [] } = useGetShuttleTripsForEmployeeQuery(
+    { companyId, employeeId },
+    { skip: !companyId || !employeeId },
+  );
+  const activeTrip = useMemo(
+    () => shuttleTrips.find((t) => t.id === activeTripId),
+    [shuttleTrips, activeTripId],
+  );
+  /** Route stops for this trip, in sequence order, with valid coordinates */
+  const routeStops = useMemo(
+    () =>
+      (activeTrip?.routes?.route_stops ?? [])
+        .filter((s) => s.lat != null && s.lng != null)
+        .sort((a, b) => a.sequence_order - b.sequence_order),
+    [activeTrip],
+  );
 
+  // ── Real-time state ──────────────────────────────────────────────────────
+  const [driverCoord, setDriverCoord] = useState<LatLng | null>(null);
+  const [polylineOrigin, setPolylineOrigin] = useState<{ lat: number; lng: number } | undefined>(undefined);
 
   /**
    * currentStopId: the stop ID the driver has most recently arrived at.
@@ -81,7 +127,8 @@ export default function RideActive() {
   const [currentStopId, setCurrentStopId] = useState<number | null>(null);
 
   /** True once the driver has arrived at THIS employee's pickup stop */
-  const captainIsHere = currentStopId !== null && myPickupStopId !== null && currentStopId === myPickupStopId;
+  const captainIsHere =
+    currentStopId !== null && myPickupStopId !== null && currentStopId === myPickupStopId;
 
   // ── Boarding mutation ─────────────────────────────────────────────────────
   const [scanBoarding, { isLoading: isBoardingLoading, isSuccess: isBoardingSuccess }] =
@@ -120,10 +167,6 @@ export default function RideActive() {
   );
 
   const handleRideEnded = useCallback(() => {
-    // Alert.alert('Ride Completed', 'Your ride has ended.', [
-    //   { text: 'OK', onPress: () => router.replace('/employee') },
-    // ]);
-
     const timer = setTimeout(() => router.replace('/employee'), 3000);
     return () => clearTimeout(timer);
   }, []);
@@ -137,7 +180,14 @@ export default function RideActive() {
     onRideEnded: handleRideEnded,
   });
 
-  // ── Bottom Sheet Snap Logic ───────────────────────────────────────────
+  // ── Bottom Sheet refs & animation ─────────────────────────────────────────
+  const bottomSheetRef = useRef<BottomSheet>(null);
+  const snapPoints = useMemo(() => ['40%', '55%'], []);
+  const animatedIndex = useSharedValue(0);
+
+  // ── Bottom Sheet Snap Logic ───────────────────────────────────────────────
+  // Snap to index 1 only when the driver arrives at THIS employee's stop.
+  // Snap back to 0 when the driver moves to any other stop.
   useEffect(() => {
     if (captainIsHere) {
       bottomSheetRef.current?.snapToIndex(1);
@@ -146,11 +196,7 @@ export default function RideActive() {
     }
   }, [captainIsHere]);
 
-  // ── Actions ───────────────────────────────────────────────────────────────
-  const bottomSheetRef = useRef<BottomSheet>(null);
-  const snapPoints = useMemo(() => ['40%', '55%'], []);
-  const animatedIndex = useSharedValue(0);
-
+  // ── Animated profile styles ───────────────────────────────────────────────
   const smallProfileStyle = useAnimatedStyle(() => {
     return {
       opacity: interpolate(animatedIndex.value, [0, 1], [1, 0], 'clamp'),
@@ -181,6 +227,7 @@ export default function RideActive() {
     };
   });
 
+  // ── Actions ───────────────────────────────────────────────────────────────
   const handleContactDriver = useCallback(() => {
     if (!driverPhone) return;
     Linking.openURL(`tel:${driverPhone}`).catch((err) =>
@@ -191,7 +238,6 @@ export default function RideActive() {
   /** Scan QR = POST attendance to the backend. Only active when captain is at my stop. */
   const handleScanQR = useCallback(async () => {
     if (!captainIsHere) {
-      // Driver not at this stop yet — navigate to QR scanner as fallback
       router.push('/employee/qr-scanner');
       return;
     }
@@ -206,7 +252,6 @@ export default function RideActive() {
         <CustomToast
           type="success"
           message="Successfully boarded"
-        // subMessage="Your attendance has been marked. Have a safe trip!"
         />,
         { duration: 4000, position: 'top', backgroundColor: '#1ad41d' },
       );
@@ -233,10 +278,55 @@ export default function RideActive() {
     dispatch(setIsOutstationDev(true));
   }, [dispatch]);
 
-  const routePoints = useMemo(
+  // ── Polyline split: completed (grey) vs remaining (blue) ─────────────────
+  /**
+   * Full polyline points from the backend, mapped to LatLng.
+   */
+  const allRoutePoints = useMemo(
     () => polylineData?.points.map((p) => ({ latitude: p.lat, longitude: p.lng })) ?? [],
     [polylineData],
   );
+
+  /**
+   * For each route stop, find the index of the closest point on the polyline.
+   * This lets us know where on the line each stop sits.
+   */
+  const stopPolylineIndices = useMemo(() => {
+    if (!allRoutePoints.length || !routeStops.length) return [];
+    return routeStops.map((stop) =>
+      findClosestIndex(allRoutePoints, { latitude: stop.lat!, longitude: stop.lng! }),
+    );
+  }, [allRoutePoints, routeStops]);
+
+  /**
+   * The index of the most-recently-arrived stop on the polyline.
+   * `null` means the driver hasn't reached any stop yet.
+   */
+  const arrivedPolylineIndex = useMemo(() => {
+    if (currentStopId === null) return null;
+    const arrivedStopIdx = routeStops.findIndex((s) => s.id === currentStopId);
+    if (arrivedStopIdx === -1) return null;
+    return stopPolylineIndices[arrivedStopIdx] ?? null;
+  }, [currentStopId, routeStops, stopPolylineIndices]);
+
+  /**
+   * Completed route = polyline from start up to the driver's current arrived stop.
+   * Shown in grey/faded to indicate "already driven" road.
+   */
+  const completedRoute = useMemo(() => {
+    if (arrivedPolylineIndex === null || !allRoutePoints.length) return [];
+    return allRoutePoints.slice(0, arrivedPolylineIndex + 1);
+  }, [allRoutePoints, arrivedPolylineIndex]);
+
+  /**
+   * Remaining route = polyline from the current arrived stop (or start) onwards.
+   * Shown in the primary blue colour.
+   */
+  const remainingRoute = useMemo(() => {
+    if (!allRoutePoints.length) return [];
+    const fromIdx = arrivedPolylineIndex !== null ? arrivedPolylineIndex : 0;
+    return allRoutePoints.slice(fromIdx);
+  }, [allRoutePoints, arrivedPolylineIndex]);
 
   // ── Status text logic ─────────────────────────────────────────────────────
   const statusText =
@@ -270,24 +360,72 @@ export default function RideActive() {
         showsMyLocationButton={false}
         showsUserLocation
       >
-        {/* Route Polyline */}
-        <Polyline
-          coordinates={routePoints}
-          strokeWidth={4}
-          strokeColor="#0C225E"
-          lineCap="round"
-          lineJoin="round"
-        />
-
-        {/* Live Driver to First Route Point Polyline */}
-        {driverCoord && routePoints.length > 0 && (
+        {/* Completed (grey/faded) portion of the route */}
+        {completedRoute.length > 1 && (
           <Polyline
-            coordinates={[driverCoord, routePoints[0]]}
+            coordinates={completedRoute}
             strokeWidth={4}
-            strokeColor="#16a34a"
+            strokeColor="#D1D5DB"
             lineCap="round"
+            lineJoin="round"
           />
         )}
+
+        {/* Remaining (blue) portion of the route */}
+        {remainingRoute.length > 1 && (
+          <Polyline
+            coordinates={remainingRoute}
+            strokeWidth={4}
+            strokeColor="#0C225E"
+            lineCap="round"
+            lineJoin="round"
+          />
+        )}
+
+        {/* Fallback: show full route if no split has happened yet and no completed portion */}
+        {completedRoute.length <= 1 && remainingRoute.length <= 1 && allRoutePoints.length > 1 && (
+          <Polyline
+            coordinates={allRoutePoints}
+            strokeWidth={4}
+            strokeColor="#0C225E"
+            lineCap="round"
+            lineJoin="round"
+          />
+        )}
+
+        {/* Route stop markers */}
+        {routeStops.map((stop, index) => {
+          const stopPolyIdx = stopPolylineIndices[index];
+          const isPassed =
+            arrivedPolylineIndex !== null &&
+            stopPolyIdx !== undefined &&
+            stopPolyIdx <= arrivedPolylineIndex;
+          const isMyStop = stop.id === myPickupStopId;
+          const isCurrentStop = stop.id === currentStopId;
+
+          return (
+            <Marker
+              key={`stop-${stop.id}`}
+              coordinate={{ latitude: stop.lat!, longitude: stop.lng! }}
+              anchor={{ x: 0.5, y: 0.5 }}
+            >
+              <View
+                style={[
+                  styles.stopMarker,
+                  isPassed && styles.stopMarkerPassed,
+                  isMyStop && styles.stopMarkerMine,
+                  isCurrentStop && styles.stopMarkerCurrent,
+                ]}
+              >
+                <MaterialCommunityIcons
+                  name="map-marker"
+                  size={16}
+                  color={isPassed ? '#9CA3AF' : isCurrentStop ? '#FFFFFF' : isMyStop ? '#F1F443' : '#FFFFFF'}
+                />
+              </View>
+            </Marker>
+          );
+        })}
 
         {/* Shuttle Marker — real-time position from WebSocket */}
         <Marker
@@ -347,7 +485,7 @@ export default function RideActive() {
               </View>
             </Animated.View>
 
-            {/* 2) Big/Centered Layout (visible at 48%) */}
+            {/* 2) Big/Centered Layout (visible at 55%) */}
             <Animated.View style={bigProfileStyle}>
               <View style={styles.captainCenterSection}>
                 <Text style={styles.captainRoleLabel}>YOUR CAPTAIN</Text>
@@ -430,6 +568,39 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 8,
   },
+  // Stop markers — base style + modifiers
+  stopMarker: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: '#0C225E',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+    elevation: 5,
+  },
+  /** Stop the bus already passed — greyed out */
+  stopMarkerPassed: {
+    backgroundColor: '#D1D5DB',
+    borderColor: '#9CA3AF',
+  },
+  /** The logged-in employee's pickup stop — highlighted yellow */
+  stopMarkerMine: {
+    backgroundColor: '#0C225E',
+    borderColor: '#F1F443',
+    borderWidth: 3,
+  },
+  /** The stop the driver is currently at — bright green pulse ring */
+  stopMarkerCurrent: {
+    backgroundColor: '#16a34a',
+    borderColor: '#FFFFFF',
+    borderWidth: 3,
+  },
   floatingButtons: {
     position: 'absolute',
     top: 60,
@@ -459,7 +630,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: -4 },
     shadowOpacity: 0.1,
     shadowRadius: 10,
-    elevation: 10
+    elevation: 10,
   },
   sheetHandle: {
     backgroundColor: '#D1D5DB',
