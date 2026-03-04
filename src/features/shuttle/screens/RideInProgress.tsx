@@ -8,16 +8,18 @@ import {
   StyleSheet,
   Text,
   View,
+  ActivityIndicator,
 } from 'react-native';
-import { Entypo, Ionicons } from '@expo/vector-icons';
+import { Entypo, Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { colors } from '@/core/theme';
 import { SlideToStartTrip } from '../components';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import {
+import BottomSheet, {
   BottomSheetBackdrop,
   BottomSheetModal,
   BottomSheetView,
+  BottomSheetScrollView,
 } from '@gorhom/bottom-sheet';
 import { useLanguage } from '@/features/shared/context/LanguageContext';
 import {
@@ -135,10 +137,12 @@ export default function RideInProgress() {
     };
   }, [rideStarted, tripId, sendLocation]);
 
-  const { data: tripEmployeesRaw = [], isLoading: isEmployeesLoading } = useGetTripEmployeesQuery(
+  const { data: realEmployees = [], isLoading: isEmployeesLoading } = useGetTripEmployeesQuery(
     tripId as number,
     { skip: !tripId },
   );
+
+  const tripEmployeesRaw = realEmployees;
 
   const { data: tripAttendance = [], isFetching: isAttendanceFetching } = useGetTripAttendanceQuery(
     tripId as number,
@@ -148,9 +152,11 @@ export default function RideInProgress() {
   const [scanPassenger, { isLoading: isScanning }] = useScanPassengerMutation();
   const [markPassengerAbsent, { isLoading: isMarkingAbsent }] =
     useMarkPassengerAbsentMutation();
-  const [startTrip] = useStartTripMutation();
+  const [startTrip, { isLoading: isStartingTrip }] = useStartTripMutation();
   const [arriveAtStop, { isLoading: isArrivingAtStop }] = useArriveAtStopMutation();
   const [completeTrip, { isLoading: isCompletingTrip }] = useCompleteTripMutation();
+
+  const isActionLoading = isStartingTrip || isArrivingAtStop || isCompletingTrip;
 
   // Increment after successful API so the slider remounts and does not get stuck
   const [slideKeyVersion, setSlideKeyVersion] = React.useState(0);
@@ -166,10 +172,15 @@ export default function RideInProgress() {
     return map;
   }, [tripAttendance]);
 
+  const [attendanceStopId, setAttendanceStopId] = useState<number | null>(null);
+
   // Bottom sheet for actions on a specific employee
   const [selectedEmployee, setSelectedEmployee] = useState<StopEmployee | null>(null);
   const actionSheetRef = useRef<BottomSheetModal>(null);
-  const actionSheetSnapPoints = useMemo(() => ['35%'], []);
+  const actionSheetSnapPoints = useMemo(() => ['30%'], []);
+
+  const arrivedStopSheetRef = useRef<BottomSheet>(null);
+  const arrivedStopSnapPoints = useMemo(() => ['60%'], []);
 
   useEffect(() => {
     if (selectedEmployee) {
@@ -196,16 +207,21 @@ export default function RideInProgress() {
     });
   }, []);
 
+  const stopForAttendance = useMemo(
+    () => stops.find((s) => s.id === attendanceStopId) ?? currentStop,
+    [stops, attendanceStopId, currentStop]
+  );
+
   const employeesAtCurrentStop: StopEmployee[] = useMemo(() => {
-    if (!currentStop) return [];
-    const list = tripEmployeesRaw.filter((emp: TripEmployee) => emp.pickupStopId === currentStop.id);
+    if (!stopForAttendance) return [];
+    const list = tripEmployeesRaw.filter((emp: TripEmployee) => emp.pickupStopId === stopForAttendance.id);
     return list.map((emp) => ({
       id: emp.id,
       name: emp.fullName,
       number: emp.phone ?? '',
       status: attendanceStatusByEmployeeId[emp.id] ?? 'absent',
     }));
-  }, [currentStop, tripEmployeesRaw, attendanceStatusByEmployeeId]);
+  }, [stopForAttendance, tripEmployeesRaw, attendanceStatusByEmployeeId]);
 
   const slideLabel = rideStarted
     ? isLastStop
@@ -235,6 +251,7 @@ export default function RideInProgress() {
           openInMaps(currentStop);
         } catch {
           // Optionally show error; slider stays
+          setSlideKeyVersion((v) => v + 1);
         }
       } else {
         openInMaps(currentStop);
@@ -246,14 +263,13 @@ export default function RideInProgress() {
 
     if (!isLastStop) {
       try {
+        setAttendanceStopId(currentStop.id);
         await arriveAtStop({
           tripId: activeTrip.id,
           current_stop_id: currentStop.id,
         }).unwrap();
         setSlideKeyVersion((v) => v + 1);
-        if (nextStopAfterCurrent) {
-          openInMaps(nextStopAfterCurrent);
-        }
+        arrivedStopSheetRef.current?.snapToIndex(0);
       } catch {
         setSlideKeyVersion((v) => v + 1);
         Alert.alert(
@@ -290,11 +306,18 @@ export default function RideInProgress() {
 
   return (
     <SafeAreaView style={styles.root}>
+      <Pressable onPress={() => router.back()}>
+        <View className="flex-row items-center gap-2 ml-[-4px] px-6 mb-3">
+          <Feather name="chevron-left" size={24} color="black" />
+          {/* <Text className="text-black font-bold">Home</Text> */}
+        </View>
+      </Pressable>
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
+
         {/* Header */}
         <View style={styles.header}>
           <Text style={styles.titleText}>
@@ -303,8 +326,79 @@ export default function RideInProgress() {
           <Text style={styles.subtitleText}>Black Hiace • ABR 986</Text>
         </View>
 
+        {/* Info Grid */}
+        <View className="flex-row items-start mb-6 mt-8">
+          {/* Vehicle */}
+          <View className="flex-1 items-center gap-[3px]">
+            <View className="w-8 h-8 rounded-lg bg-black/10 items-center justify-center mb-0.5">
+              <MaterialCommunityIcons name="bus" size={16} color="#000" />
+            </View>
+            <Text className="text-[10px] font-semibold text-black/50 uppercase tracking-[0.8px]">Hiace</Text>
+            <Text className="text-[13px] font-extrabold text-[#000] tracking-[-0.2px]">ABR 986</Text>
+          </View>
+
+          <View className="w-[1px] h-[80%] self-center bg-black/10" />
+
+          {/* Stops */}
+          <View className="flex-1 items-center gap-[3px]">
+            <View className="w-8 h-8 rounded-lg bg-black/10 items-center justify-center mb-0.5">
+              <Ionicons name="location-outline" size={16} color="#000" />
+            </View>
+            <Text className="text-[10px] font-semibold text-black/50 uppercase tracking-[0.8px]">Stops</Text>
+            <Text className="text-[13px] font-extrabold text-[#000] tracking-[-0.2px]">{stops.length}</Text>
+          </View>
+
+          <View className="w-[1px] h-[80%] self-center bg-black/10" />
+
+          {/* Employees */}
+          <View className="flex-1 items-center gap-[3px]">
+            <View className="w-8 h-8 rounded-lg bg-black/10 items-center justify-center mb-0.5">
+              <Ionicons name="people-outline" size={16} color="#000" />
+            </View>
+            <Text className="text-[10px] font-semibold text-black/50 uppercase tracking-[0.8px]">Employees</Text>
+            <Text className="text-[13px] font-extrabold text-[#000] tracking-[-0.2px]">{tripEmployeesRaw.length}</Text>
+          </View>
+        </View>
+
+        {/* Route Overview */}
+        <View className="mb-6 mt-4">
+          <Text className="text-xl font-bold mb-6 text-black">
+            Route Overview
+          </Text>
+          <View className="ml-2">
+            {stops.map((stop, index) => {
+              const isLast = index === stops.length - 1;
+              const isCurrent = currentStop?.id === stop.id;
+
+              return (
+                <View key={stop.id || index} className="flex-row items-start">
+                  <View className="items-center mr-4">
+                    {/* Dot */}
+                    <View
+                      className={`rounded-full shadow-sm items-center justify-center ${isCurrent ? 'w-5 h-5 bg-[#FF5A00]' : 'w-4 h-4 bg-[#A3A3A3]'}`}
+                      style={{ borderWidth: isCurrent ? 4 : 3, borderColor: '#FFF' }}
+                    />
+                    {/* Line */}
+                    {!isLast && (
+                      <View className={`w-[2px] h-12 my-1 ${isCurrent ? 'bg-[#FF5A00]' : 'bg-[#E5E5E5]'}`} />
+                    )}
+                  </View>
+                  <View className={`flex-1 ${isCurrent ? 'mt-[-4px]' : 'mt-[-2px]'}`}>
+                    <Text className={`text-[17px] ${isCurrent ? 'font-bold text-black' : 'font-medium text-[#6B7280]'}`}>
+                      {stop.name}
+                    </Text>
+                    {stop.eta && (
+                      <Text className="text-[13px] font-medium text-[#9CA3AF] mt-0.5">{stop.eta}</Text>
+                    )}
+                  </View>
+                </View>
+              );
+            })}
+          </View>
+        </View>
+
         {/* Next stop card */}
-        <View style={styles.cardOuter}>
+        {/* <View style={styles.cardOuter}>
           <View style={styles.cardInner}>
             {currentStop && (
               <>
@@ -325,10 +419,10 @@ export default function RideInProgress() {
               </>
             )}
           </View>
-        </View>
+        </View> */}
 
         {/* Employees list */}
-        <View style={styles.sectionHeader}>
+        {/* <View style={styles.sectionHeader}>
           <Text style={styles.sectionHeaderLabel}>
             Employees at this stop
           </Text>
@@ -419,17 +513,36 @@ export default function RideInProgress() {
               </View>
             ))
           )}
-        </View>
+        </View> */}
 
         {/* Slide control */}
-        <View style={styles.slideWrapper}>
+        {/* <View style={styles.slideWrapper}>
           <SlideToStartTrip
             key={`${slideKey}-${slideKeyVersion}`}
             label={slideLabel}
             onComplete={handleSlideComplete}
           />
-        </View>
+        </View> */}
       </ScrollView>
+
+      <View className="absolute bottom-20 left-5 right-5 pointer-events-auto">
+        <Pressable
+          onPress={handleSlideComplete}
+          disabled={isActionLoading}
+          className="bg-[#FF5A00] flex-row items-center justify-center py-6 rounded-xl active:opacity-90 disabled:opacity-70"
+        >
+          {isActionLoading && (
+            <ActivityIndicator size="small" color="#FFFFFF" style={{ marginRight: 8 }} />
+          )}
+          <Text className="text-white text-[17px] font-bold mr-1">
+            {isActionLoading
+              ? 'Processing...'
+              : (rideStarted
+                ? (isLastStop ? 'Complete Trip' : 'Mark as Arrived')
+                : 'Begin ride')}
+          </Text>
+        </Pressable>
+      </View>
 
       {/* Action bottom sheet for selected employee */}
       <BottomSheetModal
@@ -447,218 +560,178 @@ export default function RideInProgress() {
         backgroundStyle={{ backgroundColor: '#FFFFFF' }}
         handleIndicatorStyle={{ backgroundColor: 'rgba(55,65,81,0.25)' }}
       >
-        <BottomSheetView style={{ flex: 1 }}>
-          {/* Header */}
-          <View
-            style={{
-              paddingHorizontal: 20,
-              paddingTop: 12,
-              paddingBottom: 8,
-              flexDirection: 'row',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-            }}
-          >
-            <View style={{ flex: 1 }} >
+        <BottomSheetView style={{ flex: 1, backgroundColor: '#FFFFFF' }}>
+          <View className="px-5 pb-8 pt-2">
+            <Text className="text-lg font-bold mb-4 text-black">
+              {isUrdu ? 'حاضری کی حیثیت منتخب کریں' : 'Mark attendance status'}
+            </Text>
 
-              {!!selectedEmployee && (
-                <View className='flex flex-row items-center'>
-                  <View style={styles.employeeAvatarSecond}>
-                    <Text style={styles.employeeAvatarText}>
-                      {getInitials(selectedEmployee.name)}
-                    </Text>
-                  </View>
-                  <View style={styles.employeeInfo}>
-                    <Text className='text-2xl font-semibold' numberOfLines={1}>
-                      {selectedEmployee.name}
-                    </Text>
-                    <Text className='text-base text-gray-600 ' numberOfLines={1}>
-                      {selectedEmployee.status === 'present' ? 'Present' : 'Absent'}
-                    </Text>
-                  </View>
-                </View>
-              )}
-            </View>
             <Pressable
-              onPress={() => setSelectedEmployee(null)}
-              hitSlop={10}
+              disabled={isScanning || isMarkingAbsent || isAttendanceFetching}
+              onPress={() => {
+                const isBusy = isScanning || isMarkingAbsent || isAttendanceFetching;
+                if (!selectedEmployee || isBusy || !activeTrip) return;
+
+                scanPassenger({
+                  shuttleTripId: activeTrip.id,
+                  employeeId: selectedEmployee.id,
+                  status: 'PRESENT',
+                })
+                  .unwrap()
+                  .then(() => setSelectedEmployee(null))
+                  .catch(() => {
+                    Alert.alert('Error', "Couldn't mark as present.");
+                    setSelectedEmployee(null);
+                  });
+              }}
+              className="py-3 rounded-xl items-center justify-center flex-row active:opacity-90 mb-3"
               style={{
-                width: 28,
-                height: 28,
-                borderRadius: 14,
-                alignItems: 'center',
-                justifyContent: 'center',
+                backgroundColor: '#F5F5F2',
+                borderWidth: 1,
+                borderColor: 'rgba(209,213,219,1)',
+                opacity: (isScanning || isMarkingAbsent || isAttendanceFetching) ? 0.6 : 1,
               }}
             >
-              <Ionicons name="close" size={18} color="#6B7280" />
+              {isScanning && (
+                <ActivityIndicator size="small" color="#000000" style={{ marginRight: 8 }} />
+              )}
+              <Text className="text-base font-semibold text-black">
+                {isUrdu ? 'حاضری لگائیں' : 'Present'}
+              </Text>
+            </Pressable>
+
+            <Pressable
+              disabled={isScanning || isMarkingAbsent || isAttendanceFetching}
+              onPress={() => {
+                const isBusy = isScanning || isMarkingAbsent || isAttendanceFetching;
+                if (!selectedEmployee || isBusy || !activeTrip) return;
+
+                markPassengerAbsent({
+                  shuttleTripId: activeTrip.id,
+                  employeeId: selectedEmployee.id,
+                })
+                  .unwrap()
+                  .then(() => setSelectedEmployee(null))
+                  .catch(() => {
+                    Alert.alert('Error', "Couldn't mark as absent.");
+                    setSelectedEmployee(null);
+                  });
+              }}
+              className="py-3 rounded-xl items-center flex-row justify-center active:opacity-90 mb-3"
+              style={{
+                backgroundColor: '#F5F5F2',
+                borderWidth: 1,
+                borderColor: 'rgba(209,213,219,1)',
+                opacity: (isScanning || isMarkingAbsent || isAttendanceFetching) ? 0.6 : 1,
+              }}
+            >
+              {isMarkingAbsent && (
+                <ActivityIndicator size="small" color="#000000" style={{ marginRight: 8 }} />
+              )}
+              <Text className="text-base font-semibold text-black">
+                {isUrdu ? 'غیر حاضر نشان زد کریں' : 'Absent'}
+              </Text>
             </Pressable>
           </View>
-
-          {/* Divider */}
-          <View
-            style={{
-              height: StyleSheet.hairlineWidth,
-              backgroundColor: 'rgba(229,231,235,1)',
-              marginHorizontal: 20,
-              marginBottom: 4,
-            }}
-          />
-
-          {/* Mark as present / absent; cache updated from response, no refetch */}
-          {(() => {
-            const currentStatus =
-              selectedEmployee != null
-                ? attendanceStatusByEmployeeId[selectedEmployee.id] ?? 'absent'
-                : 'absent';
-            const isPresent = currentStatus === 'present';
-            const primaryLabel = isUrdu
-              ? isPresent
-                ? 'غیر حاضر نشان زد کریں'
-                : 'حاضری لگائیں'
-              : isPresent
-                ? 'Mark as absent'
-                : 'Mark as present';
-            const isBusy = isScanning || isMarkingAbsent || isAttendanceFetching;
-
-            const showErrorAndClose = () => {
-              Alert.alert(
-                isUrdu ? 'خرابی' : 'Error',
-                isUrdu
-                  ? 'حاضری کی تازہ کاری نہیں ہو سکی۔ دوبارہ کوشش کریں۔'
-                  : "Couldn't update attendance. Please try again.",
-              );
-              setSelectedEmployee(null);
-            };
-
-            return (
-              <Pressable
-                onPress={() => {
-                  if (!selectedEmployee) {
-                    setSelectedEmployee(null);
-                    return;
-                  }
-                  if (isPresent && activeTrip) {
-                    markPassengerAbsent({
-                      shuttleTripId: activeTrip.id,
-                      employeeId: selectedEmployee.id,
-                    })
-                      .unwrap()
-                      .then(() => setSelectedEmployee(null))
-                      .catch(showErrorAndClose);
-                  } else if (!isPresent && activeTrip) {
-                    scanPassenger({
-                      shuttleTripId: activeTrip.id,
-                      employeeId: selectedEmployee.id,
-                      status: 'PRESENT',
-                    })
-                      .unwrap()
-                      .then(() => setSelectedEmployee(null))
-                      .catch(showErrorAndClose);
-                  }
-                }}
-                disabled={isBusy}
-                style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  paddingHorizontal: 20,
-                  paddingVertical: 10,
-                  opacity: isBusy ? 0.6 : 1,
-                }}
-              >
-                <View
-                  style={{
-                    width: 28,
-                    height: 28,
-                    borderRadius: 14,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    marginRight: 12,
-                  }}
-                >
-                  <Ionicons name="checkmark-circle-outline" size={24} color="black" />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 14, fontWeight: '600', color: '#111827' }}>
-                    {isBusy ? (isUrdu ? 'لوڈ ہو رہا ہے…' : 'Loading…') : primaryLabel}
-                  </Text>
-                </View>
-              </Pressable>
-            );
-          })()}
-
-          {/* Call passenger / فون کریں */}
-          <Pressable
-            onPress={() => {
-              if (selectedEmployee) {
-                handleCall(selectedEmployee.number);
-              }
-              setSelectedEmployee(null);
-            }}
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              paddingHorizontal: 20,
-              paddingVertical: 10,
-            }}
-          >
-            <View
-              style={{
-                width: 28,
-                height: 28,
-                borderRadius: 14,
-                backgroundColor: '#F3F4F6',
-                alignItems: 'center',
-                justifyContent: 'center',
-                marginRight: 12,
-              }}
-            >
-              <Ionicons name="call-outline" size={18} color="#2563EB" />
-            </View>
-            <View style={{ flex: 1 }} >
-              <Text style={{ fontSize: 14, fontWeight: '600', color: '#111827' }}>
-                {isUrdu ? 'فون کریں' : 'Call passenger'}
-              </Text>
-            </View>
-          </Pressable>
-
-          {/* Divider before destructive action */}
-          <View
-            style={{
-              height: StyleSheet.hairlineWidth,
-              backgroundColor: 'rgba(229,231,235,1)',
-              marginHorizontal: 20,
-              marginVertical: 8,
-            }}
-          />
-
-          {/* Cancel / پیچھے جائیں (red row) */}
-          <Pressable
-            onPress={() => setSelectedEmployee(null)}
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              paddingHorizontal: 20,
-              paddingVertical: 10,
-            }}
-          >
-            <View
-              style={{
-                width: 28,
-                height: 28,
-                borderRadius: 14,
-                alignItems: 'center',
-                justifyContent: 'center',
-                marginRight: 12,
-              }}
-            >
-              <Ionicons name="close-circle-outline" size={18} color="#DC2626" />
-            </View>
-            <Text style={{ fontSize: 14, fontWeight: '600', color: '#DC2626' }}>
-              {isUrdu ? 'پیچھے جائیں' : 'Cancel'}
-            </Text>
-          </Pressable>
         </BottomSheetView>
       </BottomSheetModal>
+
+      {/* Arrived Stop bottom sheet showing employees */}
+      {attendanceStopId != null && (
+        <BottomSheet
+          ref={arrivedStopSheetRef}
+          index={0}
+          snapPoints={arrivedStopSnapPoints}
+          enableDynamicSizing={false}
+          backgroundStyle={{ backgroundColor: '#FFFFFF' }}
+          enablePanDownToClose={false}
+          handleIndicatorStyle={{ opacity: 0 }}
+          backdropComponent={(props) => (
+            <BottomSheetBackdrop {...props} disappearsOnIndex={-1} appearsOnIndex={0} />
+          )}
+        >
+          <View className="px-5 pb-4 pt-2 flex-row justify-between items-center">
+            <View>
+              <Text className="text-xl font-bold mb-1 text-black">
+                {stopForAttendance?.name || 'Current Stop'}
+              </Text>
+              <Text className="text-sm text-[#6B7280]">
+                Mark employees as present or absent
+              </Text>
+            </View>
+          </View>
+
+          <BottomSheetScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 120 }}>
+            <View className="overflow-hidden mb-6">
+              {employeesAtCurrentStop.map((emp, index) => (
+                <View
+                  key={emp.id}
+                  className="flex-row items-center py-4"
+                  style={
+                    index < employeesAtCurrentStop.length - 1
+                      ? { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: 'rgba(156,163,175,0.35)' }
+                      : undefined
+                  }
+                >
+                  <View
+                    className="w-14 h-14 rounded-full items-center justify-center mr-3 bg-gray-200"
+                    style={{
+                      borderWidth: 2,
+                      borderColor: '#FF5A00'
+                    }}
+                  >
+                    <Text className="text-black font-semibold text-lg">
+                      {getInitials(emp.name)}
+                    </Text>
+                  </View>
+                  <View className="flex-1 min-w-0 mr-2">
+                    <Text className="text-black font-bold text-[17px]" numberOfLines={1}>
+                      {emp.name}
+                    </Text>
+                    <View className="flex-row items-center mt-1">
+                      <Text className="text-[#8E8E93] text-[15px] mr-2" numberOfLines={1}>
+                        {emp.status === 'present' ? 'Present' : (emp.status === 'absent' ? 'Absent' : (emp.number || 'No number'))}
+                      </Text>
+                    </View>
+                  </View>
+                  <View className="flex-row gap-3">
+                    <Pressable
+                      onPress={() => handleCall(emp.number)}
+                      className="w-[42px] h-[42px] rounded-full items-center justify-center border border-gray-300"
+                    >
+                      <Ionicons name="call-outline" size={20} color="black" />
+                    </Pressable>
+                    <Pressable
+                      hitSlop={8}
+                      onPress={() => setSelectedEmployee(emp)}
+                      className="w-[42px] h-[42px] rounded-full items-center justify-center border border-gray-300"
+                    >
+                      <Entypo name="dots-three-horizontal" size={20} color="black" />
+                    </Pressable>
+                  </View>
+                </View>
+              ))}
+            </View>
+            <Pressable
+              onPress={() => {
+                arrivedStopSheetRef.current?.close();
+                // Reset frozen stop so when it opens later it uses the new one
+                setAttendanceStopId(null);
+
+                if (nextStopIndex !== null && stops.length > nextStopIndex) {
+                  // Open map for the next actual traveling stop 
+                  openInMaps(stops[nextStopIndex]);
+                }
+              }}
+              className="bg-[#FF5A00] flex-row items-center justify-center py-6  rounded-xl active:opacity-90 disabled:opacity-70"
+            >
+              <Text className="text-white text-[17px] font-bold mr-1">
+                Proceed to next stop
+              </Text>
+            </Pressable>
+          </BottomSheetScrollView>
+        </BottomSheet>
+      )}
     </SafeAreaView>
   );
 }

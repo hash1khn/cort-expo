@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Linking, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Linking, Platform, Pressable, ScrollView, StyleSheet, Text, View, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
+import { Feather, Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { BottomSheetBackdrop, BottomSheetModal, BottomSheetView } from '@gorhom/bottom-sheet';
 import { SlideToStartTrip } from '../components';
@@ -9,11 +9,20 @@ import {
   useGetTripEmployeesQuery,
   useSubmitReturnAttendanceMutation,
   useCompleteTripMutation,
+  useStartTripMutation,
   TripEmployee,
 } from '../services/shuttleApi';
 import { useActiveTrip, type Stop } from '../hooks/useActiveTrip';
+import { fontFamily } from '@/core/theme';
+import { useToast } from '@/shared/ui/molecules/Toast';
+import { CustomToast } from '@/features/shared/components/CustomToast';
+import { useLanguage } from '@/features/shared/context/LanguageContext';
 
-type EmployeeStatus = 'present' | 'absent';
+const AppText = ({ style, ...props }: any) => (
+  <Text style={[{ fontFamily }, style]} {...props} />
+);
+
+type EmployeeStatus = 'present' | 'absent' | null;
 type AbsentReason = 'SELF_COMMUTE' | 'LATE' | 'SICK';
 
 type ReturnEmployee = {
@@ -44,15 +53,23 @@ function getAbsentReasonLabel(reason: AbsentReason): string {
 }
 
 export default function Return() {
+  const { language } = useLanguage();
+  const isUrdu = language === 'ur';
+  const toast = useToast();
   const absentSheetRef = useRef<BottomSheetModal>(null);
   const absentSnapPoints = useMemo(() => ['40%'], []);
   const { activeTrip, tripId, stops, isLoading: isTripsLoading } = useActiveTrip();
-  const { data: tripEmployeesRaw = [], isLoading: isEmployeesLoading } = useGetTripEmployeesQuery(
+  const { data: realTripEmployeesRaw = [], isLoading: isEmployeesLoading } = useGetTripEmployeesQuery(
     tripId as number,
     { skip: !tripId },
   );
+
+  const tripEmployeesRaw = realTripEmployeesRaw;
   const [submitReturnAttendance, { isLoading: isSubmitting }] = useSubmitReturnAttendanceMutation();
   const [completeTrip, { isLoading: isCompletingTrip }] = useCompleteTripMutation();
+  const [startTrip, { isLoading: isStartingTrip }] = useStartTripMutation();
+
+  const isActionLoading = isSubmitting || isStartingTrip || isCompletingTrip;
 
   // Track present/absent per employee for the return trip; default is absent.
   const [employees, setEmployees] = useState<ReturnEmployee[]>([]);
@@ -69,7 +86,7 @@ export default function Return() {
         id: emp.id,
         name: emp.fullName,
         number: emp.phone ?? '',
-        status: 'absent' as const,
+        status: null,
       }));
     });
   }, [tripEmployeesRaw]);
@@ -123,11 +140,23 @@ export default function Return() {
               emp.absentReason && { absent_reason: emp.absentReason }),
           })),
         }).unwrap();
+
+        if (activeTrip?.route_id) {
+          await startTrip({
+            route_id: activeTrip.route_id,
+            direction: 'EVENING',
+          }).unwrap();
+        }
+
         setReturnTripStarted(true);
         setSliderKey((k) => k + 1);
         openStopsInMaps(stops);
       } catch {
         // On error, remount slider so user can retry; stay on screen
+        toast.show(
+          <CustomToast type="error" message={isUrdu ? 'شروع نہ ہو سکی' : 'Could not start ride'} />,
+          { duration: 4000, position: 'top', backgroundColor: '#ff4545' }
+        );
         setSliderKey((k) => k + 1);
       }
       return;
@@ -140,19 +169,22 @@ export default function Return() {
         total_distance: 0,
       }).unwrap();
       setSliderKey((k) => k + 1);
-      router.push('/shuttle');
     } catch {
       // On error, remount slider so user can retry; stay on screen
-      setSliderKey((k) => k + 1);
+      // Optionally show error
     }
+    router.push('/shuttle');
   }, [
     tripId,
+    activeTrip?.route_id,
     employees,
     returnTripStarted,
     submitReturnAttendance,
+    startTrip,
     completeTrip,
     openStopsInMaps,
     stops,
+    toast,
   ]);
 
   React.useEffect(() => {
@@ -192,94 +224,102 @@ export default function Return() {
 
   return (
     <SafeAreaView className="flex-1 bg-[#FFFFFF]" edges={['top']}>
-      <ScrollView className="flex-1 px-5" showsVerticalScrollIndicator={false}>
+      {!returnTripStarted && (
+        <Pressable onPress={() => router.back()}>
+          <View className="flex-row items-center gap-2 ml-[-4px] px-6 mb-3">
+            <Feather name="chevron-left" size={24} color="black" />
+            {/* <Text className="text-black font-bold">Home</Text> */}
+          </View>
+        </Pressable>
+      )}
+      <ScrollView
+        className="flex-1 px-6"
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: 120 }}
+      >
         {/* Title */}
-        <View className="mb-6">
-          <Text className="text-[34px] font-bold text-black">Return trip</Text>
-          <Text className="text-base font-medium text-[#6B7280] mt-1">
-            Tower → Clifton
-          </Text>
+
+        <View className="mb-3">
+          <AppText className={`text-[34px] font-bold text-black ${isUrdu ? 'ml-auto' : ''}`}>
+            {isUrdu ? 'واپسی کا سفر' : 'Return trip'}
+          </AppText>
         </View>
 
         {/* Attendance section */}
         <View className="mb-6">
-          <Text className="text-xl px-2 font-bold mb-1 text-black">
-            Mark attendance
-          </Text>
-          <Text className="text-sm px-2 mb-4 text-[#6B7280]">
-            Mark employees as present or absent for the return trip
-          </Text>
+          <AppText className={`text-xl font-bold mb-1 text-black ${isUrdu ? 'ml-auto' : ''}`}>
+            {isUrdu ? 'حاضری' : 'Mark attendance'}
+          </AppText>
+          <AppText className={`text-sm mb-4 text-[#6B7280] ${isUrdu ? 'ml-auto' : ''}`}>
+            {isUrdu ? 'افراد کی حاضری یا غیر حاضری مقرر کریں' : 'Mark employees as present or absent for the return trip'}
+          </AppText>
 
-          <View className="rounded-2xl bg-[#F5F5F2] overflow-hidden">
+          <View className="overflow-hidden">
             {employees.map((emp, index) => (
               <View
                 key={emp.id}
-                className="flex-row items-center py-4 px-4"
+                className="flex-row items-center py-4 p"
                 style={
                   index < employees.length - 1
                     ? { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: 'rgba(156,163,175,0.35)' }
                     : undefined
                 }
               >
-                <View className="w-12 h-12 rounded-xl items-center justify-center mr-3 bg-white">
-                  <Text className="text-black font-semibold text-sm">
+                <View
+                  className="w-14 h-14 rounded-full items-center justify-center mr-3 bg-gray-200"
+                  style={{
+                    borderWidth: 2,
+                    borderColor: '#FF5A00'
+                  }}
+                >
+                  <AppText className="text-black font-semibold text-lg">
                     {getInitials(emp.name)}
-                  </Text>
+                  </AppText>
                 </View>
-                <View className="flex-1 min-w-0">
-                  <Text className="text-black font-bold text-base" numberOfLines={1}>
+                <View className="flex-1 min-w-0 mr-2">
+                  <AppText className="text-black font-bold text-[17px]" numberOfLines={1}>
                     {emp.name}
-                  </Text>
-                  <Text className="text-[#6B7280] text-sm mt-0.5" numberOfLines={1}>
-                    {emp.status === 'absent' && emp.absentReason
-                      ? getAbsentReasonLabel(emp.absentReason)
-                      : emp.number}
-                  </Text>
+                  </AppText>
+                  <View className="flex-row items-center mt-1">
+                    <AppText className="text-[#8E8E93] text-[15px] mr-2" numberOfLines={1}>
+                      {emp.status === 'absent' && emp.absentReason
+                        ? getAbsentReasonLabel(emp.absentReason)
+                        : (emp.number || 'No number')}
+                    </AppText>
+                  </View>
                 </View>
-                <View className="flex-row gap-2">
+                <View className="flex-row gap-3">
                   <Pressable
-                    onPress={() => handleMarkPresent(emp.id)}
-                    className="px-3 py-2 rounded-lg active:opacity-80"
+                    disabled={returnTripStarted}
+                    onPress={() => handleMarkAbsent(emp)}
+                    className="w-[42px] h-[42px] rounded-full items-center justify-center border "
                     style={{
-                      backgroundColor:
-                        emp.status === 'present' ? 'rgba(34, 197, 94, 0.12)' : '#FFFFFF',
-                      borderWidth: 1,
-                      borderColor:
-                        emp.status === 'present'
-                          ? 'rgba(34, 197, 94, 0.7)'
-                          : 'rgba(209, 213, 219, 1)',
+                      backgroundColor: emp.status === 'absent' ? '#D27360' : 'transparent',
+                      borderColor: emp.status === 'absent' ? '#D27360' : emp.status === 'present' ? '#C0C0C0' : '#D27360',
+                      opacity: returnTripStarted ? 0.5 : 1,
                     }}
                   >
-                    <Text
-                      className="text-sm font-semibold"
-                      style={{
-                        color: emp.status === 'present' ? '#16a34a' : '#4B5563',
-                      }}
-                    >
-                      Present
-                    </Text>
+                    <Ionicons
+                      name="close"
+                      size={24}
+                      color={emp.status === 'absent' ? '#FFF' : emp.status === 'present' ? '#C0C0C0' : '#D27360'}
+                    />
                   </Pressable>
                   <Pressable
-                    onPress={() => handleMarkAbsent(emp)}
-                    className="px-3 py-2 rounded-lg active:opacity-80"
+                    disabled={returnTripStarted}
+                    onPress={() => handleMarkPresent(emp.id)}
+                    className="w-[42px] h-[42px] rounded-full items-center justify-center border"
                     style={{
-                      backgroundColor:
-                        emp.status === 'absent' ? 'rgba(239, 68, 68, 0.10)' : '#FFFFFF',
-                      borderWidth: 1,
-                      borderColor:
-                        emp.status === 'absent'
-                          ? 'rgba(239, 68, 68, 0.7)'
-                          : 'rgba(209, 213, 219, 1)',
+                      backgroundColor: emp.status === 'present' ? '#4AA388' : 'transparent',
+                      borderColor: emp.status === 'present' ? '#4AA388' : emp.status === 'absent' ? '#C0C0C0' : '#4AA388',
+                      opacity: returnTripStarted ? 0.5 : 1,
                     }}
                   >
-                    <Text
-                      className="text-sm font-semibold"
-                      style={{
-                        color: emp.status === 'absent' ? '#b91c1c' : '#4B5563',
-                      }}
-                    >
-                      Absent
-                    </Text>
+                    <Ionicons
+                      name="checkmark"
+                      size={24}
+                      color={emp.status === 'present' ? '#FFF' : emp.status === 'absent' ? '#C0C0C0' : '#4AA388'}
+                    />
                   </Pressable>
                 </View>
               </View>
@@ -288,14 +328,32 @@ export default function Return() {
         </View>
 
         {/* Slide to complete */}
-        <View className="mb-8">
+        {/* <View className="mb-8">
           <SlideToStartTrip
             key={sliderKey}
             label={returnTripStarted ? 'Slide to complete trip' : 'Slide to begin trip'}
             onComplete={handleSlideReturnTrip}
           />
-        </View>
+        </View> */}
       </ScrollView>
+
+      <View className="absolute bottom-16 left-5 right-5 pointer-events-auto">
+        <Pressable
+          onPress={handleSlideReturnTrip}
+          disabled={isActionLoading}
+          className="bg-[#FF5A00] flex-row items-center justify-center py-4 rounded-xl active:opacity-90 disabled:opacity-70"
+        >
+          {isActionLoading && (
+            <ActivityIndicator size="small" color="#FFFFFF" style={{ marginRight: 8 }} />
+          )}
+          <AppText className="text-white text-[17px] font-bold mr-1">
+            {isActionLoading
+              ? (returnTripStarted ? 'Completing...' : (isUrdu ? 'شروع ہو رہی' : 'Beginning...'))
+              : (returnTripStarted ? 'Complete Trip' : (isUrdu ? 'شروع کریں' : 'Begin ride'))}
+          </AppText>
+          {/* <Ionicons name="chevron-forward" size={22} color="#FFF" /> */}
+        </Pressable>
+      </View>
 
       {/* Absent reason bottom sheet */}
       <BottomSheetModal
@@ -310,13 +368,11 @@ export default function Return() {
         handleIndicatorStyle={{ backgroundColor: 'rgba(55,65,81,0.25)' }}
       >
         <BottomSheetView style={styles.absentSheetContent}>
-          <View className="px-5 pb-8">
-            <Text className="text-lg font-bold mb-1 text-black">
+          <View className="px-5 pb-8 ">
+            <AppText className="text-lg font-bold mb-4 text-black">
               Why is this person absent?
-            </Text>
-            <Text className="text-sm mb-6 text-[#6B7280]">
-              {employeeForAbsent?.name}
-            </Text>
+            </AppText>
+
 
             {ABSENT_REASONS.map((reason) => (
               <Pressable
@@ -329,9 +385,9 @@ export default function Return() {
                   borderColor: 'rgba(209,213,219,1)',
                 }}
               >
-                <Text className="text-base font-semibold text-black">
+                <AppText className="text-base font-semibold text-black">
                   {reason.label}
-                </Text>
+                </AppText>
               </Pressable>
             ))}
           </View>

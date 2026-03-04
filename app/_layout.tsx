@@ -19,6 +19,7 @@ import { Provider } from 'react-redux';
 import { PersistGate } from 'redux-persist/integration/react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
+import { ToastProviderWithViewport } from '../src/shared/ui/molecules/Toast';
 import { store, persistor } from '../src/store';
 import { useAppSelector } from '../src/store/hooks';
 import { logOut } from '../src/features/auth/store/auth.slice';
@@ -40,6 +41,7 @@ function RootLayoutContent() {
     Inter_600SemiBold,
     Montserrat_300Light,
     Montserrat_400Regular,
+    Geist: require('../fonts/Geist-VariableFont_wght.ttf'),
   });
 
   const role = useAppSelector((s) => s.auth.role);
@@ -111,32 +113,34 @@ function RootLayoutContent() {
   }
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <SafeAreaProvider>
-        <BottomSheetModalProvider>
-          <StatusBar style="auto" />
-          <Stack screenOptions={{ headerShown: false }}>
-            <Stack.Protected guard={!isLoggedIn}>
-              <Stack.Screen name="(auth)" />
-            </Stack.Protected>
-
-            <Stack.Protected guard={isLoggedIn}>
-              <Stack.Protected guard={isChauffeur}>
-                <Stack.Screen name="chauffeur" />
+      <ToastProviderWithViewport>
+        <SafeAreaProvider>
+          <BottomSheetModalProvider>
+            <StatusBar style="auto" />
+            <Stack screenOptions={{ headerShown: false }}>
+              <Stack.Protected guard={!isLoggedIn}>
+                <Stack.Screen name="(auth)" />
               </Stack.Protected>
 
-              <Stack.Protected guard={isDriver}>
-                <Stack.Screen name="shuttle" />
+              <Stack.Protected guard={isLoggedIn}>
+                <Stack.Protected guard={isChauffeur}>
+                  <Stack.Screen name="chauffeur" />
+                </Stack.Protected>
+
+                <Stack.Protected guard={isDriver}>
+                  <Stack.Screen name="shuttle" />
+                </Stack.Protected>
+
+                <Stack.Protected guard={isEmployee}>
+                  <Stack.Screen name="employee" />
+                </Stack.Protected>
               </Stack.Protected>
 
-              <Stack.Protected guard={isEmployee}>
-                <Stack.Screen name="employee" />
-              </Stack.Protected>
-            </Stack.Protected>
-
-            <Stack.Screen name="+not-found" />
-          </Stack>
-        </BottomSheetModalProvider>
-      </SafeAreaProvider>
+              <Stack.Screen name="+not-found" />
+            </Stack>
+          </BottomSheetModalProvider>
+        </SafeAreaProvider>
+      </ToastProviderWithViewport>
     </GestureHandlerRootView>
   );
 }

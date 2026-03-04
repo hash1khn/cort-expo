@@ -1,6 +1,17 @@
 import { baseApi } from '../../../core/api/baseApi';
 
 /** Trip on the employee's route(s) with driver and vehicle (matches backend getTripsForEmployee). */
+export type RouteStop = {
+  id: number;
+  route_id: number;
+  name: string;
+  sequence_order: number;
+  morning_eta: string | null;
+  evening_eta: string | null;
+  lat: number | null;
+  lng: number | null;
+};
+
 export type ShuttleTripForEmployee = {
   id: number;
   route_id: number | null;
@@ -12,6 +23,10 @@ export type ShuttleTripForEmployee = {
   completed_at: string | null;
   current_stop_id?: number | null;
   current_stop_arrived_at?: string | null;
+  /** The ID of this employee's designated pickup stop */
+  my_pickup_stop_id?: number | null;
+  /** Full details of this employee's pickup stop (null if unassigned) */
+  my_pickup_stop?: RouteStop | null;
   routes: {
     id: number;
     name: string;
@@ -21,16 +36,7 @@ export type ShuttleTripForEmployee = {
       make: string;
       model: string;
     } | null;
-    route_stops?: {
-      id: number;
-      route_id: number;
-      name: string;
-      sequence_order: number;
-      morning_eta: string | null;
-      evening_eta: string | null;
-      lat: number | null;
-      lng: number | null;
-    }[];
+    route_stops?: RouteStop[];
   } | null;
   users: {
     id: string;

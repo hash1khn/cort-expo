@@ -75,6 +75,8 @@ export function useRideSocket({
             if (onRideProceeding) socketService.off('ride:proceeding', onRideProceeding);
             if (onAttendanceMarked) socketService.off('attendance:marked', onAttendanceMarked);
             if (onRideEnded) socketService.off('RIDE_ENDED', onRideEnded);
+            // Clear the ride-room tracking so a finished trip is not replayed on reconnect
+            socketService.leaveRide();
         };
     }, [tripId, userId, role, onLocationUpdate, onStopArrived, onRideProceeding, onAttendanceMarked, onRideEnded]);
 

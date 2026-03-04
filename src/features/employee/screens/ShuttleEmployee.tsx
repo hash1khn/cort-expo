@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
-  Text,
+  Text as RNText,
   Pressable,
   StyleSheet,
   Linking,
@@ -12,6 +12,37 @@ import {
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AntDesign, Entypo, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { fontFamily } from '@/core/theme';
+import { useToast } from '@/shared/ui/molecules/Toast';
+
+const Text = (props: React.ComponentProps<typeof RNText>) => {
+  return <RNText {...props} style={[{ fontFamily }, props.style]} />;
+};
+
+const CustomToast = ({ title, message }: { title: string; message: string }) => (
+  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+    <View
+      style={{
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        backgroundColor: 'rgba(255,255,255,0.15)',
+        justifyContent: 'center',
+        alignItems: 'center',
+      }}
+    >
+      <Ionicons name="notifications" size={16} color="#fff" />
+    </View>
+    <View style={{ flex: 1, gap: 2 }}>
+      <RNText style={{ fontSize: 14, fontWeight: '600', color: '#fff', fontFamily }}>
+        {title}
+      </RNText>
+      <RNText style={{ fontSize: 12, color: 'rgba(255,255,255,0.7)', fontFamily }}>
+        {message}
+      </RNText>
+    </View>
+  </View>
+);
 import BottomSheet, {
   BottomSheetBackdrop,
   BottomSheetView,
@@ -19,11 +50,13 @@ import BottomSheet, {
 } from '@gorhom/bottom-sheet';
 import { useAppDispatch, useAppSelector } from '../../../store/hooks';
 import { useRouter } from 'expo-router';
+import { useFocusEffect } from 'expo-router';
 import { logOut } from '../../auth/store';
 import { logout } from '../../auth/services';
 import { useGetChauffeurBookingsQuery } from '../services/bookingsApi';
 import { useGetShuttleTripsForEmployeeQuery } from '../services/employeeShuttleApi';
 import { RideHistoryCard } from '../components/RideHistoryCard';
+import { CompactRideHistoryCard } from '../components/CompactRideHistoryCard';
 import { RideStatusBar, type UpcomingShuttleInfo } from '../components/RideStatusBar';
 import {
   setIsWaitingForDriverResponse,
@@ -31,6 +64,7 @@ import {
   setChauffeurRide,
 } from '../store';
 import { useRideStartListener } from '../../../hooks/useRideStartListener';
+import FlipCard from '../components/FlipCard';
 
 const PROFILE_SHEET_SNAP = ['65%'];
 const DROPOFF_SHEET_SNAP = ['45%'];
@@ -41,6 +75,19 @@ export default function NewHome() {
     (state) => state.employeeRide,
   );
   const dispatch = useAppDispatch();
+  const toast = useToast();
+
+  const showHomeToast = () => {
+    toast.show(
+      <CustomToast title="New Message" message="Sarah sent you a photo." />,
+      {
+        duration: 4000,
+        position: 'top',
+        type: 'default',
+        backgroundColor: '#1c1c1c',
+      },
+    );
+  };
 
   const companyId = (user?.company_id ?? 0) as number;
   const employeeId = (user?.id ?? '') as string;
@@ -49,10 +96,21 @@ export default function NewHome() {
     { skip: !companyId || !employeeId },
   );
 
-  const { data: shuttleTrips = [], isLoading: isShuttleTripsLoading } = useGetShuttleTripsForEmployeeQuery(
+  const {
+    data: shuttleTrips = [],
+    isLoading: isShuttleTripsLoading,
+    refetch: refetchShuttleTrips,
+  } = useGetShuttleTripsForEmployeeQuery(
     { companyId, employeeId },
     { skip: !companyId || !employeeId },
   );
+
+  // Always keep a ref pointing at the latest trips so the socket callback
+  // (which closes over a stale value) can read fresh data after a refetch.
+  const shuttleTripsRef = useRef(shuttleTrips);
+  useEffect(() => {
+    shuttleTripsRef.current = shuttleTrips;
+  }, [shuttleTrips]);
 
   const upcomingShuttle = useMemo((): UpcomingShuttleInfo | null => {
     const trip = shuttleTrips.find((t) => t.status !== 'COMPLETED') ?? shuttleTrips[0];
@@ -123,10 +181,48 @@ export default function NewHome() {
   const [dropoffValue, setDropoffValue] = useState('');
   const router = useRouter();
 
-  // Navigate to active ride screen when driver starts a trip while this screen is open
+  // Refetch whenever this screen comes back into focus (e.g. returning from RideActive).
+  // This ensures the next trip (e.g. evening/return) is automatically shown
+  // without the user having to pull-to-refresh.
+  useFocusEffect(
+    useCallback(() => {
+      if (companyId && employeeId) {
+        refetchShuttleTrips();
+      }
+    }, [companyId, employeeId, refetchShuttleTrips]),
+  );
+
+  // Navigate to active ride screen the moment a driver starts any trip.
+  // Both MORNING and EVENING trips are already SCHEDULED in the DB (generated daily),
+  // so they exist in the cached list. We read from the ref for a zero-latency
+  // navigation — no network wait before the screen opens.
   useRideStartListener(
     useCallback((data) => {
-      router.push({ pathname: '/employee/ride-active', params: { tripId: data.tripId } });
+      const trips = shuttleTripsRef.current;
+      const matchingTrip = trips.find((t) => t.id === data.tripId);
+      const myPickupStopId = matchingTrip?.my_pickup_stop_id ?? null;
+      const driverPhone = matchingTrip?.users?.phone ?? '';
+      const vehicle = matchingTrip?.routes?.vehicles;
+      const vehicleDisplay = vehicle
+        ? `${vehicle.make} ${vehicle.model}`.trim()
+        : data.vehicleInfo;
+      const vehiclePlate = vehicle?.plate_number ?? '';
+      // Backend sends route name in `driverName` field — prefer real name from trip.
+      const driverName = matchingTrip?.users?.full_name ?? data.driverName;
+      const direction = matchingTrip?.direction ?? '';
+
+      router.push({
+        pathname: '/employee/ride-active',
+        params: {
+          tripId: String(data.tripId),
+          myPickupStopId: myPickupStopId != null ? String(myPickupStopId) : '',
+          driverName,
+          driverPhone,
+          vehicleDisplay,
+          vehiclePlate,
+          direction,
+        },
+      });
     }, [router]),
   );
 
@@ -202,8 +298,30 @@ export default function NewHome() {
       openDropoffSheet();
       return;
     }
-    router.push('/employee/ride-active');
-  }, [isOutstationDev, isWaitingForDriverResponse, openDropoffSheet, router]);
+
+    // Find the active/started shuttle trip to pass real params
+    const activeTrip = shuttleTrips.find(
+      (t) => t.status === 'STARTED' || t.status === 'IN_PROGRESS',
+    ) ?? shuttleTrips[0];
+    const myPickupStopId = activeTrip?.my_pickup_stop_id ?? null;
+    const driverPhone = activeTrip?.users?.phone ?? '';
+    const vehicle = activeTrip?.routes?.vehicles;
+    const vehicleDisplay = vehicle ? `${vehicle.make} ${vehicle.model}`.trim() : '';
+    const vehiclePlate = vehicle?.plate_number ?? '';
+    const driverName = activeTrip?.users?.full_name ?? 'Driver';
+
+    router.push({
+      pathname: '/employee/ride-active',
+      params: {
+        tripId: activeTrip?.id ? String(activeTrip.id) : '',
+        myPickupStopId: myPickupStopId != null ? String(myPickupStopId) : '',
+        driverName,
+        driverPhone,
+        vehicleDisplay,
+        vehiclePlate,
+      },
+    });
+  }, [isOutstationDev, isWaitingForDriverResponse, openDropoffSheet, router, shuttleTrips]);
 
   useEffect(() => {
     const sub = AppState.addEventListener('change', (state) => {
@@ -213,17 +331,20 @@ export default function NewHome() {
   }, []);
 
   return (
-    <View style={{ paddingTop: insets.top }} className="bg-white flex-1">
+    <View style={{ paddingTop: insets.top }} className="bg-[#FFFF] flex-1">
       <ScrollView
         style={{ flex: 1 }}
-        contentContainerStyle={{ paddingBottom: 24 }}
+        contentContainerStyle={{ paddingBottom: 24, paddingHorizontal: 20 }}
         showsVerticalScrollIndicator={false}
       >
-        <View className="flex-row justify-between items-center px-4 mt-4">
+        <View className="flex-row justify-between items-center my-4">
           <View className="flex-1">
-            <Text className="text-black text-3xl font-bold mb-1">
-              Hey there, {firstName ? `${firstName}` : ' Muhammad'}
-            </Text>
+            <Pressable onPress={showHomeToast} hitSlop={8}>
+              <Text className="text-black text-4xl font-bold">
+                {/* Hey there, {firstName ? `${firstName}` : ' Muhammad'} */}
+                Home
+              </Text>
+            </Pressable>
 
             {/* <Text className="text-text-muted text-xl mt-1">
               Where do you want to go?
@@ -233,21 +354,23 @@ export default function NewHome() {
             onPress={openProfileSheet}
             className="w-12 h-12 rounded-full items-center justify-center ml-3"
           >
-            <AntDesign name="align-right" size={24} color="black" />
+            <AntDesign name="menu" size={22} color="black" />
           </Pressable>
         </View>
 
         {/* Status bar: purple card */}
-        <View className="px-4 mt-6">
+        {/* <View className="px-4 mt-6">
           <RideStatusBar
             enableDevToggle
             upcomingShuttle={upcomingShuttle}
             isLoading={isShuttleTripsLoading}
           />
-        </View>
+        </View> */}
+        <FlipCard />
+        {/* <FlipCard /> */}
 
         {/* Chauffeur / Outstation card - opens dropoff sheet when dev outstation is enabled */}
-        <View className="px-4 mt-4">
+        {/* <View className="px-4 mt-4">
           <Pressable
             onPress={handleChauffeurCardPress}
             className="rounded-2xl overflow-hidden"
@@ -278,7 +401,7 @@ export default function NewHome() {
               <Entypo name="chevron-right" size={24} color="#fff" />
             </View>
           </Pressable>
-        </View>
+        </View> */}
 
 
 
@@ -319,10 +442,10 @@ export default function NewHome() {
         </View> */}
 
         {/* Recent Rides section */}
-        <View className="px-4 mt-6">
+        <View className="mt-6">
           <Pressable onPress={() => { router.push('/employee/rides') }} hitSlop={8}>
-            <View className="flex-row items-center justify-between gap-0 px-1 mb-3">
-              <Text className="text-black text-2xl font-bold">Recent Rides</Text>
+            <View className="flex-row items-center justify-between gap-0 mb-3">
+              <Text className="text-black text-xl font-bold">Recent Rides</Text>
               <Text className='text-amber-500 text-sm font-bold'>View all</Text>
               {/* <Pressable onPress={()=>{router.push('/employee/rides')}} hitSlop={8}>
                 <Text className="text-text-muted text-sm font-medium">View history</Text>
@@ -358,13 +481,11 @@ export default function NewHome() {
                 })
               }
             /> */}
-            <RideHistoryCard
-              rideId="PO123RT"
-              driverName="Sajjad"
-              pickup="Clifton"
+            <CompactRideHistoryCard
               destination="Tower"
-              status="completed"
-              dateTime="Today, 08:30 AM"
+              date="Yesterday"
+              rideType="Shuttle"
+              timeOfDropoff="14:52"
               onPress={() =>
                 router.push({
                   pathname: '/employee/ride-details',
@@ -372,13 +493,11 @@ export default function NewHome() {
                 })
               }
             />
-            <RideHistoryCard
-              rideId="PO123RT"
-              driverName="Sajjad"
-              pickup="Clifton"
-              destination="Tower"
-              status="completed"
-              dateTime="Today, 08:30 AM"
+            <CompactRideHistoryCard
+              destination="Clifton"
+              date="Oct 24"
+              rideType="Shuttle"
+              timeOfDropoff="22:10"
               onPress={() =>
                 router.push({
                   pathname: '/employee/ride-details',
@@ -394,16 +513,17 @@ export default function NewHome() {
                 source={require('@/../assets/bus_image.png')}
                 style={styles.bentoLarge}
                 imageStyle={styles.bentoLargeImage}
+
               >
                 <View className="flex-1 justify-between p-4 bg-black/30">
-                  <View>
+                  <Pressable onPress={() => router.push('/employee/ride-active')}>
                     <Text className="text-white text-xs font-semibold uppercase tracking-wide">
                       Instation & Outstation
                     </Text>
                     <Text className="text-white text-2xl font-bold mt-1">
                       Your chauffeur, your schedule
                     </Text>
-                  </View>
+                  </Pressable>
                   <View className="flex-row items-center mt-3">
 
                   </View>
@@ -417,7 +537,7 @@ export default function NewHome() {
                   style={styles.bentoSmall}
                   imageStyle={styles.bentoSmallImage}
                 >
-                  <View className="flex-1 bg-black/25 items-start justify-end p-3">
+                  <View className="flex-1  items-start justify-end p-3">
                     <Text className="text-white text-lg font-semibold">
                       Enjoy the ride while we handle the rest.
                     </Text>
@@ -428,7 +548,7 @@ export default function NewHome() {
                   style={styles.bentoSmall}
                   imageStyle={styles.bentoSmallImage}
                 >
-                  <View className="flex-1 bg-black/25 items-start justify-end p-3">
+                  <View className="flex-1  items-start justify-end p-3">
                     <Text className="text-white text-lg font-semibold">
                       Chauffeur at your door, right on time.
                     </Text>

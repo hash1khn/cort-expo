@@ -117,10 +117,10 @@ export const shuttleApi = baseApi.injectEndpoints({
           !response
             ? []
             : Array.isArray(response)
-            ? response
-            : Array.isArray(response.data)
-            ? response.data
-            : [];
+              ? response
+              : Array.isArray(response.data)
+                ? response.data
+                : [];
 
         return rawRows.map((row) => {
           const user = row.users ?? {};
@@ -151,10 +151,10 @@ export const shuttleApi = baseApi.injectEndpoints({
           !response
             ? []
             : Array.isArray(response)
-            ? response
-            : Array.isArray(response.data)
-            ? response.data
-            : [];
+              ? response
+              : Array.isArray(response.data)
+                ? response.data
+                : [];
 
         return rawRows.map((row) => {
           const user = row.users ?? {};

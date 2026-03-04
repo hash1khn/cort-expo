@@ -12,6 +12,8 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, typography } from '../../../core/theme';
 import { CortButton } from '@/components';
+import AnimatedMeshGradient from '@/shared/ui/organisms/mesh-gradient';
+import type { IMeshGradientColor } from '@/shared/ui/organisms/mesh-gradient/types';
 
 const { width, height } = Dimensions.get('window');
 
@@ -21,6 +23,8 @@ type Props = {
 };
 
 export function GetStartedScreen({ onGetStarted, onApplyAsChauffeur }: Props) {
+
+
   return (
     <View style={styles.root}>
       <StatusBar barStyle="dark-content" backgroundColor={colors.white} />
@@ -75,10 +79,12 @@ export function GetStartedScreen({ onGetStarted, onApplyAsChauffeur }: Props) {
         </View>
       </SafeAreaView>
     </View>
+
   );
 }
 
 const styles = StyleSheet.create({
+
   root: {
     flex: 1,
     backgroundColor: colors.white,

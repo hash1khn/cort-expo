@@ -155,9 +155,8 @@ export function ShuttleDriver() {
     isLast?: boolean;
   }) => (
     <View
-      className={`flex-row justify-between items-center py-3 px-1 ${
-        !isLast ? 'border-b border-black/5' : ''
-      }`}
+      className={`flex-row justify-between items-center py-3 px-1 ${!isLast ? 'border-b border-black/5' : ''
+        }`}
     >
       {isUrdu ? (
         <View className="flex-row items-center w-full justify-between">
@@ -306,60 +305,62 @@ export function ShuttleDriver() {
           </Text>
         </View>
 
+
+
         {/* No rides message */}
         {!hasTrips && (
           <View className="mt-4 my-auto">
-            <Text className={`py-2 font-medium text-black ${language==='ur'?'ml-auto text-2xl ':'text-base '}`}>
-              {language==='en'?'You have no rides for today.':'آج کوئی سواری مقرر نہیں ہے'}
+            <Text className={`py-2 font-medium text-black ${language === 'ur' ? 'ml-auto text-2xl ' : 'text-base '}`}>
+              {language === 'en' ? 'You have no rides for today.' : 'آج کوئی سواری مقرر نہیں ہے'}
             </Text>
           </View>
         )}
 
         {hasTrips && (
-        <>
-        {/* JOINT CARD: Status + Route Details */}
-        <View className="mb-6 rounded-3xl bg-[#EDEDEB] p-6">
-          {/* ACTIVE TRIP STATUS (transparent inside the card) */}
-          <View className="mb-5">
-            <View className="flex-row items-center justify-between mb-4">
-              <View className="flex-row items-center gap-3">
-                <View className="p-2 bg-white rounded-xl">
-                  <Ionicons name="bus" size={20} color="#000000" />
+          <>
+            {/* JOINT CARD: Status + Route Details */}
+            <View className="mb-6 rounded-3xl bg-[#EDEDEB] p-6">
+              {/* ACTIVE TRIP STATUS (transparent inside the card) */}
+              <View className="mb-5">
+                <View className="flex-row items-center justify-between mb-4">
+                  <View className="flex-row items-center gap-3">
+                    <View className="p-2 bg-white rounded-xl">
+                      <Ionicons name="bus" size={20} color="#000000" />
+                    </View>
+                    <View>
+                      <Text className="text-xs font-semibold tracking-wider text-[#6B7280]">
+                        Black Hiace
+                      </Text>
+                      <Text className="text-lg font-semibold text-black">
+                        ABR‑986
+                      </Text>
+                    </View>
+                  </View>
+                  <View className="px-3 py-1.5 rounded-xl bg-black">
+                    <Text className="text-sm font-bold text-white">
+                      {routeDetails.start}
+                    </Text>
+                  </View>
                 </View>
-                <View>
-                  <Text className="text-xs font-semibold tracking-wider text-[#6B7280]">
-                    Black Hiace
+
+                <View className="flex-row items-center gap-3 mb-0">
+                  <Text className="text-[2rem] text-black font-bold">
+                    {routeDetails.origin}
                   </Text>
-                  <Text className="text-lg font-semibold text-black">
-                  ABR‑986
+                  <Feather name="arrow-right" size={24} color="#6B7280" />
+                  <Text className="text-[2rem] text-black font-bold">
+                    {routeDetails.destination}
                   </Text>
                 </View>
+
               </View>
-              <View className="px-3 py-1.5 rounded-xl bg-black">
-                <Text className="text-sm font-bold text-white">
-                  {routeDetails.start}
-                </Text>
-              </View>
-            </View>
 
-            <View className="flex-row items-center gap-3 mb-0">
-              <Text className="text-[2rem] text-black font-bold">
-                {routeDetails.origin}
-              </Text>
-              <Feather name="arrow-right" size={24} color="#6B7280" />
-              <Text className="text-[2rem] text-black font-bold">
-                {routeDetails.destination}
-              </Text>
-            </View>
+              {/* Divider */}
+              {/* <View className="h-px bg-black/10 mb-4" /> */}
 
-          </View>
-
-          {/* Divider */}
-          {/* <View className="h-px bg-black/10 mb-4" /> */}
-
-          {/* ROUTE DETAILS (Information table) */}
-          <View className="w-full">
-            {/* <Text
+              {/* ROUTE DETAILS (Information table) */}
+              <View className="w-full">
+                {/* <Text
               className={`text-base font-semibold text-black mb-3 ${
                 isUrdu ? 'w-full text-right' : ''
               }`}
@@ -368,174 +369,174 @@ export function ShuttleDriver() {
               {labels.sectionTitle}
             </Text> */}
 
-            <View className="rounded-xl  ">
-              <InfoRow
-                label={labels.route}
-                value={routeDetails.number}
-                icon={<FontAwesome5 name="route" size={18} color="#000000" />}
-              />
-              <InfoRow
-                label={labels.stops}
-                value={routeDetails.stops}
-                icon={
-                  <MaterialCommunityIcons
-                    name="bus-stop"
-                    size={18}
-                    color="#000000"
+                <View className="rounded-xl  ">
+                  <InfoRow
+                    label={labels.route}
+                    value={routeDetails.number}
+                    icon={<FontAwesome5 name="route" size={18} color="#000000" />}
                   />
-                }
-              />
-              <InfoRow
-                label={labels.employees}
-                value={routeDetails.employees}
-                icon={<Ionicons name="people-outline" size={18} color="#000000" />}
-              />
-              <InfoRow
-                label={labels.start}
-                value={routeDetails.start}
-                icon={<Ionicons name="time-outline" size={18} color="#000000" />}
-                isLast
-              />
+                  <InfoRow
+                    label={labels.stops}
+                    value={routeDetails.stops}
+                    icon={
+                      <MaterialCommunityIcons
+                        name="bus-stop"
+                        size={18}
+                        color="#000000"
+                      />
+                    }
+                  />
+                  <InfoRow
+                    label={labels.employees}
+                    value={routeDetails.employees}
+                    icon={<Ionicons name="people-outline" size={18} color="#000000" />}
+                  />
+                  <InfoRow
+                    label={labels.start}
+                    value={routeDetails.start}
+                    icon={<Ionicons name="time-outline" size={18} color="#000000" />}
+                    isLast
+                  />
+                </View>
+
+                <Pressable
+                  onPress={handleCliftonTowerPress}
+                  className="flex-row items-center justify-center gap-2 py-3 rounded-xl mt-4 bg-[#FF5A00] active:scale-[0.98]"
+                >
+                  <Ionicons name="play-sharp" size={20} color="#FFFFFF" />
+                  <Text
+                    className="text-xl py-2 text-white"
+                    style={{ fontFamily: 'NotoNastaliqUrdu', fontWeight: '800' }}
+                  >
+                    {' '}
+                    شروع  کریں
+                  </Text>
+                </Pressable>
+              </View>
             </View>
 
-            <Pressable
-              onPress={handleCliftonTowerPress}
-              className="flex-row items-center justify-center gap-2 py-3 rounded-xl mt-4 bg-[#FF5A00] active:scale-[0.98]"
-            >
-              <Ionicons name="play-sharp" size={20} color="#FFFFFF" />
-              <Text
-                className="text-xl py-2 text-white"
-                style={{ fontFamily: 'NotoNastaliqUrdu', fontWeight: '800' }}
-              >
-                {' '}
-                شروع  کریں
-              </Text>
-            </Pressable>
-          </View>
-        </View>
+            {/* NEXT RIDE SECTION WITH ACCORDIONS */}
+            {accordionItems.length > 0 && (
+              <View className="mb-8">
+                <Text className="text-xl px-2 font-bold mb-4 text-black">
+                  Next Ride
+                </Text>
 
-        {/* NEXT RIDE SECTION WITH ACCORDIONS */}
-        {accordionItems.length > 0 && (
-          <View className="mb-8">
-            <Text className="text-xl px-2 font-bold mb-4 text-black">
-              Next Ride
-            </Text>
-
-            {accordionItems.map((item) => {
-              const isOpen = openAccordionId === item.id;
-              const tripDetails = item.details;
-              return (
-                <View key={item.id} className="mb-3">
-                  <Pressable
-                    onPress={() =>
-                      setOpenAccordionId(isOpen ? null : item.id)
-                    }
-                    className="flex-row items-center justify-between px-4 py-3 rounded-xl "
-                  >
-                    <View className="flex-row items-center gap-3 flex-1">
-                      <View className="p-1.5 rounded-full bg-white">
-                        <MaterialIcons name="access-time" size={20} color="black" />
-                      </View>
-                      <View className="flex-1">
-                        <Text className="text-base font-semibold text-black">
-                          {item.title}
-                        </Text>
-                        <Text className="text-[0.9rem] text-[#6B7280] mt-0.5">
-                          {item.subtitle}
-                        </Text>
-                      </View>
-                    </View>
-                    <Ionicons
-                      name={isOpen ? 'chevron-up' : 'chevron-down'}
-                      size={20}
-                      color="#6B7280"
-                    />
-                  </Pressable>
-
-                  {isOpen && (
-                    <View className="mt-3 rounded-3xl bg-[#EDEDEB] p-5">
-                      <View className="mb-4">
-                        <View className="flex-row items-center justify-between mb-3">
-                          <View className="flex-row items-center gap-3">
-                            <View className="p-2 bg-white rounded-xl">
-                              <Ionicons
-                                name="bus"
-                                size={18}
-                                color="#000000"
-                              />
-                            </View>
-                            <View>
-                              <Text className="text-xs font-bold uppercase tracking-wider text-[#6B7280]">
-                                {item.trip.routes?.name ?? 'Assigned Shuttle'}
-                              </Text>
-                              <Text className="text-sm font-bold text-black">
-                                Route {tripDetails.number}
-                              </Text>
-                            </View>
+                {accordionItems.map((item) => {
+                  const isOpen = openAccordionId === item.id;
+                  const tripDetails = item.details;
+                  return (
+                    <View key={item.id} className="mb-3">
+                      <Pressable
+                        onPress={() =>
+                          setOpenAccordionId(isOpen ? null : item.id)
+                        }
+                        className="flex-row items-center justify-between px-4 py-3 rounded-xl "
+                      >
+                        <View className="flex-row items-center gap-3 flex-1">
+                          <View className="p-1.5 rounded-full bg-white">
+                            <MaterialIcons name="access-time" size={20} color="black" />
                           </View>
-                          <View className="px-3 py-1 rounded-full bg-black">
-                            <Text className="text-xs font-bold text-white">
-                              {routeDetails.start}
+                          <View className="flex-1">
+                            <Text className="text-base font-semibold text-black">
+                              {item.title}
+                            </Text>
+                            <Text className="text-[0.9rem] text-[#6B7280] mt-0.5">
+                              {item.subtitle}
                             </Text>
                           </View>
                         </View>
-
-                        <View className="flex-row items-center gap-2">
-                          <Text className="text-xl text-black font-bold">
-                            {tripDetails.origin}
-                          </Text>
-                          <Feather
-                            name="arrow-right"
-                            size={18}
-                            color="#6B7280"
-                          />
-                          <Text className="text-xl text-black font-bold">
-                            {tripDetails.destination}
-                          </Text>
-                        </View>
-                      </View>
-
-                      <View className="h-px bg-black/10 mb-3" />
-
-                      <View className="rounded-xl  py-1">
-                        <InfoRow
-                          label={labels.route}
-                          value={tripDetails.number}
-                          icon={<Feather name="map-pin" size={18} color="#000000" />}
+                        <Ionicons
+                          name={isOpen ? 'chevron-up' : 'chevron-down'}
+                          size={20}
+                          color="#6B7280"
                         />
-                        <InfoRow
-                          label={labels.stops}
-                          value={tripDetails.stops}
-                          icon={<Feather name="map" size={18} color="#000000" />}
-                        />
-                        <InfoRow
-                          label={labels.employees}
-                          value={tripDetails.employees}
-                          icon={
-                            <Ionicons
-                              name="people-outline"
-                              size={18}
-                              color="#000000"
+                      </Pressable>
+
+                      {isOpen && (
+                        <View className="mt-3 rounded-3xl bg-[#EDEDEB] p-5">
+                          <View className="mb-4">
+                            <View className="flex-row items-center justify-between mb-3">
+                              <View className="flex-row items-center gap-3">
+                                <View className="p-2 bg-white rounded-xl">
+                                  <Ionicons
+                                    name="bus"
+                                    size={18}
+                                    color="#000000"
+                                  />
+                                </View>
+                                <View>
+                                  <Text className="text-xs font-bold uppercase tracking-wider text-[#6B7280]">
+                                    {item.trip.routes?.name ?? 'Assigned Shuttle'}
+                                  </Text>
+                                  <Text className="text-sm font-bold text-black">
+                                    Route {tripDetails.number}
+                                  </Text>
+                                </View>
+                              </View>
+                              <View className="px-3 py-1 rounded-full bg-black">
+                                <Text className="text-xs font-bold text-white">
+                                  {routeDetails.start}
+                                </Text>
+                              </View>
+                            </View>
+
+                            <View className="flex-row items-center gap-2">
+                              <Text className="text-xl text-black font-bold">
+                                {tripDetails.origin}
+                              </Text>
+                              <Feather
+                                name="arrow-right"
+                                size={18}
+                                color="#6B7280"
+                              />
+                              <Text className="text-xl text-black font-bold">
+                                {tripDetails.destination}
+                              </Text>
+                            </View>
+                          </View>
+
+                          <View className="h-px bg-black/10 mb-3" />
+
+                          <View className="rounded-xl  py-1">
+                            <InfoRow
+                              label={labels.route}
+                              value={tripDetails.number}
+                              icon={<Feather name="map-pin" size={18} color="#000000" />}
                             />
-                          }
-                        />
-                        <InfoRow
-                          label={labels.start}
-                          value={tripDetails.start}
-                          icon={
-                            <Ionicons name="time-outline" size={18} color="#000000" />
-                          }
-                          isLast
-                        />
-                      </View>
+                            <InfoRow
+                              label={labels.stops}
+                              value={tripDetails.stops}
+                              icon={<Feather name="map" size={18} color="#000000" />}
+                            />
+                            <InfoRow
+                              label={labels.employees}
+                              value={tripDetails.employees}
+                              icon={
+                                <Ionicons
+                                  name="people-outline"
+                                  size={18}
+                                  color="#000000"
+                                />
+                              }
+                            />
+                            <InfoRow
+                              label={labels.start}
+                              value={tripDetails.start}
+                              icon={
+                                <Ionicons name="time-outline" size={18} color="#000000" />
+                              }
+                              isLast
+                            />
+                          </View>
+                        </View>
+                      )}
                     </View>
-                  )}
-                </View>
-              );
-            })}
-          </View>
-        )}
-        </>
+                  );
+                })}
+              </View>
+            )}
+          </>
         )}
       </ScrollView>
     </SafeAreaView>

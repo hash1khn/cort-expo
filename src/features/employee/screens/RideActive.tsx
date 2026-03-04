@@ -1,16 +1,23 @@
-import React, { useCallback, useMemo, useRef, useState, useEffect } from 'react';
-import { Image as RNImage, Linking, Pressable, StyleSheet, Text, View, Alert } from 'react-native';
-import { Image } from 'expo-image';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Linking, Pressable, StyleSheet, Text as RNText, View, ActivityIndicator } from 'react-native';
 import MapView, { Marker, Polyline } from 'react-native-maps';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import BottomSheet, { BottomSheetScrollView } from '@gorhom/bottom-sheet';
+import { Ionicons, MaterialCommunityIcons, Octicons } from '@expo/vector-icons';
+import BottomSheet, { BottomSheetView } from '@gorhom/bottom-sheet';
+import Animated, { useSharedValue, useAnimatedStyle, interpolate } from 'react-native-reanimated';
 import { mockShuttlePolyline } from '@/services/mockData';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useAppDispatch, useAppSelector } from '../../../store/hooks';
 import { setIsOutstationDev } from '../store';
 import { useRideSocket } from '../../../hooks/useRideSocket';
+import { fontFamily } from '@/core/theme';
+import { useScanBoardingMutation } from '../services/boardingApi';
+import { useToast } from '@/shared/ui/molecules/Toast';
+import { CustomToast } from '@/features/shared/components/CustomToast';
 
-const DRIVER_PHONE = '03162211320';
+const Text = (props: React.ComponentProps<typeof RNText>) => {
+  return <RNText {...props} style={[{ fontFamily }, props.style]} />;
+};
+
 
 export default function RideActive() {
   const dispatch = useAppDispatch();
@@ -18,14 +25,66 @@ export default function RideActive() {
     (state) => state.employeeRide.isWaitingForDriverResponse,
   );
   const userId = useAppSelector((state) => state.auth.user?.id ?? '');
+  const toast = useToast();
 
-  // tripId is passed as a route param from ShuttleEmployee / _layout launch check
-  const { tripId: tripIdParam } = useLocalSearchParams<{ tripId?: string }>();
+  /**
+   * Route params:
+   *  - tripId           : the active shuttle trip ID
+   *  - myPickupStopId   : the employee's assigned pickup stop ID (from the for-employee API)
+   *  - driverName       : driver's full name
+   *  - driverPhone      : driver's phone number
+   *  - vehicleDisplay   : e.g. "Suzuki Bolan"
+   *  - vehiclePlate     : e.g. "ADD-1234"
+   */
+  const {
+    tripId: tripIdParam,
+    myPickupStopId: myPickupStopIdParam,
+    driverName: driverNameParam,
+    driverPhone: driverPhoneParam,
+    vehicleDisplay: vehicleDisplayParam,
+    vehiclePlate: vehiclePlateParam,
+    direction: directionParam,
+  } = useLocalSearchParams<{
+    tripId?: string;
+    myPickupStopId?: string;
+    driverName?: string;
+    driverPhone?: string;
+    vehicleDisplay?: string;
+    vehiclePlate?: string;
+    direction?: string;
+  }>();
+
   const activeTripId = tripIdParam ? Number(tripIdParam) : 0;
+  const myPickupStopId = myPickupStopIdParam ? Number(myPickupStopIdParam) : null;
 
-  // Real-time driver location coordinate
+  // Derive initials from driverName param
+  const driverName = driverNameParam ?? 'Driver';
+  const driverPhone = driverPhoneParam ?? '';
+  const vehicleDisplay = vehicleDisplayParam ?? '—';
+  const vehiclePlate = vehiclePlateParam ?? '—';
+  const driverInitials = driverName
+    .split(' ')
+    .map((n) => n[0] ?? '')
+    .join('')
+    .slice(0, 2)
+    .toUpperCase();
+
+  // ── Real-time state ──────────────────────────────────────────────────────
   const [driverCoord, setDriverCoord] = useState<{ latitude: number; longitude: number } | null>(null);
+  /**
+   * currentStopId: the stop ID the driver has most recently arrived at.
+   * Set by the `stop:arrived` WebSocket event.
+   */
+  const [currentStopId, setCurrentStopId] = useState<number | null>(null);
 
+  /** True once the driver has arrived at THIS employee's pickup stop */
+  const captainIsHere = currentStopId !== null && myPickupStopId !== null && currentStopId === myPickupStopId;
+
+  // ── Boarding mutation ─────────────────────────────────────────────────────
+  const [scanBoarding, { isLoading: isBoardingLoading, isSuccess: isBoardingSuccess }] =
+    useScanBoardingMutation();
+
+  // ── Socket callbacks ──────────────────────────────────────────────────────
   const handleLocationUpdate = useCallback(
     (data: { lat: number; lng: number }) => {
       setDriverCoord({ latitude: data.lat, longitude: data.lng });
@@ -33,10 +92,18 @@ export default function RideActive() {
     [],
   );
 
+  const handleStopArrived = useCallback(
+    (data: { stopId: number; stopName: string; arrivedAt: string }) => {
+      setCurrentStopId(data.stopId);
+    },
+    [],
+  );
+
   const handleRideEnded = useCallback(() => {
-    Alert.alert('Ride Completed', 'Your ride has ended.', [
-      { text: 'OK', onPress: () => router.replace('/employee') },
-    ]);
+    // Alert.alert('Ride Completed', 'Your ride has ended.', [
+    //   { text: 'OK', onPress: () => router.replace('/employee') },
+    // ]);
+
     const timer = setTimeout(() => router.replace('/employee'), 3000);
     return () => clearTimeout(timer);
   }, []);
@@ -46,24 +113,103 @@ export default function RideActive() {
     userId,
     role: 'employee',
     onLocationUpdate: handleLocationUpdate,
+    onStopArrived: handleStopArrived,
     onRideEnded: handleRideEnded,
   });
 
+  // ── Bottom Sheet Snap Logic ───────────────────────────────────────────
+  useEffect(() => {
+    if (captainIsHere) {
+      bottomSheetRef.current?.snapToIndex(1);
+    } else {
+      bottomSheetRef.current?.snapToIndex(0);
+    }
+  }, [captainIsHere]);
 
+  // ── Actions ───────────────────────────────────────────────────────────────
   const bottomSheetRef = useRef<BottomSheet>(null);
-  const snapPoints = useMemo(() => ['42%', '85%'], []);
+  const snapPoints = useMemo(() => ['40%', '55%'], []);
+  const animatedIndex = useSharedValue(0);
+
+  const smallProfileStyle = useAnimatedStyle(() => {
+    return {
+      opacity: interpolate(animatedIndex.value, [0, 1], [1, 0], 'clamp'),
+      position: 'absolute',
+      top: interpolate(animatedIndex.value, [0, 1], [20, 0], 'clamp'),
+      left: 0,
+      right: 0,
+      zIndex: 1,
+      pointerEvents: animatedIndex.value < 0.5 ? 'auto' : 'none',
+    };
+  });
+
+  const bigProfileStyle = useAnimatedStyle(() => {
+    return {
+      opacity: interpolate(animatedIndex.value, [0, 1], [0, 1], 'clamp'),
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      right: 0,
+      zIndex: 2,
+      pointerEvents: animatedIndex.value >= 0.5 ? 'auto' : 'none',
+    };
+  });
+
+  const animatedContainerStyle = useAnimatedStyle(() => {
+    return {
+      height: interpolate(animatedIndex.value, [0, 1], [65, 195], 'clamp'),
+    };
+  });
 
   const handleContactDriver = useCallback(() => {
-    const url = `tel:${DRIVER_PHONE}`;
-    Linking.openURL(url).catch((err) => console.warn('Could not open dialer:', err));
-  }, []);
+    if (!driverPhone) return;
+    Linking.openURL(`tel:${driverPhone}`).catch((err) =>
+      console.warn('Could not open dialer:', err),
+    );
+  }, [driverPhone]);
 
-  const handleScanQR = useCallback(() => {
-    router.push('/employee/qr-scanner');
-  }, []);
+  /** Scan QR = POST attendance to the backend. Only active when captain is at my stop. */
+  const handleScanQR = useCallback(async () => {
+    if (!captainIsHere) {
+      // Driver not at this stop yet — navigate to QR scanner as fallback
+      router.push('/employee/qr-scanner');
+      return;
+    }
+    if (!activeTripId || !userId) return;
+
+    try {
+      await scanBoarding({
+        shuttle_trip_id: activeTripId,
+        employee_id: userId,
+      }).unwrap();
+      toast.show(
+        <CustomToast
+          type="success"
+          message="Successfully boarded"
+        // subMessage="Your attendance has been marked. Have a safe trip!"
+        />,
+        { duration: 4000, position: 'top', backgroundColor: '#1ad41d' },
+      );
+    } catch (err: any) {
+      const isTripNotFound: boolean =
+        err?.data?.message?.toLowerCase().includes('not found') ||
+        err?.status === 404;
+      toast.show(
+        <CustomToast
+          type="error"
+          message={isTripNotFound ? 'Trip not found' : 'Failed to board'}
+          subMessage={
+            isTripNotFound
+              ? "We couldn't find an active trip. Please try again."
+              : (err?.data?.message ?? 'Could not mark attendance. Please try again.')
+          }
+        />,
+        { duration: 4000, position: 'top', backgroundColor: '#ff4545' },
+      );
+    }
+  }, [captainIsHere, activeTripId, userId, scanBoarding, toast]);
 
   const handleDevMarkOutstation = useCallback(() => {
-    // Dev-only toggle: mark this as an outstation flow.
     dispatch(setIsOutstationDev(true));
   }, [dispatch]);
 
@@ -73,8 +219,25 @@ export default function RideActive() {
         latitude: p.latitude,
         longitude: p.longitude,
       })),
-    []
+    [],
   );
+
+  // ── Status text logic ─────────────────────────────────────────────────────
+  const statusText =
+    directionParam === 'EVENING'
+      ? 'Ride in progress'
+      : isBoardingSuccess
+        ? "Sit tight, you're on the way"
+        : captainIsHere
+          ? 'Captain is here, please board the shuttle'
+          : isWaitingForDriverResponse
+            ? 'Waiting for driver...'
+            : 'Arriving in 15 min';
+
+  const statusColor = captainIsHere ? '#000' : '#000';
+
+  // ── Scan QR button state ──────────────────────────────────────────────────
+  const qrButtonLabel = isBoardingLoading ? 'Scanning...' : 'Scan QR';
 
   return (
     <View style={styles.root}>
@@ -90,7 +253,6 @@ export default function RideActive() {
         toolbarEnabled={false}
         showsMyLocationButton={false}
         showsUserLocation
-        userInterfaceStyle="dark"
       >
         {/* Route Polyline */}
         <Polyline
@@ -100,6 +262,16 @@ export default function RideActive() {
           lineCap="round"
           lineJoin="round"
         />
+
+        {/* Live Driver to First Route Point Polyline */}
+        {driverCoord && routePoints.length > 0 && (
+          <Polyline
+            coordinates={[driverCoord, routePoints[0]]}
+            strokeWidth={4}
+            strokeColor="#16a34a"
+            lineCap="round"
+          />
+        )}
 
         {/* Shuttle Marker — real-time position from WebSocket */}
         <Marker
@@ -112,10 +284,10 @@ export default function RideActive() {
         </Marker>
       </MapView>
 
-      {/* Floating Action Buttons */}
+      {/* Floating back button */}
       <View style={styles.floatingButtons}>
         <Pressable style={styles.floatingBtn} onPress={() => router.back()}>
-          <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
+          <Ionicons name="arrow-back" size={24} color="#000000" />
         </Pressable>
       </View>
 
@@ -123,140 +295,97 @@ export default function RideActive() {
       <BottomSheet
         ref={bottomSheetRef}
         index={0}
+        animatedIndex={animatedIndex}
         snapPoints={snapPoints}
         enablePanDownToClose={false}
         handleIndicatorStyle={styles.sheetHandle}
         backgroundStyle={styles.sheetBackground}
       >
-        <BottomSheetScrollView
-          style={styles.sheetContent}
-          showsVerticalScrollIndicator={false}
-        >
-          {/* Header: ETA */}
-          <View style={styles.header}>
-            <Text style={styles.headerTitle}>
-              {isWaitingForDriverResponse
-                ? 'Waiting for driver to respond...'
-                : 'Driver is arriving in ~6 min'}
+        <BottomSheetView style={styles.sheetContent}>
+          {/* Status / ETA header */}
+          <View style={styles.statusContainer}>
+            <Text style={[styles.statusText, { color: statusColor }]}>
+              {statusText}
             </Text>
-            <Text style={styles.headerSubtitle}>Black Hiace </Text>
           </View>
+          <View style={styles.divider} />
 
-          {/* Driver Card */}
-          <View style={styles.driverCard}>
-            <View style={styles.driverLeft}>
-              <View style={styles.avatarContainer}>
-                <Image
-                  source={require('@/../assets/driver.png')}
-                  style={styles.avatar}
-                  contentFit="cover"
-                />
+          {/* Crossfade profile section */}
+          <Animated.View style={animatedContainerStyle}>
+            {/* 1) Small/Horizontal Layout (visible at 40%) */}
+            <Animated.View style={smallProfileStyle}>
+              <View style={styles.driverRow}>
+                <View style={styles.captainSection}>
+                  <View style={styles.avatarCircle}>
+                    <Text style={styles.avatarInitials}>{driverInitials}</Text>
+                  </View>
+                  <View style={styles.captainInfoBox}>
+                    <Text style={styles.captainRole}>{vehicleDisplay}</Text>
+                    <Text style={styles.captainName}>{driverName}</Text>
+                  </View>
+                </View>
 
+                <View style={styles.plateContainer}>
+                  <Text style={styles.plateText}>{vehiclePlate}</Text>
+                </View>
               </View>
+            </Animated.View>
 
-              <View style={styles.driverDetails}>
-                <Text style={styles.driverName}>Faisal Ali</Text>
-                <Text style={styles.vehicleInfo}>Black Toyota Hiace</Text>
-              </View>
-            </View>
+            {/* 2) Big/Centered Layout (visible at 48%) */}
+            <Animated.View style={bigProfileStyle}>
+              <View style={styles.captainCenterSection}>
+                <Text style={styles.captainRoleLabel}>YOUR CAPTAIN</Text>
 
-            {/* License Plate */}
-            <View style={styles.licensePlate}>
-              <RNImage
-                source={require('@/../assets/ajrak.jpeg')}
-                style={styles.platePattern}
-                resizeMode="cover"
-              />
-              <View style={styles.plateContent}>
-                <Text style={styles.plateText}>ABR 986</Text>
-              </View>
-            </View>
-          </View>
+                <View style={styles.avatarCircleBig}>
+                  <Text style={styles.avatarInitialsBig}>{driverInitials}</Text>
+                </View>
 
-          {/* Action Buttons */}
-          <View style={styles.actions}>
-            <Pressable
-              style={styles.actionButton}
-              onPress={handleContactDriver}
-              android_ripple={{ color: '#f47f0030' }}
-            >
-              <View style={[styles.actionIcon, { backgroundColor: '#F59E0B15' }]}>
-                <Ionicons name="call" size={24} color="#F59E0B" />
+                <Text style={styles.captainNameBig}>{driverName}</Text>
+
+                <View style={styles.vehicleInfoRow}>
+                  <Text style={styles.vehicleText}>{vehicleDisplay}</Text>
+                  <View style={styles.dotSeparator} />
+                  <View style={styles.plateContainerSmall}>
+                    <Text style={styles.plateTextSmall}>{vehiclePlate}</Text>
+                  </View>
+                </View>
               </View>
-              <Text style={styles.actionLabel}>Contact driver</Text>
+            </Animated.View>
+          </Animated.View>
+
+          <View style={[styles.divider, { marginTop: 30, marginBottom: 4 }]} />
+
+          {/* Action buttons row */}
+          <View style={styles.threeActionsRow}>
+            <Pressable style={styles.iconActionBtn} onPress={handleContactDriver}>
+              <Ionicons name="call-outline" size={20} color="#141414" />
+              <Text style={styles.iconActionText}>Call driver</Text>
             </Pressable>
 
-            <Pressable
-              style={styles.actionButton}
-              onPress={handleScanQR}
-              android_ripple={{ color: '#10B98130' }}
-            >
-              <View style={[styles.actionIcon, { backgroundColor: '#10B98115' }]}>
-                <Ionicons name="qr-code-outline" size={24} color="#10B981" />
-              </View>
-              <Text style={styles.actionLabel}>Scan QR</Text>
+            <Pressable style={styles.iconActionBtn}>
+              <Octicons name="share" size={20} color="black" />
+              <Text style={styles.iconActionText}>Share ride</Text>
             </Pressable>
+
+            {/* Scan QR — visible only while not yet boarded (and NOT on return trips) */}
+            {!isBoardingSuccess && captainIsHere && directionParam !== 'EVENING' && (
+              <Pressable
+                style={styles.iconActionBtn}
+                onPress={handleScanQR}
+                disabled={isBoardingLoading}
+              >
+                {isBoardingLoading ? (
+                  <ActivityIndicator size="small" color="#141414" />
+                ) : (
+                  <Ionicons name="qr-code-outline" size={20} color="#141414" />
+                )}
+                <Text style={styles.iconActionText}>{qrButtonLabel}</Text>
+              </Pressable>
+            )}
           </View>
 
-          {/* Pickup Notes */}
-          <Pressable style={styles.notesCard}>
-            <View style={styles.notesIcon}>
-              <MaterialCommunityIcons name="message-text-outline" size={20} color="#6B7280" />
-            </View>
-            <Text style={styles.notesText}>Any pickup notes for driver?</Text>
-            <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
-          </Pressable>
-
-          {/* Dev-only: mark this chauffeur ride as outstation */}
-          <Pressable
-            style={styles.devButton}
-            onPress={handleDevMarkOutstation}
-            android_ripple={{ color: '#4B556320' }}
-          >
-            <Text style={styles.devButtonText}>Dev: Mark as outstation ride</Text>
-          </Pressable>
-
-          {/* Trip Details */}
-          <View style={styles.tripDetails}>
-            <View style={styles.tripHeader}>
-              <Text style={styles.tripHeaderText}>Trip details</Text>
-            </View>
-
-            <View style={styles.tripContent}>
-              {/* Pickup */}
-              <View style={styles.locationRow}>
-                <View style={[styles.locationDot, { backgroundColor: '#F59E0B' }]}>
-                  <View style={styles.locationDotInner} />
-                </View>
-                <View style={styles.locationInfo}>
-                  <Text style={styles.locationLabel}>Pickup</Text>
-                  <Text style={styles.locationAddress}>Disco Bakery</Text>
-                </View>
-              </View>
-
-              {/* Connector Line */}
-              <View style={styles.connectorLine} />
-
-              {/* Dropoff */}
-              <View style={styles.locationRow}>
-                <View style={[styles.locationDot, { backgroundColor: '#10B981' }]}>
-                  <MaterialCommunityIcons name="map-marker" size={16} color="white" />
-                </View>
-                <View style={styles.locationInfo}>
-                  <Text style={styles.locationLabel}>Dropoff</Text>
-                  <Text style={styles.locationAddress}>
-                    {isWaitingForDriverResponse
-                      ? 'Dropoff submitted, waiting for driver'
-                      : 'Clifton'}
-                  </Text>
-                </View>
-              </View>
-            </View>
-          </View>
-
-          {/* Bottom Padding */}
           <View style={{ height: 40 }} />
-        </BottomSheetScrollView>
+        </BottomSheetView>
       </BottomSheet>
     </View>
   );
@@ -265,13 +394,11 @@ export default function RideActive() {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: '#0A0A0A',
+    backgroundColor: '#F1F1E9',
   },
   map: {
     ...StyleSheet.absoluteFillObject,
   },
-
-  // Vehicle Marker
   vehicleMarker: {
     width: 44,
     height: 44,
@@ -287,8 +414,6 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 8,
   },
-
-  // Floating Buttons
   floatingButtons: {
     position: 'absolute',
     top: 60,
@@ -299,286 +424,198 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: '#141414',
+    backgroundColor: '#FFFF',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: '#1F1F1F',
+    borderColor: '#EAEAEA',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
+    shadowOpacity: 0.1,
     shadowRadius: 8,
     elevation: 4,
   },
-
-  // Bottom Sheet — dark (match dashboard bottom sheet)
   sheetBackground: {
-    backgroundColor: '#141414',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    borderWidth: 1,
-    borderColor: '#1F1F1F',
+    backgroundColor: '#FFF',
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 12,
-    elevation: 16,
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
+    elevation: 10
   },
   sheetHandle: {
-    backgroundColor: '#3F3F3F',
-    width: 40,
-    height: 4,
+    backgroundColor: '#D1D5DB',
+    width: 48,
+    height: 5,
+    borderRadius: 3,
   },
   sheetContent: {
     flex: 1,
     paddingHorizontal: 20,
+    paddingTop: 10,
   },
-
-  // Header
-  header: {
-    marginTop: 8,
-    marginBottom: 20,
-  },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#FFFFFF',
-    marginBottom: 4,
-  },
-  headerSubtitle: {
-    fontSize: 15,
-    color: '#9CA3AF',
-    fontWeight: '500',
-  },
-
-  // Driver Card
-  driverCard: {
-    flexDirection: 'row',
+  statusContainer: {
+    marginTop: 4,
+    marginBottom: 16,
     alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#1A1A1A',
-    padding: 16,
-    borderRadius: 16,
-    marginBottom: 20,
-    borderWidth: 1,
-    borderColor: '#1F1F1F',
+    paddingHorizontal: 8,
   },
-  driverLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  avatarContainer: {
-    position: 'relative',
-    marginRight: 12,
-  },
-  avatar: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: '#2D2D2D',
-  },
-  ratingBadge: {
-    position: 'absolute',
-    bottom: -4,
-    right: -4,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#141414',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#1F1F1F',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  ratingText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#FFFFFF',
-    marginLeft: 2,
-  },
-  driverDetails: {
-    flex: 1,
-  },
-  driverName: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#FFFFFF',
-    marginBottom: 2,
-  },
-  vehicleInfo: {
+  statusText: {
     fontSize: 14,
-    color: '#9CA3AF',
-    fontWeight: '500',
-  },
-
-  // License Plate
-  licensePlate: {
-    width: 95,
-    height: 44,
-    borderRadius: 6,
-    overflow: 'hidden',
-    backgroundColor: '#1A1A1A',
-    borderWidth: 1.5,
-    borderColor: '#3F3F3F',
-  },
-  platePattern: {
-    width: '100%',
-    height: 12,
-  },
-  plateContent: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#FFFF',
-  },
-  plateText: {
-    fontSize: 16,
     fontWeight: '800',
-    color: '#000000',
-    letterSpacing: 1.5,
-  },
-
-  // Action Buttons
-  actions: {
-    flexDirection: 'row',
-    gap: 12,
-    marginBottom: 20,
-  },
-  actionButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#1A1A1A',
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#1F1F1F',
-  },
-  actionIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
-  },
-  actionLabel: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#FFFFFF',
-    flex: 1,
-  },
-
-  // Notes Card
-  notesCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#1A1A1A',
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 20,
-    borderWidth: 1,
-    borderColor: '#1F1F1F',
-  },
-  devButton: {
-    marginTop: 12,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: 10,
-    backgroundColor: '#111827',
-    borderWidth: 1,
-    borderColor: '#4B5563',
-    alignItems: 'center',
-  },
-  devButtonText: {
-    fontSize: 13,
-    color: '#E5E7EB',
-    fontWeight: '500',
-  },
-  notesIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#141414',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
-  },
-  notesText: {
-    flex: 1,
-    fontSize: 15,
-    color: '#9CA3AF',
-    fontWeight: '500',
-  },
-
-  // Trip Details
-  tripDetails: {
-    backgroundColor: '#1A1A1A',
-    borderRadius: 16,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: '#1F1F1F',
-  },
-  tripHeader: {
-    backgroundColor: '#141414',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-  },
-  tripHeaderText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#9CA3AF',
+    color: '#000',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
+    textAlign: 'center',
   },
-  tripContent: {
-    padding: 16,
+  divider: {
+    height: 1,
+    backgroundColor: '#E5E7EB',
+    marginBottom: 16,
   },
-  locationRow: {
+  // SMALL LAYOUT
+  driverRow: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 8,
   },
-  locationDot: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+  captainSection: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  captainInfoBox: {
+    justifyContent: 'center',
+    gap: 2,
+  },
+  avatarCircle: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#000',
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 12,
   },
-  locationDotInner: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#FFFFFF',
+  avatarInitials: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#F1F443',
   },
-  locationInfo: {
-    flex: 1,
-    paddingTop: 2,
+  captainRole: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#6B7280',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
   },
-  locationLabel: {
-    fontSize: 13,
-    color: '#9CA3AF',
-    fontWeight: '500',
+  captainName: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#000',
+    letterSpacing: -0.2,
+  },
+  plateContainer: {
+    backgroundColor: '#EAEAEA',
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+  },
+  plateText: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#000',
+  },
+  // BIG LAYOUT
+  captainCenterSection: {
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 8,
+  },
+  captainRoleLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#6B7280',
+    textTransform: 'uppercase',
+    letterSpacing: 1.2,
+    marginBottom: 2,
+  },
+  avatarCircleBig: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: '#000',
+    alignItems: 'center',
+    justifyContent: 'center',
     marginBottom: 4,
   },
-  locationAddress: {
-    fontSize: 16,
-    color: '#FFFFFF',
-    fontWeight: '600',
+  avatarInitialsBig: {
+    fontSize: 26,
+    fontWeight: '800',
+    color: '#F1F443',
   },
-  connectorLine: {
-    width: 2,
-    height: 24,
-    backgroundColor: '#3F3F3F',
-    marginLeft: 15,
-    marginVertical: 4,
+  captainNameBig: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#000',
+    letterSpacing: -0.3,
+  },
+  vehicleInfoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 4,
+  },
+  vehicleText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#4B5563',
+  },
+  dotSeparator: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#9CA3AF',
+  },
+  plateContainerSmall: {
+    backgroundColor: '#EAEAEA',
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  plateTextSmall: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#000',
+  },
+  threeActionsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-evenly',
+    alignItems: 'center',
+    paddingVertical: 8,
+  },
+  iconActionBtn: {
+    alignItems: 'center',
+    gap: 8,
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 12,
+  },
+  iconActionBtnActive: {
+    backgroundColor: '#0C225E',
+  },
+  iconActionBtnSuccess: {
+    backgroundColor: '#16a34a',
+  },
+  iconActionText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#141414',
   },
 });
