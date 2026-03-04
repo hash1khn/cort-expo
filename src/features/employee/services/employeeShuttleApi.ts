@@ -44,6 +44,19 @@ export type GetShuttleTripsForEmployeeParams = {
   employeeId: string;
 };
 
+export type PolylinePoint = { lat: number; lng: number };
+
+export type ShuttlePolylineResponse = {
+  points: PolylinePoint[];
+  encodedPolyline: string;
+};
+
+export type GetShuttlePolylineParams = {
+  tripId: number;
+  driverLat?: number;
+  driverLng?: number;
+};
+
 export const employeeShuttleApi = baseApi.injectEndpoints({
   endpoints: (builder) => ({
     getShuttleTripsForEmployee: builder.query<
@@ -56,7 +69,20 @@ export const employeeShuttleApi = baseApi.injectEndpoints({
       }),
       providesTags: ['ShuttleTrip'],
     }),
+
+    getShuttlePolyline: builder.query<ShuttlePolylineResponse, GetShuttlePolylineParams>({
+      query: ({ tripId, driverLat, driverLng }) => ({
+        url: `/shuttle-trips/${tripId}/polyline`,
+        params: {
+          ...(driverLat !== undefined ? { driverLat } : {}),
+          ...(driverLng !== undefined ? { driverLng } : {}),
+        },
+      }),
+    }),
   }),
 });
 
-export const { useGetShuttleTripsForEmployeeQuery } = employeeShuttleApi;
+export const {
+  useGetShuttleTripsForEmployeeQuery,
+  useGetShuttlePolylineQuery,
+} = employeeShuttleApi;
