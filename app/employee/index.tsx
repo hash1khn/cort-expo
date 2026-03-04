@@ -1,6 +1,10 @@
-import EmployeeHomeMap from '@/features/employee/screens/EmployeeHomeMap';
 import ShuttleEmployee from '@/features/employee/screens/ShuttleEmployee';
+import { EmployeeDrawerScreenWrapper } from '@/features/employee/components/EmployeeDrawerScreenWrapper';
 
 export default function EmployeeHomeRoute() {
-  return <ShuttleEmployee />;
+  return (
+    <EmployeeDrawerScreenWrapper>
+      <ShuttleEmployee />
+    </EmployeeDrawerScreenWrapper>
+  );
 }

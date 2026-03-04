@@ -130,6 +130,20 @@ export default function Return() {
         router.push('/shuttle');
         return;
       }
+
+      // Validate that all employees have been marked
+      const unmarked = employees.filter((e) => e.status === null);
+      if (unmarked.length > 0) {
+        toast.show(
+          <CustomToast
+            type="error"
+            message={isUrdu ? 'شروع کرنے سے پہلے تمام حاضری درج کریں' : 'Mark all attendance to start ride'}
+          />,
+          { duration: 3500, position: 'top', backgroundColor: '#ff4545' },
+        );
+        return;
+      }
+
       try {
         await submitReturnAttendance({
           shuttleTripId: tripId,

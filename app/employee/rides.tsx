@@ -1,8 +1,13 @@
 import React from 'react';
 import EmployeeRides from '@/features/employee/screens/EmployeeRides';
+import { EmployeeDrawerScreenWrapper } from '@/features/employee/components/EmployeeDrawerScreenWrapper';
 
 const Rides = () => {
-  return <EmployeeRides />;
+  return (
+    <EmployeeDrawerScreenWrapper>
+      <EmployeeRides />
+    </EmployeeDrawerScreenWrapper>
+  );
 };
 
 export default Rides;

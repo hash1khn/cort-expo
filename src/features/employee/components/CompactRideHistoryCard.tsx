@@ -19,8 +19,8 @@ export function CompactRideHistoryCard({
     return (
         <Pressable
             onPress={onPress}
-//   className="rounded-[1.25rem] bg-gray-100 py-5 px-5 mb-1 flex-row justify-between items-center active:opacity-90"
-            className="rounded-[1.25rem] bg-transparent border border-gray-400 py-5 px-5 mb-1 flex-row justify-between items-center active:opacity-90"
+            className="rounded-[1.25rem] bg-gray-100 py-5 px-5 mb-1 flex-row justify-between items-center active:opacity-90"
+        // className="rounded-[1.25rem] bg-transparent border border-gray-400 py-5 px-5 mb-1 flex-row justify-between items-center active:opacity-90"
         >
             <View className="flex-1 pr-4">
                 <Text className="text-black text-lg font-bold mb-1" numberOfLines={1}>

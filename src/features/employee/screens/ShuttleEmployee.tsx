@@ -43,19 +43,12 @@ const CustomToast = ({ title, message }: { title: string; message: string }) => 
     </View>
   </View>
 );
-import BottomSheet, {
-  BottomSheetBackdrop,
-  BottomSheetView,
-  type BottomSheetBackdropProps,
-} from '@gorhom/bottom-sheet';
 import { useAppDispatch, useAppSelector } from '../../../store/hooks';
-import { useRouter } from 'expo-router';
+import { useRouter, useNavigation } from 'expo-router';
+import { DrawerActions } from '@react-navigation/native';
 import { useFocusEffect } from 'expo-router';
-import { logOut } from '../../auth/store';
-import { logout } from '../../auth/services';
 import { useGetChauffeurBookingsQuery } from '../services/bookingsApi';
 import { useGetShuttleTripsForEmployeeQuery } from '../services/employeeShuttleApi';
-import { RideHistoryCard } from '../components/RideHistoryCard';
 import { CompactRideHistoryCard } from '../components/CompactRideHistoryCard';
 import { RideStatusBar, type UpcomingShuttleInfo } from '../components/RideStatusBar';
 import {
@@ -174,12 +167,12 @@ export default function NewHome() {
       .toUpperCase()
     : '?';
 
-  const profileSheetRef = useRef<BottomSheet>(null);
-  const dropoffSheetRef = useRef<BottomSheet>(null);
-  const profileSnapPoints = useMemo(() => PROFILE_SHEET_SNAP, []);
-  const dropoffSnapPoints = useMemo(() => DROPOFF_SHEET_SNAP, []);
-  const [dropoffValue, setDropoffValue] = useState('');
   const router = useRouter();
+  const navigation = useNavigation();
+
+  const handleOpenDrawer = useCallback(() => {
+    navigation.dispatch(DrawerActions.openDrawer());
+  }, [navigation]);
 
   // Refetch whenever this screen comes back into focus (e.g. returning from RideActive).
   // This ensures the next trip (e.g. evening/return) is automatically shown
@@ -226,47 +219,7 @@ export default function NewHome() {
     }, [router]),
   );
 
-  const openProfileSheet = useCallback(() => {
-    profileSheetRef.current?.snapToIndex(0);
-  }, []);
-
-  const closeProfileSheet = useCallback(() => {
-    profileSheetRef.current?.close();
-  }, []);
-
-  const openDropoffSheet = useCallback(() => {
-    setDropoffValue('');
-    dropoffSheetRef.current?.snapToIndex(0);
-  }, []);
-
-  const closeDropoffSheet = useCallback(() => {
-    dropoffSheetRef.current?.close();
-  }, []);
-
-  const handleConfirmDropoff = useCallback(() => {
-    if (!dropoffValue.trim()) {
-      return;
-    }
-    dispatch(setOutstationDropoff(dropoffValue.trim()));
-    dispatch(setIsWaitingForDriverResponse(true));
-    closeDropoffSheet();
-    router.push('/employee/ride-active');
-  }, [closeDropoffSheet, dispatch, dropoffValue, router]);
   const insets = useSafeAreaInsets();
-  const handleSheetChange = useCallback((index: number) => {
-    // optional: track open/close
-  }, []);
-  const renderBackdrop = useCallback(
-    (props: BottomSheetBackdropProps) => (
-      <BottomSheetBackdrop
-        {...props}
-        disappearsOnIndex={-1}
-        appearsOnIndex={0}
-        opacity={0.5} // Adjust darkness (0-1)
-      />
-    ),
-    []
-  );
 
   const [isCalling, setIsCalling] = useState(false);
 
@@ -281,21 +234,13 @@ export default function NewHome() {
     // TODO: open help screen or URL when available
   }, []);
 
-  const handleLogout = useCallback(async () => {
-    closeProfileSheet();
-    try {
-      await logout();
-    } finally {
-      dispatch(logOut());
-      router.replace('/(auth)/get-started');
-    }
-  }, [closeProfileSheet, dispatch, router]);
+  // Removed logout handler as it now lives in EmployeeDrawerContent
 
   const handleChauffeurCardPress = useCallback(() => {
     // If dev outstation is enabled and we are not yet waiting for a response,
     // first ask for the dropoff location instead of going straight to active ride.
     if (isOutstationDev && !isWaitingForDriverResponse) {
-      openDropoffSheet();
+      // openDropoffSheet behavior removed; outstation dev flow may need to be handled via a screen instead
       return;
     }
 
@@ -321,7 +266,7 @@ export default function NewHome() {
         vehiclePlate,
       },
     });
-  }, [isOutstationDev, isWaitingForDriverResponse, openDropoffSheet, router, shuttleTrips]);
+  }, [isOutstationDev, isWaitingForDriverResponse, router, shuttleTrips]);
 
   useEffect(() => {
     const sub = AppState.addEventListener('change', (state) => {
@@ -351,7 +296,7 @@ export default function NewHome() {
             </Text> */}
           </View>
           <Pressable
-            onPress={openProfileSheet}
+            onPress={handleOpenDrawer}
             className="w-12 h-12 rounded-full items-center justify-center ml-3"
           >
             <AntDesign name="menu" size={22} color="black" />
@@ -442,10 +387,10 @@ export default function NewHome() {
         </View> */}
 
         {/* Recent Rides section */}
-        <View className="mt-6">
+        <View className="mt-5">
           <Pressable onPress={() => { router.push('/employee/rides') }} hitSlop={8}>
             <View className="flex-row items-center justify-between gap-0 mb-3">
-              <Text className="text-black text-xl font-bold">Recent Rides</Text>
+              <Text className="text-black text-2xl font-bold">Recent Rides</Text>
               <Text className='text-amber-500 text-sm font-bold'>View all</Text>
               {/* <Pressable onPress={()=>{router.push('/employee/rides')}} hitSlop={8}>
                 <Text className="text-text-muted text-sm font-medium">View history</Text>
@@ -560,115 +505,6 @@ export default function NewHome() {
         </View>
       </ScrollView>
 
-      {/* Profile bottom sheet */}
-      <BottomSheet
-        ref={profileSheetRef}
-        index={-1}
-        snapPoints={profileSnapPoints}
-        backdropComponent={renderBackdrop}
-        enablePanDownToClose
-        onChange={handleSheetChange}
-        backgroundStyle={{ backgroundColor: '#1F1F1D' }}
-        handleIndicatorStyle={{ backgroundColor: '#1F1F1D' }}
-      >
-        <BottomSheetView style={{ flex: 1 }}>
-          <View className="flex-1" style={{ paddingBottom: 32 }}>
-            {/* Close button - top right */}
-            <View className="absolute top-0 right-0 px-4 pt-2">
-              <Pressable
-                onPress={closeProfileSheet}
-                className="w-10 h-10 rounded-full bg-white/10 items-center justify-center"
-              >
-                <Ionicons name="close" size={24} color="#fff" />
-              </Pressable>
-            </View>
-
-            {/* Avatar & name */}
-            <View className="items-center mt-0">
-              <View className="w-24 h-24 rounded-full bg-white/20 items-center justify-center">
-                <Text className="text-white text-3xl font-bold">{initials}</Text>
-              </View>
-              <Text className="text-white text-2xl font-bold mt-3">
-                {fullName}
-              </Text>
-              {/* <Text className="text-gray-400 text-sm mt-1">Employee</Text> */}
-            </View>
-            {/* 
-            Key info - joined date
-            <View className="flex-row justify-center mt-6 px-4">
-              <View className="items-center">
-                <MaterialCommunityIcons
-                  name="calendar"
-                  size={22}
-                  color="rgba(255,255,255,0.8)"
-                />
-                <Text className="text-gray-300 text-sm mt-1">Joined 1/09/2024</Text>
-              </View>
-            </View> */}
-
-            {/* Detail list */}
-            <View className='mt-6 mb-4  mx-4 '>
-              <Text className='text-text-muted ml-4 mb-2'>Details</Text>
-              <View className="rounded-xl py-1 bg-surface-light">
-                <InfoRow label="Email" value={user?.email ?? '—'} hasBorder={true} />
-                <InfoRow label="Status" value={'Employee'} hasBorder={true} />
-
-                <InfoRow label="Shuttle Route" value="101" hasBorder={false} />
-
-              </View>
-            </View>
-            <Pressable
-              onPress={handleLogout}
-              className="py-4 rounded-2xl w-[90%] mx-auto items-center active:opacity-90"
-              accessibilityRole="button"
-            >
-              <Text className="text-red-600 text-base font-semibold">
-                Log out
-              </Text>
-            </Pressable>
-          </View>
-        </BottomSheetView>
-      </BottomSheet>
-
-      {/* Dropoff entry bottom sheet (dev outstation flow) */}
-      <BottomSheet
-        ref={dropoffSheetRef}
-        index={-1}
-        snapPoints={dropoffSnapPoints}
-        backdropComponent={renderBackdrop}
-        enablePanDownToClose
-        onChange={handleSheetChange}
-        backgroundStyle={{ backgroundColor: '#111827' }}
-        handleIndicatorStyle={{ backgroundColor: '#4B5563' }}
-      >
-        <BottomSheetView style={{ flex: 1 }}>
-          <View className="flex-1 px-4 pt-4 pb-6">
-            <Text className="text-white text-xl font-bold mb-1">
-              Enter dropoff
-            </Text>
-            <Text className="text-gray-400 text-sm mb-4">
-              Add a dropoff location for your outstation chauffeur ride.
-            </Text>
-            <View className="bg-white/10 rounded-2xl px-3 py-2 mb-4">
-              <TextInput
-                value={dropoffValue}
-                onChangeText={setDropoffValue}
-                placeholder="e.g. Gharo Wind Farm"
-                placeholderTextColor="#9CA3AF"
-                className="text-white text-base"
-              />
-            </View>
-            <Pressable
-              onPress={handleConfirmDropoff}
-              className="mt-auto bg-white rounded-2xl py-3 items-center active:opacity-90"
-            >
-              <Text className="text-black font-semibold text-base">
-                Confirm dropoff
-              </Text>
-            </Pressable>
-          </View>
-        </BottomSheetView>
-      </BottomSheet>
     </View>
   );
 }

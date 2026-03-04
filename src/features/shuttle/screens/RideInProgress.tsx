@@ -10,18 +10,18 @@ import {
   View,
   ActivityIndicator,
 } from 'react-native';
-import { Entypo, Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { colors } from '@/core/theme';
 import { SlideToStartTrip } from '../components';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import BottomSheet, {
   BottomSheetBackdrop,
-  BottomSheetModal,
-  BottomSheetView,
   BottomSheetScrollView,
 } from '@gorhom/bottom-sheet';
 import { useLanguage } from '@/features/shared/context/LanguageContext';
+import { useToast } from '@/shared/ui/molecules/Toast';
+import { CustomToast } from '@/features/shared/components/CustomToast';
 import {
   useGetTripEmployeesQuery,
   useGetTripAttendanceQuery,
@@ -43,6 +43,9 @@ type EmployeeStatus = 'present' | 'absent';
 
 type StopEmployee = { id: string; name: string; number: string; status: EmployeeStatus };
 
+// Per-employee loading state: which action is in flight
+type EmployeeLoadingAction = 'scanning' | 'marking_absent' | null;
+
 function getInitials(name: string) {
   return name
     .split(' ')
@@ -55,6 +58,7 @@ function getInitials(name: string) {
 export default function RideInProgress() {
   const { language } = useLanguage();
   const isUrdu = language === 'ur';
+  const toast = useToast();
 
   const {
     activeTrip,
@@ -71,9 +75,20 @@ export default function RideInProgress() {
   const userId = useAppSelector((s) => s.auth.user?.id ?? '');
 
   // Patch attendance cache in real time when server broadcasts an update
+  // Track employees who self-scanned via WebSocket — these are the only ones whose buttons lock
+  const [selfScannedIds, setSelfScannedIds] = useState<Set<string>>(new Set());
+  // Track employees the driver has manually marked (present or absent) — used for proceed validation
+  const [driverMarkedIds, setDriverMarkedIds] = useState<Set<string>>(new Set());
+
   const handleAttendanceMarked = useCallback(
     (data: { employeeId: string; employeeName: string; markedBy: string; timestamp: string }) => {
       if (!tripId) return;
+      // Only lock buttons when the employee boarded themselves (self-scan)
+      if (data.markedBy === 'self') {
+        setSelfScannedIds((prev) => new Set(prev).add(data.employeeId));
+        // Also count as driver-marked for proceed validation purposes
+        setDriverMarkedIds((prev) => new Set(prev).add(data.employeeId));
+      }
       store.dispatch(
         shuttleApi.util.updateQueryData('getTripAttendance', tripId as number, (draft) => {
           const i = draft.findIndex((e) => e.employeeId === data.employeeId);
@@ -92,6 +107,8 @@ export default function RideInProgress() {
           }
         }),
       );
+      // Clear any loading spinner for this employee
+      setEmployeeLoadingMap((prev) => ({ ...prev, [data.employeeId]: null }));
     },
     [tripId],
   );
@@ -174,21 +191,24 @@ export default function RideInProgress() {
 
   const [attendanceStopId, setAttendanceStopId] = useState<number | null>(null);
 
-  // Bottom sheet for actions on a specific employee
-  const [selectedEmployee, setSelectedEmployee] = useState<StopEmployee | null>(null);
-  const actionSheetRef = useRef<BottomSheetModal>(null);
-  const actionSheetSnapPoints = useMemo(() => ['30%'], []);
+  // Reset per-stop tracking when the sheet opens at a new stop
+  const prevAttendanceStopIdRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (attendanceStopId !== null && attendanceStopId !== prevAttendanceStopIdRef.current) {
+      prevAttendanceStopIdRef.current = attendanceStopId;
+      setDriverMarkedIds(new Set());
+    }
+  }, [attendanceStopId]);
 
   const arrivedStopSheetRef = useRef<BottomSheet>(null);
   const arrivedStopSnapPoints = useMemo(() => ['60%'], []);
 
-  useEffect(() => {
-    if (selectedEmployee) {
-      actionSheetRef.current?.present();
-    } else {
-      actionSheetRef.current?.dismiss();
-    }
-  }, [selectedEmployee]);
+  // Per-employee loading state for inline tick/cross actions
+  const [employeeLoadingMap, setEmployeeLoadingMap] = useState<Record<string, EmployeeLoadingAction>>({});
+
+  const setEmployeeLoading = useCallback((empId: string, action: EmployeeLoadingAction) => {
+    setEmployeeLoadingMap((prev) => ({ ...prev, [empId]: action }));
+  }, []);
 
   const handleCall = useCallback((phone?: string) => {
     if (phone) {
@@ -241,12 +261,25 @@ export default function RideInProgress() {
     }
 
     if (!rideStarted) {
-      // First slide: call start trip API, then open maps
+      // First slide: read current GPS position, then call start trip API, then open maps
       const routeId = activeTrip?.route_id;
       const direction = activeTrip?.direction;
       if (routeId != null && direction) {
         try {
-          await startTrip({ route_id: routeId, direction }).unwrap();
+          // Ask for location permission and get the driver's current position
+          // so the backend can generate the polyline from the real start point.
+          let driverLat: number | undefined;
+          let driverLng: number | undefined;
+          const { status } = await Location.requestForegroundPermissionsAsync();
+          if (status === 'granted') {
+            const loc = await Location.getCurrentPositionAsync({
+              accuracy: Location.Accuracy.High,
+            });
+            driverLat = loc.coords.latitude;
+            driverLng = loc.coords.longitude;
+          }
+
+          await startTrip({ route_id: routeId, direction, lat: driverLat, lng: driverLng }).unwrap();
           setSlideKeyVersion((v) => v + 1);
           openInMaps(currentStop);
         } catch {
@@ -544,98 +577,6 @@ export default function RideInProgress() {
         </Pressable>
       </View>
 
-      {/* Action bottom sheet for selected employee */}
-      <BottomSheetModal
-        ref={actionSheetRef}
-        snapPoints={actionSheetSnapPoints}
-        enablePanDownToClose
-        onDismiss={() => setSelectedEmployee(null)}
-        backdropComponent={(props) => (
-          <BottomSheetBackdrop
-            {...props}
-            disappearsOnIndex={-1}
-            appearsOnIndex={0}
-          />
-        )}
-        backgroundStyle={{ backgroundColor: '#FFFFFF' }}
-        handleIndicatorStyle={{ backgroundColor: 'rgba(55,65,81,0.25)' }}
-      >
-        <BottomSheetView style={{ flex: 1, backgroundColor: '#FFFFFF' }}>
-          <View className="px-5 pb-8 pt-2">
-            <Text className="text-lg font-bold mb-4 text-black">
-              {isUrdu ? 'حاضری کی حیثیت منتخب کریں' : 'Mark attendance status'}
-            </Text>
-
-            <Pressable
-              disabled={isScanning || isMarkingAbsent || isAttendanceFetching}
-              onPress={() => {
-                const isBusy = isScanning || isMarkingAbsent || isAttendanceFetching;
-                if (!selectedEmployee || isBusy || !activeTrip) return;
-
-                scanPassenger({
-                  shuttleTripId: activeTrip.id,
-                  employeeId: selectedEmployee.id,
-                  status: 'PRESENT',
-                })
-                  .unwrap()
-                  .then(() => setSelectedEmployee(null))
-                  .catch(() => {
-                    Alert.alert('Error', "Couldn't mark as present.");
-                    setSelectedEmployee(null);
-                  });
-              }}
-              className="py-3 rounded-xl items-center justify-center flex-row active:opacity-90 mb-3"
-              style={{
-                backgroundColor: '#F5F5F2',
-                borderWidth: 1,
-                borderColor: 'rgba(209,213,219,1)',
-                opacity: (isScanning || isMarkingAbsent || isAttendanceFetching) ? 0.6 : 1,
-              }}
-            >
-              {isScanning && (
-                <ActivityIndicator size="small" color="#000000" style={{ marginRight: 8 }} />
-              )}
-              <Text className="text-base font-semibold text-black">
-                {isUrdu ? 'حاضری لگائیں' : 'Present'}
-              </Text>
-            </Pressable>
-
-            <Pressable
-              disabled={isScanning || isMarkingAbsent || isAttendanceFetching}
-              onPress={() => {
-                const isBusy = isScanning || isMarkingAbsent || isAttendanceFetching;
-                if (!selectedEmployee || isBusy || !activeTrip) return;
-
-                markPassengerAbsent({
-                  shuttleTripId: activeTrip.id,
-                  employeeId: selectedEmployee.id,
-                })
-                  .unwrap()
-                  .then(() => setSelectedEmployee(null))
-                  .catch(() => {
-                    Alert.alert('Error', "Couldn't mark as absent.");
-                    setSelectedEmployee(null);
-                  });
-              }}
-              className="py-3 rounded-xl items-center flex-row justify-center active:opacity-90 mb-3"
-              style={{
-                backgroundColor: '#F5F5F2',
-                borderWidth: 1,
-                borderColor: 'rgba(209,213,219,1)',
-                opacity: (isScanning || isMarkingAbsent || isAttendanceFetching) ? 0.6 : 1,
-              }}
-            >
-              {isMarkingAbsent && (
-                <ActivityIndicator size="small" color="#000000" style={{ marginRight: 8 }} />
-              )}
-              <Text className="text-base font-semibold text-black">
-                {isUrdu ? 'غیر حاضر نشان زد کریں' : 'Absent'}
-              </Text>
-            </Pressable>
-          </View>
-        </BottomSheetView>
-      </BottomSheetModal>
-
       {/* Arrived Stop bottom sheet showing employees */}
       {attendanceStopId != null && (
         <BottomSheet
@@ -663,67 +604,147 @@ export default function RideInProgress() {
 
           <BottomSheetScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 120 }}>
             <View className="overflow-hidden mb-6">
-              {employeesAtCurrentStop.map((emp, index) => (
-                <View
-                  key={emp.id}
-                  className="flex-row items-center py-4"
-                  style={
-                    index < employeesAtCurrentStop.length - 1
-                      ? { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: 'rgba(156,163,175,0.35)' }
-                      : undefined
-                  }
-                >
+              {employeesAtCurrentStop.map((emp, index) => {
+                const loadingAction = employeeLoadingMap[emp.id] ?? null;
+                // Buttons only lock when employee self-scanned via WebSocket
+                const selfScanned = selfScannedIds.has(emp.id);
+                const isAbsentBtn = emp.status === 'absent' && driverMarkedIds.has(emp.id);
+                const isPresentBtn = emp.status === 'present' && (driverMarkedIds.has(emp.id) || selfScanned);
+
+                return (
                   <View
-                    className="w-14 h-14 rounded-full items-center justify-center mr-3 bg-gray-200"
-                    style={{
-                      borderWidth: 2,
-                      borderColor: '#FF5A00'
-                    }}
+                    key={emp.id}
+                    className="flex-row items-center py-4"
+                    style={
+                      index < employeesAtCurrentStop.length - 1
+                        ? { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: 'rgba(156,163,175,0.35)' }
+                        : undefined
+                    }
                   >
-                    <Text className="text-black font-semibold text-lg">
-                      {getInitials(emp.name)}
-                    </Text>
-                  </View>
-                  <View className="flex-1 min-w-0 mr-2">
-                    <Text className="text-black font-bold text-[17px]" numberOfLines={1}>
-                      {emp.name}
-                    </Text>
-                    <View className="flex-row items-center mt-1">
-                      <Text className="text-[#8E8E93] text-[15px] mr-2" numberOfLines={1}>
-                        {emp.status === 'present' ? 'Present' : (emp.status === 'absent' ? 'Absent' : (emp.number || 'No number'))}
+                    <View
+                      className="w-14 h-14 rounded-full items-center justify-center mr-3 bg-gray-200"
+                      style={{ borderWidth: 2, borderColor: '#FF5A00' }}
+                    >
+                      <Text className="text-black font-semibold text-lg">
+                        {getInitials(emp.name)}
                       </Text>
                     </View>
+                    <View className="flex-1 min-w-0 mr-2">
+                      <Text className="text-black font-bold text-[17px]" numberOfLines={1}>
+                        {emp.name}
+                      </Text>
+                      <View className="flex-row items-center mt-1">
+                        <Text className="text-[#8E8E93] text-[15px] mr-2" numberOfLines={1}>
+                          {emp.status === 'present' ? 'Present' : emp.status === 'absent' ? 'Absent' : (emp.number || 'No number')}
+                        </Text>
+                      </View>
+                    </View>
+
+                    {/* Tick / Cross buttons — only lock on self-scan */}
+                    <View className="flex-row gap-3">
+                      {/* Cross = Absent */}
+                      <Pressable
+                        disabled={selfScanned || loadingAction !== null}
+                        onPress={async () => {
+                          if (!activeTrip) return;
+                          setEmployeeLoading(emp.id, 'marking_absent');
+                          try {
+                            await markPassengerAbsent({
+                              shuttleTripId: activeTrip.id,
+                              employeeId: emp.id,
+                            }).unwrap();
+                            setDriverMarkedIds((prev) => new Set(prev).add(emp.id));
+                          } catch {
+                            Alert.alert('Error', "Couldn't mark as absent.");
+                          } finally {
+                            setEmployeeLoading(emp.id, null);
+                          }
+                        }}
+                        className="w-[42px] h-[42px] rounded-full items-center justify-center border"
+                        style={{
+                          backgroundColor: isAbsentBtn ? '#D27360' : 'transparent',
+                          borderColor: isAbsentBtn ? '#D27360' : isPresentBtn ? '#C0C0C0' : '#D27360',
+                          opacity: (selfScanned || (loadingAction !== null && loadingAction !== 'marking_absent')) ? 0.5 : 1,
+                        }}
+                      >
+                        {loadingAction === 'marking_absent' ? (
+                          <ActivityIndicator size="small" color={isAbsentBtn ? '#FFF' : '#D27360'} />
+                        ) : (
+                          <Ionicons
+                            name="close"
+                            size={24}
+                            color={isAbsentBtn ? '#FFF' : isPresentBtn ? '#C0C0C0' : '#D27360'}
+                          />
+                        )}
+                      </Pressable>
+
+                      {/* Tick = Present */}
+                      <Pressable
+                        disabled={selfScanned || loadingAction !== null}
+                        onPress={async () => {
+                          if (!activeTrip) return;
+                          setEmployeeLoading(emp.id, 'scanning');
+                          try {
+                            await scanPassenger({
+                              shuttleTripId: activeTrip.id,
+                              employeeId: emp.id,
+                              status: 'PRESENT',
+                            }).unwrap();
+                            setDriverMarkedIds((prev) => new Set(prev).add(emp.id));
+                          } catch {
+                            Alert.alert('Error', "Couldn't mark as present.");
+                          } finally {
+                            setEmployeeLoading(emp.id, null);
+                          }
+                        }}
+                        className="w-[42px] h-[42px] rounded-full items-center justify-center border"
+                        style={{
+                          backgroundColor: isPresentBtn ? '#4AA388' : 'transparent',
+                          borderColor: isPresentBtn ? '#4AA388' : isAbsentBtn ? '#C0C0C0' : '#4AA388',
+                          opacity: (selfScanned || (loadingAction !== null && loadingAction !== 'scanning')) ? 0.5 : 1,
+                        }}
+                      >
+                        {loadingAction === 'scanning' ? (
+                          <ActivityIndicator size="small" color={isPresentBtn ? '#FFF' : '#4AA388'} />
+                        ) : (
+                          <Ionicons
+                            name="checkmark"
+                            size={24}
+                            color={isPresentBtn ? '#FFF' : isAbsentBtn ? '#C0C0C0' : '#4AA388'}
+                          />
+                        )}
+                      </Pressable>
+                    </View>
                   </View>
-                  <View className="flex-row gap-3">
-                    <Pressable
-                      onPress={() => handleCall(emp.number)}
-                      className="w-[42px] h-[42px] rounded-full items-center justify-center border border-gray-300"
-                    >
-                      <Ionicons name="call-outline" size={20} color="black" />
-                    </Pressable>
-                    <Pressable
-                      hitSlop={8}
-                      onPress={() => setSelectedEmployee(emp)}
-                      className="w-[42px] h-[42px] rounded-full items-center justify-center border border-gray-300"
-                    >
-                      <Entypo name="dots-three-horizontal" size={20} color="black" />
-                    </Pressable>
-                  </View>
-                </View>
-              ))}
+                );
+              })}
             </View>
             <Pressable
               onPress={() => {
+                // Validate all employees at this stop have been marked
+                const unmarked = employeesAtCurrentStop.filter(
+                  (e) => !driverMarkedIds.has(e.id) && !selfScannedIds.has(e.id),
+                );
+                if (unmarked.length > 0) {
+                  toast.show(
+                    <CustomToast
+                      type="error"
+                      message={isUrdu ? 'شروع کرنے سے پہلے تمام حاضری درج کریں' : 'Mark all attendance before proceeding'}
+                    />,
+                    { duration: 3500, position: 'top', backgroundColor: '#ff4545' },
+                  );
+                  return;
+                }
                 arrivedStopSheetRef.current?.close();
                 // Reset frozen stop so when it opens later it uses the new one
                 setAttendanceStopId(null);
 
                 if (nextStopIndex !== null && stops.length > nextStopIndex) {
-                  // Open map for the next actual traveling stop 
+                  // Open map for the next actual traveling stop
                   openInMaps(stops[nextStopIndex]);
                 }
               }}
-              className="bg-[#FF5A00] flex-row items-center justify-center py-6  rounded-xl active:opacity-90 disabled:opacity-70"
+              className="bg-[#FF5A00] flex-row items-center justify-center py-6 rounded-xl active:opacity-90 disabled:opacity-70"
             >
               <Text className="text-white text-[17px] font-bold mr-1">
                 Proceed to next stop

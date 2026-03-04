@@ -261,15 +261,20 @@ export const shuttleApi = baseApi.injectEndpoints({
     }),
     startTrip: builder.mutation<
       ShuttleTrip,
-      { route_id: number; direction: 'MORNING' | 'EVENING' }
+      { route_id: number; direction: 'MORNING' | 'EVENING'; lat?: number; lng?: number }
     >({
-      query: ({ route_id, direction }) => {
+      query: ({ route_id, direction, lat, lng }) => {
         const now = new Date();
         const date = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
         return {
           url: '/shuttle-trips/start',
           method: 'POST',
-          body: { route_id, direction, date },
+          body: {
+            route_id,
+            direction,
+            date,
+            ...(lat !== undefined && lng !== undefined ? { lat, lng } : {}),
+          },
         };
       },
       async onQueryStarted(
