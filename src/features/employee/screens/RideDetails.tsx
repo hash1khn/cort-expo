@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import {
   View,
-  Text,
+  Text as RNText,
   Image,
   ScrollView,
   StyleSheet,
@@ -12,6 +12,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import MapView, { Marker } from 'react-native-maps';
 import { Feather, Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
+import { fontFamily } from '@/core/theme';
+
+const Text = (props: React.ComponentProps<typeof RNText>) => {
+  return <RNText {...props} style={[{ fontFamily }, props.style]} />;
+};
 
 const MAP_HEIGHT = Dimensions.get('window').height * 0.22;
 
@@ -40,29 +45,27 @@ const RideDetails = () => {
   const currentTime = useMemo(() => formatCurrentTime(), []);
 
   return (
-    <SafeAreaView className="flex-1 bg-[#0A0A0A]">
+    <SafeAreaView className="flex-1 bg-white">
       {/* Header */}
-      <View className="flex-row items-center justify-center px-4 py-3">
+      <View className="flex-row items-center justify-center px-4 py-3 relative">
         <Pressable
           onPress={() => router.back()}
-          className="rounded-full flex-row items-center justify-center mr-2 absolute left-2"
+          className="rounded-full flex-row items-center justify-center absolute left-4"
         >
-          <Ionicons name="chevron-back" size={26} color={'#FFFFFF'} />
-          <Text className='text-white text-lg font-medium'>Back</Text>
+          <Ionicons name="chevron-back" size={26} color="black" />
+          <Text className="text-black text-lg font-medium">Back</Text>
         </Pressable>
-        <Text className="text-white text-xl font-bold text-center">20 Jan, 2025</Text>
+        <Text className="text-black text-xl font-bold text-center">20 Jan, 2025</Text>
       </View>
 
-      <ScrollView 
-        className="flex-1" 
-        showsVerticalScrollIndicator={false} 
+      <ScrollView
+        className="flex-1"
+        showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 24 }}
       >
-        
-
         {/* Map card */}
-        <View className="overflow-hidden rounded-2xl mx-4 mt-4 mb-4 border border-[#1F1F1F]">
-          <View className="bg-[#141414]">
+        <View className="overflow-hidden rounded-2xl mx-4 mt-6 mb-4 border border-gray-300 bg-white">
+          <View>
             <View style={{ height: MAP_HEIGHT, overflow: 'hidden' }}>
               <MapView
                 style={StyleSheet.absoluteFill}
@@ -71,7 +74,7 @@ const RideDetails = () => {
                 zoomEnabled={false}
                 pitchEnabled={false}
                 rotateEnabled={false}
-                userInterfaceStyle="dark"
+                userInterfaceStyle="light"
               >
                 <Marker
                   coordinate={MANHATTAN_COORDS}
@@ -81,36 +84,36 @@ const RideDetails = () => {
                 </Marker>
               </MapView>
             </View>
-            <View className="flex-row justify-between items-center px-4 py-3.5 border-b border-[#1F1F1F]">
-              <Text className="text-[15px] font-semibold text-[#9CA3AF]">Pickup</Text>
-              <Text className="text-[16px] font-semibold text-white">Clifton Zone 7</Text>
+            <View className="flex-row justify-between items-center px-4 py-4 border-b border-gray-200">
+              <Text className="text-[15px] font-semibold text-gray-500">Pickup</Text>
+              <Text className="text-[16px] font-semibold text-black">Clifton Zone 7</Text>
             </View>
-            <View className="flex-row justify-between items-center px-4 py-3.5">
-              <Text className="text-[15px] font-semibold text-[#9CA3AF]">Destination</Text>
-              <Text className="text-[16px] font-semibold text-white">Disco Bakery, Block 4A</Text>
+            <View className="flex-row justify-between items-center px-4 py-4">
+              <Text className="text-[15px] font-semibold text-gray-500">Destination</Text>
+              <Text className="text-[16px] font-semibold text-black">Disco Bakery, Block 4A</Text>
             </View>
           </View>
         </View>
 
         {/* Driver Information Section */}
-        <View className="overflow-hidden rounded-2xl mx-4 border border-[#1F1F1F]">
-          <View className="bg-[#1A1A1A] px-4 py-3">
-            <Text className="text-[14px] font-semibold text-white">
+        <View className="overflow-hidden rounded-2xl mx-4 border border-gray-300 bg-white">
+          <View className="bg-gray-50 px-4 py-3 border-b border-gray-300">
+            <Text className="text-[14px] font-semibold text-gray-600">
               Driver information
             </Text>
           </View>
-          <View className="bg-[#141414]">
-            <View className="flex-row justify-between items-center px-4 py-3.5 border-b border-[#1F1F1F]">
-              <Text className="text-[15px] font-semibold text-[#9CA3AF]">Name</Text>
-              <Text className="text-[16px] font-semibold text-white">Mushtaq Ahmed</Text>
+          <View className="bg-white">
+            <View className="flex-row justify-between items-center px-4 py-4 border-b border-gray-200">
+              <Text className="text-[15px] font-semibold text-gray-500">Name</Text>
+              <Text className="text-[16px] font-semibold text-black">Mushtaq Ahmed</Text>
             </View>
-            <View className="flex-row justify-between items-center px-4 py-3.5 border-b border-[#1F1F1F]">
-              <Text className="text-[15px] font-semibold text-[#9CA3AF]">Vehicle</Text>
-              <Text className="text-[16px] font-semibold text-white">Black Toyota Vitz</Text>
+            <View className="flex-row justify-between items-center px-4 py-4 border-b border-gray-200">
+              <Text className="text-[15px] font-semibold text-gray-500">Vehicle</Text>
+              <Text className="text-[16px] font-semibold text-black">Black Toyota Vitz</Text>
             </View>
-            <View className="flex-row justify-between items-center px-4 py-3.5">
-              <Text className="text-[15px] font-semibold text-[#9CA3AF]">Number Plate</Text>
-              <Text className="text-[16px] font-semibold text-white">ABR 986</Text>
+            <View className="flex-row justify-between items-center px-4 py-4">
+              <Text className="text-[15px] font-semibold text-gray-500">Number Plate</Text>
+              <Text className="text-[16px] font-semibold text-black">ABR 986</Text>
             </View>
           </View>
         </View>
@@ -118,13 +121,13 @@ const RideDetails = () => {
         {/* Support - Report a problem */}
         <View className="mx-4 mt-6">
           <Pressable
-            className="flex-row items-center rounded-2xl bg-[#141414] border border-[#1F1F1F] px-4 py-4 active:opacity-70"
+            className="flex-row items-center rounded-2xl bg-white border border-gray-300 px-4 py-4 active:opacity-70"
           >
             <View className="w-10 h-10 rounded-xl bg-[#f47f00] items-center justify-center mr-3">
               <MaterialIcons name="report" size={22} color="white" />
             </View>
-            <Text className="flex-1 text-[15px] font-semibold text-white">Report a problem</Text>
-            <Feather name="arrow-up-right" size={22} color="#6B7280" />
+            <Text className="flex-1 text-[15px] font-semibold text-black">Report a problem</Text>
+            <Feather name="arrow-up-right" size={22} color="black" />
           </Pressable>
         </View>
       </ScrollView>
