@@ -391,7 +391,7 @@ export default function NewHome() {
           <Pressable onPress={() => { router.push('/employee/rides') }} hitSlop={8}>
             <View className="flex-row items-center justify-between gap-0 mb-3">
               <Text className="text-black text-2xl font-bold">Recent Rides</Text>
-              <Text className='text-amber-500 text-sm font-bold'>View all</Text>
+              <Text className='text-[#FF5A00] text-sm font-bold'>View all</Text>
               {/* <Pressable onPress={()=>{router.push('/employee/rides')}} hitSlop={8}>
                 <Text className="text-text-muted text-sm font-medium">View history</Text>
               </Pressable> */}

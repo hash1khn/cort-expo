@@ -62,10 +62,22 @@ export const FlipCard: React.FC<FlipCardProps> & {
   onFlip,
   blurTint = "light",
   scaleOnPress = true,
+  isFlipped: externalIsFlipped,
 }) => {
-    const [isFlipped, setIsFlipped] = useState(false);
+    const [internalIsFlipped, setInternalIsFlipped] = useState(false);
     const rotation = useSharedValue(0);
     const scale = useSharedValue(1);
+
+    const isFlipped = externalIsFlipped !== undefined ? externalIsFlipped : internalIsFlipped;
+
+    React.useEffect(() => {
+      if (externalIsFlipped !== undefined) {
+        rotation.value = withTiming(externalIsFlipped ? 180 : 0, {
+          duration: animationDuration,
+          easing: Easing.inOut(Easing.cubic),
+        });
+      }
+    }, [externalIsFlipped, animationDuration, rotation]);
 
     const flip = () => {
       if (enableHaptics) {
@@ -73,12 +85,13 @@ export const FlipCard: React.FC<FlipCardProps> & {
       }
 
       const next = !isFlipped;
-      setIsFlipped(next);
-
-      rotation.value = withTiming(next ? 180 : 0, {
-        duration: animationDuration,
-        easing: Easing.inOut(Easing.cubic),
-      });
+      if (externalIsFlipped === undefined) {
+        setInternalIsFlipped(next);
+        rotation.value = withTiming(next ? 180 : 0, {
+          duration: animationDuration,
+          easing: Easing.inOut(Easing.cubic),
+        });
+      }
 
       onFlip?.(next);
     };
