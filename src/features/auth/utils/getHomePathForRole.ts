@@ -3,7 +3,7 @@ import type { UserRole } from '../../../core/types/navigation';
 export function getHomePathForRole(role: UserRole): string {
   switch (role) {
     case 'CHAUFFEUR':
-      return '/chauffeur/(home)';
+      return '/chauffeur';
     case 'SHUTTLE_DRIVER':
       return '/shuttle';
     case 'EMPLOYEE':

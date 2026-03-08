@@ -1,41 +1,63 @@
 import React, { useCallback, useState } from 'react';
-import { Linking, Modal, Pressable, Text, View, ScrollView } from 'react-native';
+import { Linking, Modal, Pressable, Text as RNText, View, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useChauffeurStore, type ChauffeurBooking } from '../store';
+import { fontFamily } from '@/core/theme';
+
+const Text = (props: React.ComponentProps<typeof RNText>) => {
+  return <RNText {...props} style={[{ fontFamily }, props.style]} />;
+};
 
 function BookingCard({
   booking,
   onPress,
+  showButton = false,
+  onButtonPress,
 }: {
   booking: ChauffeurBooking;
   onPress: () => void;
+  showButton?: boolean;
+  onButtonPress?: () => void;
 }) {
   return (
     <Pressable
       onPress={onPress}
-      className="rounded-2xl p-5 bg-surface-background border border-white/10 mb-4 active:opacity-90"
+      className="rounded-3xl p-5 bg-[#EDEDEB] mb-4 active:opacity-90 shadow-sm"
     >
       <View className="flex-row items-center justify-between mb-3">
         <View className="flex-row items-center gap-2">
-          <View className="p-2 bg-white/10 rounded-xl">
-            <Ionicons name="car-sport" size={20} color="rgba(255,255,255,0.9)" />
+          <View className="p-2 bg-white rounded-xl">
+            <Ionicons name="car-sport" size={20} color="#000000" />
           </View>
-          <Text className="text-white font-bold text-lg">{booking.passengerName}</Text>
+          <Text className="text-black font-bold text-lg">{booking.passengerName}</Text>
         </View>
-        <View className="px-3 py-1.5 rounded-full bg-white/20">
+        <View className="px-3 py-1.5 rounded-xl bg-black">
           <Text className="text-sm font-bold text-white">{booking.pickupTime}</Text>
         </View>
       </View>
-      <View className="flex-row items-center gap-2">
-        <Text className="text-white text-base font-semibold">{booking.pickup}</Text>
-        <Feather name="arrow-right" size={16} color="rgba(255,255,255,0.6)" />
-        <Text className="text-white text-base font-semibold flex-1" numberOfLines={1}>
+      <View className="flex-row items-center gap-3">
+        <Text className="text-black text-xl font-bold">{booking.pickup}</Text>
+        <Feather name="arrow-right" size={20} color="#6B7280" />
+        <Text className="text-black text-xl font-bold flex-1" numberOfLines={1}>
           {booking.dropoff}
         </Text>
       </View>
-      <Text className="text-white/50 text-sm mt-1">{booking.dateLabel}</Text>
+      <Text className="text-[#6B7280] text-sm mt-1 font-medium">{booking.dateLabel}</Text>
+
+      {showButton && (
+        <Pressable
+          onPress={(e) => {
+            e.stopPropagation();
+            onButtonPress?.();
+          }}
+          className="flex-row items-center justify-center gap-2 py-1 rounded-xl mt-4 bg-[#FF5A00] active:scale-[0.98]"
+        >
+          <Ionicons name="play-sharp" size={18} color="#FFFFFF" />
+          <Text className="text-white text-lg font-bold py-2">Start</Text>
+        </Pressable>
+      )}
     </Pressable>
   );
 }
@@ -44,18 +66,24 @@ export function ChauffeurHomeScreen() {
   const { bookings, setSelectedBooking } = useChauffeurStore();
   const [showRequestModal, setShowRequestModal] = useState(false);
 
-  const assignedBooking: ChauffeurBooking | undefined = bookings.find(
-    (b) => b.isOutstation
-  );
-  const inCityTodayBookings = bookings.filter(
-    (b) => !b.isOutstation && b.dateLabel === 'Today'
-  );
+  // Merge them for indexed rendering or just map through bookings directly
+  // if you want to follow the "first, second, third" logic precisely.
+  const displayBookings = bookings;
 
-  const devBooking: ChauffeurBooking | undefined = assignedBooking ?? bookings[0];
+  const devBooking: ChauffeurBooking | undefined = bookings[0];
 
   const handleBookingPress = (booking: ChauffeurBooking) => {
     setSelectedBooking(booking.id);
-    router.push('/chauffeur/(home)/booking-detail');
+    router.push('/chauffeur/booking-detail');
+  };
+
+  const handleStartTrip = (booking: ChauffeurBooking) => {
+    setSelectedBooking(booking.id);
+    if (booking.isOutstation) {
+      router.push('/chauffeur/start-ride');
+    } else {
+      router.push('/chauffeur/active-trip');
+    }
   };
 
   const handleDevOpenRequest = () => {
@@ -67,13 +95,7 @@ export function ChauffeurHomeScreen() {
 
   const handleDevProceedToTrip = useCallback(() => {
     setShowRequestModal(false);
-    router.push('/chauffeur/(home)/active-trip');
-  }, []);
-
-  const handleDevCall = useCallback(() => {
-    setShowRequestModal(false);
-    // Simple dev call action – in real flow you would use booking phone
-    Linking.openURL('tel:+923001234567').catch(() => {});
+    router.push('/chauffeur/active-trip');
   }, []);
 
   const today = new Date();
@@ -84,80 +106,42 @@ export function ChauffeurHomeScreen() {
   });
 
   return (
-    <SafeAreaView className="flex-1 bg-background" edges={['top']}>
+    <SafeAreaView className="flex-1 bg-[#FFFFFF]" edges={['top']}>
       <ScrollView className="flex-1 px-5" showsVerticalScrollIndicator={false}>
         <View className="flex-row items-center justify-end py-0">
           <Pressable
             hitSlop={12}
-            onPress={() => router.push('/chauffeur/(home)/profile')}
-            className="p-2 -mr-2 rounded-full bg-white/5"
+            onPress={() => router.push('/chauffeur/profile')}
+            className="p-2 -mr-2 rounded-full bg-[#EDEDEB]"
           >
-            <Ionicons name="person-circle-outline" size={32} color="#FFF" />
+            <Ionicons name="person-circle-outline" size={32} color="#000000" />
           </Pressable>
         </View>
 
         <View className="mb-6">
-          <Text className="text-[34px] font-bold text-white">My Bookings</Text>
-          <Text className="text-white/50 text-xl font-medium">{dateStr}</Text>
+          <Text className="text-[34px] font-bold text-black">My Bookings</Text>
+          <Text className="text-[#6B7280] text-base font-medium">{dateStr}</Text>
         </View>
 
-        {assignedBooking && (
-          <View className="mb-5">
-            <Text className="text-white text-xl px-2 font-bold mb-4">Assigned</Text>
+        <View className="mt-2">
+          {displayBookings.map((booking, index) => (
+            <BookingCard
+              key={booking.id}
+              booking={booking}
+              onPress={() => handleBookingPress(booking)}
+              showButton={index === 0 || index === 2}
+              onButtonPress={() => handleStartTrip(booking)}
+            />
+          ))}
+        </View>
 
-            <Pressable
-              onPress={() => handleBookingPress(assignedBooking)}
-              className="rounded-3xl p-5 bg-surface-background border border-white/10 mb-2 active:opacity-90"
-            >
-              <View className="flex-row items-center justify-between mb-3">
-                <View className="flex-row items-center gap-2">
-                  <View className="p-2 bg-white/10 rounded-xl">
-                    <Ionicons name="car-sport" size={20} color="rgba(255,255,255,0.9)" />
-                  </View>
-                  <View>
-                    <Text className="text-white font-bold text-lg">
-                      {assignedBooking.passengerName}
-                    </Text>
-                    <Text className="text-white/60 text-xs mt-0.5">Outstation</Text>
-                  </View>
-                </View>
-                <View className="px-3 py-1.5 rounded-full bg-white/20">
-                  <Text className="text-sm font-bold text-white">
-                    {assignedBooking.pickupTime}
-                  </Text>
-                </View>
-              </View>
-              <View className="flex-row items-center gap-2">
-                <Text className="text-white text-base font-semibold">
-                  {assignedBooking.pickup}
-                </Text>
-                <Feather name="arrow-right" size={16} color="rgba(255,255,255,0.6)" />
-                <Text className="text-white text-base font-semibold flex-1" numberOfLines={1}>
-                  {assignedBooking.dropoff}
-                </Text>
-              </View>
-            </Pressable>
-          </View>
-        )}
-
-        {inCityTodayBookings.length > 0 && (
-          <View className="mb-5">
-            <Text className="text-white text-xl px-2 font-bold mb-4">
-              In-city rides today
-            </Text>
-            {inCityTodayBookings.map((b) => (
-              <BookingCard key={b.id} booking={b} onPress={() => handleBookingPress(b)} />
-            ))}
-          </View>
-        )}
-
-        {bookings.length === 0 && (
-          <View className="rounded-xl bg-surface-background py-8 px-4 items-center">
-            <Ionicons name="calendar-outline" size={48} color="rgba(255,255,255,0.4)" />
-            <Text className="text-white/60 text-lg font-medium mt-3 text-center">
+        {displayBookings.length === 0 && (
+          <View className="rounded-3xl bg-[#EDEDEB] py-8 px-4 items-center">
+            <Ionicons name="calendar-outline" size={48} color="#6B7280" />
+            <Text className="text-[#6B7280] text-lg font-medium mt-3 text-center">
               No assigned bookings
             </Text>
-            <Text className="text-white/40 text-sm mt-1 text-center">
+            <Text className="text-[#6B7280]/60 text-sm mt-1 text-center">
               You will see pre-assigned trips here.
             </Text>
           </View>
@@ -170,9 +154,9 @@ export function ChauffeurHomeScreen() {
         <View className="px-5 pb-6">
           <Pressable
             onPress={handleDevOpenRequest}
-            className="py-3 rounded-2xl bg-white/10 items-center justify-center"
+            className="py-3 rounded-2xl bg-[#EDEDEB] items-center justify-center"
           >
-            <Text className="text-white text-xs font-medium">
+            <Text className="text-black text-xs font-medium">
               DEV: Open passenger request modal
             </Text>
           </Pressable>
@@ -197,7 +181,7 @@ export function ChauffeurHomeScreen() {
           <View
             style={{
               width: '100%',
-              borderRadius: 24,
+              borderRadius: 10,
               backgroundColor: '#ffffff',
               paddingHorizontal: 20,
               paddingVertical: 24,
@@ -226,8 +210,8 @@ export function ChauffeurHomeScreen() {
             </Text>
             <Text
               style={{
-                fontSize: 16,
-                fontWeight: '600',
+                fontSize: 24,
+                fontWeight: '700',
                 color: '#111827',
                 textAlign: 'center',
                 marginTop: 4,
@@ -248,44 +232,24 @@ export function ChauffeurHomeScreen() {
                 onPress={handleDevProceedToTrip}
                 style={{
                   flex: 1,
-                  borderRadius: 20,
-                  paddingVertical: 12,
+                  borderRadius: 12,
+                  paddingVertical: 14,
                   alignItems: 'center',
                   justifyContent: 'center',
-                  backgroundColor: '#000000',
+                  backgroundColor: '#FF5A00',
                 }}
               >
                 <Text
                   style={{
                     color: '#ffffff',
-                    fontSize: 15,
-                    fontWeight: '600',
+                    fontSize: 16,
+                    fontWeight: '700',
                   }}
                 >
                   Proceed to trip
                 </Text>
               </Pressable>
-              <Pressable
-                onPress={handleDevCall}
-                style={{
-                  flex: 1,
-                  borderRadius: 20,
-                  paddingVertical: 12,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  backgroundColor: '#F3F4F6',
-                }}
-              >
-                <Text
-                  style={{
-                    color: '#111827',
-                    fontSize: 15,
-                    fontWeight: '500',
-                  }}
-                >
-                  Call
-                </Text>
-              </Pressable>
+
             </View>
           </View>
         </View>

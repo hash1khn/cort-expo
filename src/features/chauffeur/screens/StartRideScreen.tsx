@@ -69,7 +69,7 @@ export function StartRideScreen() {
     if (meterImageUri) {
       setMeterPhoto(meterImageUri);
       // After confirming meter photo, go into the active trip flow
-      router.replace('/chauffeur/(home)/active-trip');
+      router.replace('/chauffeur/active-trip');
     }
   }, [meterImageUri, setMeterPhoto]);
 

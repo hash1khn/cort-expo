@@ -26,12 +26,12 @@ export function ChauffeurActiveTripScreen() {
 
   const handleCall = useCallback(() => {
     // In real app, use booking passenger phone
-    Linking.openURL('tel:+923001234567').catch(() => {});
+    Linking.openURL('tel:+923001234567').catch(() => { });
   }, []);
 
   const handleCompleteTrip = useCallback(() => {
     clearTrip();
-    router.replace('/chauffeur/(home)');
+    router.replace('/chauffeur');
   }, [clearTrip]);
 
   const statusLabel =

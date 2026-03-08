@@ -13,11 +13,11 @@ export function ChauffeurProfileScreen() {
 
   const initials = user?.full_name
     ? user.full_name
-        .split(' ')
-        .map((n) => n[0])
-        .join('')
-        .slice(0, 2)
-        .toUpperCase()
+      .split(' ')
+      .map((n) => n[0])
+      .join('')
+      .slice(0, 2)
+      .toUpperCase()
     : '?';
 
   const handleLogout = async () => {
@@ -60,13 +60,6 @@ export function ChauffeurProfileScreen() {
           </View>
         </View>
 
-        <Pressable
-          onPress={() => router.push('/chauffeur/(home)/settings')}
-          className="flex-row items-center justify-between py-4 px-4 rounded-xl bg-surface-background mb-6"
-        >
-          <Text className="text-white text-base font-medium">Settings</Text>
-          <Ionicons name="chevron-forward" size={20} color="rgba(255,255,255,0.5)" />
-        </Pressable>
 
         <Pressable
           onPress={handleLogout}

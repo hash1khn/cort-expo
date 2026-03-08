@@ -61,9 +61,9 @@ export function BookingDetailScreen() {
               // Outstation rides go through meter photo flow,
               // in-city rides jump straight into the active trip screen.
               if (booking.isOutstation) {
-                router.push('/chauffeur/(home)/start-ride');
+                router.push('/chauffeur/start-ride');
               } else {
-                router.push('/chauffeur/(home)/active-trip');
+                router.push('/chauffeur/active-trip');
               }
             }}
             className="flex-row items-center justify-center gap-2 py-4 rounded-2xl bg-white mt-6 active:scale-[0.98]"

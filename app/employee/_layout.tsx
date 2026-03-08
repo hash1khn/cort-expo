@@ -8,7 +8,7 @@ const hideDrawerItem = { drawerItemStyle: { display: 'none' as const } };
 export default function Layout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <View style={{ flex: 1, backgroundColor: '#FFFF' }}>
+      <View style={{ flex: 1, backgroundColor: '#1F1F1D' }}>
         <Drawer
           screenOptions={{
             headerShown: false,
