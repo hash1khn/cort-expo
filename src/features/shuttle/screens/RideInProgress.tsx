@@ -12,7 +12,6 @@ import {
 } from 'react-native';
 import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { colors } from '@/core/theme';
-import { SlideToStartTrip } from '../components';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import BottomSheet, {
@@ -175,9 +174,6 @@ export default function RideInProgress() {
 
   const isActionLoading = isStartingTrip || isArrivingAtStop || isCompletingTrip;
 
-  // Increment after successful API so the slider remounts and does not get stuck
-  const [slideKeyVersion, setSlideKeyVersion] = React.useState(0);
-
   // Single source of truth: derive present/absent from server manifest only.
   const attendanceStatusByEmployeeId = useMemo(() => {
     const map: Record<string, EmployeeStatus> = {};
@@ -243,18 +239,6 @@ export default function RideInProgress() {
     }));
   }, [stopForAttendance, tripEmployeesRaw, attendanceStatusByEmployeeId]);
 
-  const slideLabel = rideStarted
-    ? isLastStop
-      ? 'Slide to complete trip'
-      : 'Slide to mark as arrived'
-    : 'Slide to start trip';
-
-  const slideKey = rideStarted
-    ? isLastStop
-      ? `complete-${currentStop?.id ?? 'none'}`
-      : `arrived-${currentStop?.id ?? 'none'}`
-    : `start-${currentStop?.id ?? 'none'}`;
-
   const handleSlideComplete = useCallback(async () => {
     if (!currentStop || !stops.length) {
       return;
@@ -272,19 +256,22 @@ export default function RideInProgress() {
           let driverLng: number | undefined;
           const { status } = await Location.requestForegroundPermissionsAsync();
           if (status === 'granted') {
-            const loc = await Location.getCurrentPositionAsync({
-              accuracy: Location.Accuracy.High,
-            });
-            driverLat = loc.coords.latitude;
-            driverLng = loc.coords.longitude;
+            let loc = await Location.getLastKnownPositionAsync();
+            if (!loc) {
+              loc = await Location.getCurrentPositionAsync({
+                accuracy: Location.Accuracy.Balanced,
+              });
+            }
+            if (loc) {
+              driverLat = loc.coords.latitude;
+              driverLng = loc.coords.longitude;
+            }
           }
 
           await startTrip({ route_id: routeId, direction, lat: driverLat, lng: driverLng }).unwrap();
-          setSlideKeyVersion((v) => v + 1);
           openInMaps(currentStop);
         } catch {
-          // Optionally show error; slider stays
-          setSlideKeyVersion((v) => v + 1);
+          // Optionally show error
         }
       } else {
         openInMaps(currentStop);
@@ -301,10 +288,8 @@ export default function RideInProgress() {
           tripId: activeTrip.id,
           current_stop_id: currentStop.id,
         }).unwrap();
-        setSlideKeyVersion((v) => v + 1);
         arrivedStopSheetRef.current?.snapToIndex(0);
       } catch {
-        setSlideKeyVersion((v) => v + 1);
         Alert.alert(
           'Error',
           'Failed to mark as arrived. Please try again.',
@@ -319,7 +304,6 @@ export default function RideInProgress() {
         tripId: activeTrip.id,
         total_distance: 0,
       }).unwrap();
-      setSlideKeyVersion((v) => v + 1);
     } catch {
       // Optionally show error
     }
@@ -548,14 +532,7 @@ export default function RideInProgress() {
           )}
         </View> */}
 
-        {/* Slide control */}
-        {/* <View style={styles.slideWrapper}>
-          <SlideToStartTrip
-            key={`${slideKey}-${slideKeyVersion}`}
-            label={slideLabel}
-            onComplete={handleSlideComplete}
-          />
-        </View> */}
+
       </ScrollView>
 
       <View className="absolute bottom-20 left-5 right-5 pointer-events-auto">

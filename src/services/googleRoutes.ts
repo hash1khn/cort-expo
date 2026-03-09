@@ -25,15 +25,15 @@ const STOP_2: LatLng = {
 // LOG  [googleRoutes] Encoded polyline:
 // s}cwC_~oxK_BmBgB_CaEeFgCqDmH}KyJcNc@VkAlAeE|E_FrFiDrD}CtDeBpBKOlAwAn@}@sAeBuAlAQ^aEpDs@t@WLmE`Eg@d@g@t@o@n@rAdBV\
 const DEBUG_ENCODED_POLYLINE =
-"s}cwC_~oxKKOUWWYY]CCGIm@{@y@cA}@gAgAuAA??Ay@eAgA{A_AuAcA}AoAhA{CnC}ArAs@p@}DnDwAlAr@|@a@Zq@l@C@BAp@m@`@[s@}@vAmA|DoDr@q@|AsAzCoCnAiAaBeCU_@Y_@S]cA{AeAyAW]W]m@}@W[W_@iA_BqAgBIKKUXQHNBF[Nc@VSRc@b@STgApA}BjC_FrFwBzBq@v@kAxAg@j@CBIJ[^eBpBKOlAwAXe@TWa@g@OSa@i@q@l@c@^Q^IHi@b@a@^c@^c@`@MJUTa@b@QPWL_BzAcA~@EDED[VA@MJKJMLg@t@o@n@`@d@X^V^V"
+  "s}cwC_~oxKKOUWWYY]CCGIm@{@y@cA}@gAgAuAA??Ay@eAgA{A_AuAcA}AoAhA{CnC}ArAs@p@}DnDwAlAr@|@a@Zq@l@C@BAp@m@`@[s@}@vAmA|DoDr@q@|AsAzCoCnAiAaBeCU_@Y_@S]cA{AeAyAW]W]m@}@W[W_@iA_BqAgBIKKUXQHNBF[Nc@VSRc@b@STgApA}BjC_FrFwBzBq@v@kAxAg@j@CBIJ[^eBpBKOlAwAXe@TWa@g@OSa@i@q@l@c@^Q^IHi@b@a@^c@^c@`@MJUTa@b@QPWL_BzAcA~@EDED[VA@MJKJMLg@t@o@n@`@d@X^V^V"
 
-  export async function fetchRoutePolyline(
-    origin: LatLng,
-    destination: LatLng,
-  ): Promise<LatLng[]> {
-    return decodePolyline(DEBUG_ENCODED_POLYLINE);
-  }
-  
+export async function fetchRoutePolyline(
+  origin: LatLng,
+  destination: LatLng,
+): Promise<LatLng[]> {
+  return decodePolyline(DEBUG_ENCODED_POLYLINE);
+}
+
 
 if (!API_KEY) {
   // eslint-disable-next-line no-console
@@ -98,8 +98,8 @@ function decodePolyline(encoded: string): LatLng[] {
 //     origin: {
 //       location: {
 //         latLng: {
-            // longitude: 67.0944149
-            // latitude: 24.9268883
+// longitude: 67.0944149
+// latitude: 24.9268883
 //         },
 //       },
 //     },
@@ -115,8 +115,8 @@ function decodePolyline(encoded: string): LatLng[] {
 //     destination: {
 //       location: {
 //         latLng: {
-      //    latitude: 24.9291421,
-      // longitude: 67.0973605,
+//    latitude: 24.9291421,
+// longitude: 67.0973605,
 //         },
 //       },
 //     },
@@ -166,5 +166,5 @@ function decodePolyline(encoded: string): LatLng[] {
 //   // eslint-disable-next-line no-console
 //   console.log('[googleRoutes] Encoded polyline:', encoded);
 
-  // return decodePolyline(encoded);
+// return decodePolyline(encoded);
 // }

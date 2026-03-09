@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Linking, Pressable, StyleSheet, Text as RNText, View, ActivityIndicator } from 'react-native';
+import { Linking, Pressable, StyleSheet, Text as RNText, View, ActivityIndicator, Image } from 'react-native';
 import MapView, { Marker, Polyline } from 'react-native-maps';
 import { Ionicons, MaterialCommunityIcons, Octicons } from '@expo/vector-icons';
 import BottomSheet, { BottomSheetView } from '@gorhom/bottom-sheet';
@@ -43,6 +43,26 @@ function findClosestIndex(points: LatLng[], target: LatLng): number {
     }
   }
   return bestIdx;
+}
+
+function calculateHeading(current: LatLng, next: LatLng) {
+  const PI = Math.PI;
+  const lat1 = (current.latitude * PI) / 180;
+  const long1 = (current.longitude * PI) / 180;
+  const lat2 = (next.latitude * PI) / 180;
+  const long2 = (next.longitude * PI) / 180;
+
+  const dLon = long2 - long1;
+
+  const y = Math.sin(dLon) * Math.cos(lat2);
+  const x =
+    Math.cos(lat1) * Math.sin(lat2) -
+    Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon);
+
+  let brng = Math.atan2(y, x);
+  brng = (brng * 180) / PI;
+  brng = (brng + 360) % 360;
+  return brng;
 }
 
 export default function RideActive() {
@@ -309,24 +329,58 @@ export default function RideActive() {
     return stopPolylineIndices[arrivedStopIdx] ?? null;
   }, [currentStopId, routeStops, stopPolylineIndices]);
 
-  /**
-   * Completed route = polyline from start up to the driver's current arrived stop.
-   * Shown in grey/faded to indicate "already driven" road.
-   */
-  const completedRoute = useMemo(() => {
-    if (arrivedPolylineIndex === null || !allRoutePoints.length) return [];
-    return allRoutePoints.slice(0, arrivedPolylineIndex + 1);
-  }, [allRoutePoints, arrivedPolylineIndex]);
+  const currentDriverPolylineIndex = useMemo(() => {
+    if (!driverCoord || !allRoutePoints.length) return null;
+    return findClosestIndex(allRoutePoints, driverCoord);
+  }, [driverCoord, allRoutePoints]);
+
+  const lastHeadingRef = useRef(0);
+
+  const busHeading = useMemo(() => {
+    if (!allRoutePoints.length || currentDriverPolylineIndex === null) {
+      return lastHeadingRef.current;
+    }
+    const currentIdx = currentDriverPolylineIndex;
+    const current = allRoutePoints[currentIdx];
+    // Look ahead a few points for a smoother trajectory
+    const lookAheadIndex = Math.min(currentIdx + 3, allRoutePoints.length - 1);
+    const next = allRoutePoints[lookAheadIndex];
+
+    if (!current || !next || (current.latitude === next.latitude && current.longitude === next.longitude)) {
+      return lastHeadingRef.current;
+    }
+
+    const heading = calculateHeading(current, next);
+
+    // Calculate the shortest difference between the new heading and last heading
+    let diff = heading - lastHeadingRef.current;
+    diff = ((diff + 540) % 360) - 180;
+
+    // Only update heading if the turn is significant
+    if (Math.abs(diff) > 2) {
+      lastHeadingRef.current = heading;
+      return heading;
+    }
+
+    return lastHeadingRef.current;
+  }, [allRoutePoints, currentDriverPolylineIndex]);
 
   /**
-   * Remaining route = polyline from the current arrived stop (or start) onwards.
-   * Shown in the primary blue colour.
+   * Completed route = polyline from start up to the driver's current position.
+   */
+  const completedRoute = useMemo(() => {
+    if (currentDriverPolylineIndex === null || !allRoutePoints.length) return [];
+    return allRoutePoints.slice(0, currentDriverPolylineIndex + 1);
+  }, [allRoutePoints, currentDriverPolylineIndex]);
+
+  /**
+   * Remaining route = polyline from the current driver position (or start) onwards.
    */
   const remainingRoute = useMemo(() => {
     if (!allRoutePoints.length) return [];
-    const fromIdx = arrivedPolylineIndex !== null ? arrivedPolylineIndex : 0;
+    const fromIdx = currentDriverPolylineIndex !== null ? currentDriverPolylineIndex : 0;
     return allRoutePoints.slice(fromIdx);
-  }, [allRoutePoints, arrivedPolylineIndex]);
+  }, [allRoutePoints, currentDriverPolylineIndex]);
 
   // ── Status text logic ─────────────────────────────────────────────────────
   const statusText =
@@ -360,34 +414,25 @@ export default function RideActive() {
         showsMyLocationButton={false}
         showsUserLocation
       >
-        {/* Completed (grey/faded) portion of the route */}
-        {completedRoute.length > 1 && (
+        {/* Remaining route Polyline */}
+        {remainingRoute.length > 1 && (
           <Polyline
-            coordinates={completedRoute}
+            coordinates={remainingRoute}
             strokeWidth={4}
-            strokeColor="#D1D5DB"
+            strokeColor="#4B5563"
             lineCap="round"
             lineJoin="round"
           />
         )}
 
-        {/* Remaining (blue) portion of the route */}
-        {remainingRoute.length > 1 && (
-          <Polyline
-            coordinates={remainingRoute}
-            strokeWidth={4}
-            strokeColor="#0C225E"
-            lineCap="round"
-            lineJoin="round"
-          />
-        )}
+        {/* Completed route Polyline (hidden as requested) */}
 
         {/* Fallback: show full route if no split has happened yet and no completed portion */}
         {completedRoute.length <= 1 && remainingRoute.length <= 1 && allRoutePoints.length > 1 && (
           <Polyline
             coordinates={allRoutePoints}
             strokeWidth={4}
-            strokeColor="#0C225E"
+            strokeColor="#4B5563"
             lineCap="round"
             lineJoin="round"
           />
@@ -427,13 +472,19 @@ export default function RideActive() {
           );
         })}
 
-        {/* Shuttle Marker — real-time position from WebSocket */}
+        {/* Simple shuttle marker */}
         <Marker
           coordinate={driverCoord ?? { latitude: 24.8607, longitude: 67.0104 }}
           anchor={{ x: 0.5, y: 0.5 }}
+          flat={true}
+          rotation={busHeading}
+          style={{ zIndex: 100 }}
         >
-          <View style={styles.vehicleMarker}>
-            <MaterialCommunityIcons name="bus-side" size={22} color="white" />
+          <View style={{ transform: [{ rotate: `${busHeading}deg` }] }}>
+            <Image
+              source={require('../../../../assets/car_birdeye.png')}
+              style={{ width: 60, height: 60, resizeMode: 'contain' }}
+            />
           </View>
         </Marker>
       </MapView>

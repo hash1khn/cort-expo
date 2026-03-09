@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { View, Pressable, StyleSheet, Text as RNText } from 'react-native';
+import { View, Pressable, StyleSheet, Text as RNText, Image } from 'react-native';
 import MapView, { Marker, Polyline } from 'react-native-maps';
 import { Ionicons, MaterialCommunityIcons, Octicons } from '@expo/vector-icons';
 import BottomSheet, { BottomSheetView } from '@gorhom/bottom-sheet';
@@ -33,6 +33,26 @@ function findClosestIndex(points: LatLng[], target: LatLng): number {
     }
   }
   return bestIdx;
+}
+
+function calculateHeading(current: LatLng, next: LatLng) {
+  const PI = Math.PI;
+  const lat1 = (current.latitude * PI) / 180;
+  const long1 = (current.longitude * PI) / 180;
+  const lat2 = (next.latitude * PI) / 180;
+  const long2 = (next.longitude * PI) / 180;
+
+  const dLon = long2 - long1;
+
+  const y = Math.sin(dLon) * Math.cos(lat2);
+  const x =
+    Math.cos(lat1) * Math.sin(lat2) -
+    Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon);
+
+  let brng = Math.atan2(y, x);
+  brng = (brng * 180) / PI;
+  brng = (brng + 360) % 360;
+  return brng;
 }
 
 /**
@@ -86,6 +106,37 @@ export default function EmployeeHomeMap() {
     if (!routePoints.length) return null;
     const idx = Math.min(currentIndex, routePoints.length - 1);
     return routePoints[idx];
+  }, [routePoints, currentIndex]);
+
+  const lastHeadingRef = useRef(0);
+
+  const busHeading = useMemo(() => {
+    if (!routePoints.length || currentIndex >= routePoints.length - 1) {
+      return lastHeadingRef.current;
+    }
+    const current = routePoints[currentIndex];
+    // Look ahead a few points for a smoother trajectory
+    const lookAheadIndex = Math.min(currentIndex + 3, routePoints.length - 1);
+    const next = routePoints[lookAheadIndex];
+
+    if (current.latitude === next.latitude && current.longitude === next.longitude) {
+      return lastHeadingRef.current;
+    }
+
+    const heading = calculateHeading(current, next);
+
+    // Calculate the shortest difference between the new heading and last heading
+    let diff = heading - lastHeadingRef.current;
+    diff = ((diff + 540) % 360) - 180;
+
+    // Only update heading if the turn is significant
+    // This prevents micro-rotations (jitter) on slightly jagged straight lines
+    if (Math.abs(diff) > 2) {
+      lastHeadingRef.current = heading;
+      return heading;
+    }
+
+    return lastHeadingRef.current;
   }, [routePoints, currentIndex]);
 
   useEffect(() => {
@@ -283,22 +334,13 @@ export default function EmployeeHomeMap() {
           <Polyline
             coordinates={remainingRoute}
             strokeWidth={4}
-            strokeColor="#0C225E"
+            strokeColor="#4B5563"
             lineCap="round"
             lineJoin="round"
           />
         )}
 
-        {/* Completed route Polyline (faded) */}
-        {completedRoute.length > 1 && (
-          <Polyline
-            coordinates={completedRoute}
-            strokeWidth={4}
-            strokeColor="#D1D5DB"
-            lineCap="round"
-            lineJoin="round"
-          />
-        )}
+        {/* Completed route Polyline (hidden as requested) */}
 
         {/* Intermediate stops */}
         {stops.map((stop, index) => (
@@ -315,9 +357,18 @@ export default function EmployeeHomeMap() {
 
         {/* Simple shuttle marker */}
         {driverCoord && (
-          <Marker coordinate={driverCoord} anchor={{ x: 0.5, y: 0.5 }}>
-            <View style={styles.vehicleMarker}>
-              <MaterialCommunityIcons name="bus-side" size={22} color="white" />
+          <Marker
+            coordinate={driverCoord}
+            anchor={{ x: 0.5, y: 0.5 }}
+            flat={true}
+            rotation={busHeading}
+            style={{ zIndex: 100 }}
+          >
+            <View style={{ transform: [{ rotate: `${busHeading}deg` }] }}>
+              <Image
+                source={require('../../../../assets/car_birdeye.png')}
+                style={{ width: 60, height: 60, resizeMode: 'contain' }}
+              />
             </View>
           </Marker>
         )}
@@ -465,7 +516,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: '#0C225E',
+    backgroundColor: '#FF5A00',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 4,
@@ -563,7 +614,7 @@ const styles = StyleSheet.create({
   avatarInitials: {
     fontSize: 20,
     fontWeight: '800',
-    color: '#F1F443',
+    color: '#FF5A00',
   },
   captainRole: {
     fontSize: 10,
@@ -616,7 +667,7 @@ const styles = StyleSheet.create({
   avatarInitialsBig: {
     fontSize: 26,
     fontWeight: '800',
-    color: '#F1F443',
+    color: '#FF5A00',
   },
   captainNameBig: {
     fontSize: 22,
@@ -676,7 +727,7 @@ const styles = StyleSheet.create({
     marginTop: 12,
     paddingVertical: 12,
     borderRadius: 12,
-    backgroundColor: '#0C225E',
+    backgroundColor: '#FF5A00',
     alignItems: 'center',
     justifyContent: 'center',
   },

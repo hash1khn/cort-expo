@@ -401,11 +401,11 @@ export function ShuttleDriver() {
 
                 <Pressable
                   onPress={handleCliftonTowerPress}
-                  className="flex-row items-center justify-center gap-2 py-3 rounded-xl mt-4 bg-[#FF5A00] active:scale-[0.98]"
+                  className="flex-row items-center justify-center gap-2 py-2 rounded-xl mt-4 bg-[#FF5A00] active:scale-[0.98]"
                 >
                   <Ionicons name="play-sharp" size={20} color="#FFFFFF" />
                   <Text
-                    className="text-xl py-2 text-white"
+                    className="text-xl py-3 mt-1 text-white"
                     style={{ fontFamily: 'NotoNastaliqUrdu', fontWeight: '800' }}
                   >
                     {' '}
