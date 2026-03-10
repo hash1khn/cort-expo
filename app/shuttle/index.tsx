@@ -1,5 +1,5 @@
 import { ShuttleDriver } from '@/features/shuttle/screens/ShuttleDriver';
-import { DrawerScreenWrapper } from '@/features/shuttle/components/DrawerScreenWrapper';
+import { DrawerScreenWrapper } from '@/features/shared/components/DrawerScreenWrapper';
 
 export default function ShuttleHomeRoute() {
   return (

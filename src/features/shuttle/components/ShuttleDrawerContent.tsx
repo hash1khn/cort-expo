@@ -11,17 +11,29 @@ import { logout } from '@/features/auth/services';
 import { useLanguage } from '@/features/shared/context/LanguageContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { useRouter } from 'expo-router';
+import { ActivityIndicator } from 'react-native';
+
 export function ShuttleDrawerContent(props: DrawerContentComponentProps) {
   const dispatch = useAppDispatch();
   const user = useAppSelector((state) => state.auth.user);
   const { language, setLanguage } = useLanguage();
   const insets = useSafeAreaInsets();
+  const router = useRouter();
+
+  const [isLoggingOut, setIsLoggingOut] = React.useState(false);
 
   const handleLogout = async () => {
+    if (isLoggingOut) return;
+    setIsLoggingOut(true);
     try {
       await logout();
+    } catch (error) {
+      console.error('Logout failed:', error);
     } finally {
       dispatch(logOut());
+      setIsLoggingOut(false);
+      router.replace('/(auth)/get-started');
     }
   };
   const fullName = user?.full_name ?? 'Guest';
@@ -41,8 +53,8 @@ export function ShuttleDrawerContent(props: DrawerContentComponentProps) {
       style={{ backgroundColor: '#1F1F1D' }}
       showsVerticalScrollIndicator={false}
     >
-      <View className=" px-1 pb-6 flex-1 ">
-        <View className=" mt-4">
+      <View className=" px-5 pb-6 flex-1 ">
+        <View className=" mt-4 ">
           <View className="w-24 h-24 rounded-full bg-white/20 items-center justify-center">
             <Text className="text-white text-3xl font-bold">{initials}</Text>
           </View>
@@ -77,12 +89,19 @@ export function ShuttleDrawerContent(props: DrawerContentComponentProps) {
 
         <Pressable
           onPress={handleLogout}
-          className="mt-auto mb-16 pt-6 flex-row items-center  gap-2 py-3 rounded-xl "
+          className={`mt-auto mb-16 pt-6 flex-row items-center gap-2 py-3 rounded-xl ${isLoggingOut ? 'opacity-50' : ''}`}
           accessibilityRole="button"
           accessibilityLabel="Log out"
+          disabled={isLoggingOut}
         >
-          <MaterialCommunityIcons name="logout" size={20} color="#EF4444" />
-          <Text className="text-base font-semibold text-red-500">Logout</Text>
+          {isLoggingOut ? (
+            <ActivityIndicator size="small" color="#ef4444" />
+          ) : (
+            <MaterialCommunityIcons name="logout" size={20} color="#EF4444" />
+          )}
+          <Text className="text-base font-semibold text-red-500">
+            {isLoggingOut ? 'Logging out...' : 'Logout'}
+          </Text>
         </Pressable>
       </View>
     </DrawerContentScrollView>

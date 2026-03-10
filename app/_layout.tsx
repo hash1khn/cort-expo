@@ -98,10 +98,13 @@ function RootLayoutContent() {
   // Manage socket connection lifecycle (foreground/background)
   useSocketConnection(authToken);
 
-  // Safety net: if a ride started while the app was closed, navigate to it
   useAppLaunchRideCheck(user?.id, (rideData) => {
     if (rideData.role === 'driver') {
-      router.push('/shuttle/ride');
+      if (rideData.direction === 'EVENING') {
+        router.push('/shuttle/return');
+      } else {
+        router.push('/shuttle/ride');
+      }
     } else {
       router.push({ pathname: '/employee/ride-active', params: { tripId: rideData.tripId } });
     }

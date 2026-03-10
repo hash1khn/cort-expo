@@ -47,7 +47,7 @@ export function EmployeeDrawerContent(props: DrawerContentComponentProps) {
             style={{ backgroundColor: '#1F1F1D' }}
             showsVerticalScrollIndicator={false}
         >
-            <View className="px-6   flex-1 w-full">
+            <View className="px-4   flex-1 w-full">
                 {/* --- Profile Section --- */}
                 <View className="mt-4">
                     {/* Profile Image (Placeholder logic) */}
@@ -77,24 +77,24 @@ export function EmployeeDrawerContent(props: DrawerContentComponentProps) {
                         onPress={() => props.navigation.navigate('index')}
                         className="py-3 mb-2 flex-row items-center"
                     >
-                        <Feather name="home" size={24} color="white" />
-                        <Text className="text-white text-[19px] font-bold ml-4">Home</Text>
+                        <Feather name="home" size={20} color="white" />
+                        <Text className="text-white text-xl font-bold ml-4">Home</Text>
                     </Pressable>
 
                     <Pressable
                         onPress={() => props.navigation.navigate('rides')}
                         className="py-3 mb-2 flex-row items-center"
                     >
-                        <MaterialIcons name="history-toggle-off" size={24} color="white" />
-                        <Text className="text-white text-[19px] font-bold ml-4">History</Text>
+                        <MaterialIcons name="history-toggle-off" size={20} color="white" />
+                        <Text className="text-white text-xl font-bold ml-4">History</Text>
                     </Pressable>
 
                     <Pressable
                         onPress={() => { }}
                         className="py-3 mb-2 flex-row items-center"
                     >
-                        <MaterialIcons name="report-gmailerrorred" size={24} color="white" />
-                        <Text className="text-white text-[19px] font-bold ml-4">Report a problem</Text>
+                        <MaterialIcons name="report-gmailerrorred" size={20} color="white" />
+                        <Text className="text-white text-xl font-bold ml-4">Report a problem</Text>
                     </Pressable>
                 </View>
 
@@ -111,7 +111,7 @@ export function EmployeeDrawerContent(props: DrawerContentComponentProps) {
                         {isLoggingOut ? (
                             <ActivityIndicator size="small" color="#ef4444" />
                         ) : (
-                            <MaterialCommunityIcons name="logout" color="#ef4444" size={24} />
+                            <MaterialCommunityIcons name="logout" color="#ef4444" size={20} />
                         )}
                         <Text className="text-red-500 text-lg font-bold ml-3">
                             {isLoggingOut ? 'Logging out...' : 'Log out'}

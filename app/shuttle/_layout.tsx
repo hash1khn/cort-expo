@@ -12,7 +12,7 @@ export default function ShuttleLayout() {
         <Drawer
           screenOptions={{
             headerShown: false,
-            drawerPosition: 'right',
+            drawerPosition: 'left',
             drawerType: 'back', // the screen itself moves, drawer sits at back
             overlayColor: 'transparent', // remove dark overlay on home screen
             sceneStyle: { backgroundColor: 'transparent' }, // so we see the #1F1F1D base underneath
@@ -23,8 +23,6 @@ export default function ShuttleLayout() {
           <Drawer.Screen name="index" options={hideDrawerItem} />
           <Drawer.Screen name="ride" options={hideDrawerItem} />
           <Drawer.Screen name="return" options={hideDrawerItem} />
-          <Drawer.Screen name="profile" options={hideDrawerItem} />
-          <Drawer.Screen name="settings" options={hideDrawerItem} />
         </Drawer>
       </View>
     </LanguageProvider>

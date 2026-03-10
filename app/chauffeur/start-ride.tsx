@@ -1,5 +1,10 @@
 import { StartRideScreen } from '@/features/chauffeur/screens/StartRideScreen';
+import { DrawerScreenWrapper } from '@/features/shared/components/DrawerScreenWrapper';
 
 export default function StartRideRoute() {
-  return <StartRideScreen />;
+  return (
+    <DrawerScreenWrapper>
+      <StartRideScreen />
+    </DrawerScreenWrapper>
+  );
 }

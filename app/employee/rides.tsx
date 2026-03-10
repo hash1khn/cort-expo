@@ -1,12 +1,12 @@
 import React from 'react';
 import EmployeeRides from '@/features/employee/screens/EmployeeRides';
-import { EmployeeDrawerScreenWrapper } from '@/features/employee/components/EmployeeDrawerScreenWrapper';
+import { DrawerScreenWrapper } from '@/features/shared/components/DrawerScreenWrapper';
 
 const Rides = () => {
   return (
-    <EmployeeDrawerScreenWrapper>
+    <DrawerScreenWrapper>
       <EmployeeRides />
-    </EmployeeDrawerScreenWrapper>
+    </DrawerScreenWrapper>
   );
 };
 

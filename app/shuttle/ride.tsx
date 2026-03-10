@@ -1,5 +1,5 @@
 import RideInProgress from '@/features/shuttle/screens/RideInProgress';
-import { DrawerScreenWrapper } from '@/features/shuttle/components/DrawerScreenWrapper';
+import { DrawerScreenWrapper } from '@/features/shared/components/DrawerScreenWrapper';
 
 export default function Ride() {
   return (
