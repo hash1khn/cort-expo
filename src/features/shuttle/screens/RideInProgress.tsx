@@ -28,6 +28,7 @@ import {
   useMarkPassengerAbsentMutation,
   useStartTripMutation,
   useArriveAtStopMutation,
+  useProceedFromStopMutation,
   useCompleteTripMutation,
   TripEmployee,
   shuttleApi,
@@ -68,6 +69,7 @@ export default function RideInProgress() {
     nextStopIndex,
     isLastStop,
     rideStarted,
+    isAtStop,
     isLoading: isTripsLoading,
   } = useActiveTrip();
 
@@ -170,6 +172,7 @@ export default function RideInProgress() {
     useMarkPassengerAbsentMutation();
   const [startTrip, { isLoading: isStartingTrip }] = useStartTripMutation();
   const [arriveAtStop, { isLoading: isArrivingAtStop }] = useArriveAtStopMutation();
+  const [proceedFromStop, { isLoading: isProceeding }] = useProceedFromStopMutation();
   const [completeTrip, { isLoading: isCompletingTrip }] = useCompleteTripMutation();
 
   const isActionLoading = isStartingTrip || isArrivingAtStop || isCompletingTrip;
@@ -198,6 +201,26 @@ export default function RideInProgress() {
 
   const arrivedStopSheetRef = useRef<BottomSheet>(null);
   const arrivedStopSnapPoints = useMemo(() => ['60%'], []);
+
+  // CRASH RECOVERY: If app is relaunched while driver was at a stop (AT_STOP),
+  // automatically restore the attendance bottom sheet so they can continue.
+  const hasAutoOpenedRef = useRef(false);
+  useEffect(() => {
+    if (
+      isAtStop &&
+      activeTrip?.current_stop_id != null &&
+      !hasAutoOpenedRef.current &&
+      !isTripsLoading
+    ) {
+      hasAutoOpenedRef.current = true;
+      setAttendanceStopId(activeTrip.current_stop_id);
+      // Small delay to let the BottomSheet mount before snapping
+      const timer = setTimeout(() => {
+        arrivedStopSheetRef.current?.snapToIndex(0);
+      }, 400);
+      return () => clearTimeout(timer);
+    }
+  }, [isAtStop, activeTrip?.current_stop_id, isTripsLoading]);
 
   // Per-employee loading state for inline tick/cross actions
   const [employeeLoadingMap, setEmployeeLoadingMap] = useState<Record<string, EmployeeLoadingAction>>({});
@@ -697,7 +720,7 @@ export default function RideInProgress() {
               })}
             </View>
             <Pressable
-              onPress={() => {
+              onPress={async () => {
                 // Validate all employees at this stop have been marked
                 const unmarked = employeesAtCurrentStop.filter(
                   (e) => !driverMarkedIds.has(e.id) && !selfScannedIds.has(e.id),
@@ -712,13 +735,26 @@ export default function RideInProgress() {
                   );
                   return;
                 }
+
+                // Persist EN_ROUTE on backend BEFORE closing the sheet.
+                // This ensures crash recovery won't re-show this stop's sheet.
+                if (activeTrip) {
+                  try {
+                    await proceedFromStop({ tripId: activeTrip.id }).unwrap();
+                  } catch {
+                    // Non-fatal: optimistic cache update already flipped to EN_ROUTE.
+                  }
+                }
+
                 arrivedStopSheetRef.current?.close();
                 // Reset frozen stop so when it opens later it uses the new one
                 setAttendanceStopId(null);
 
-                if (nextStopIndex !== null && stops.length > nextStopIndex) {
-                  // Open map for the next actual traveling stop
-                  openInMaps(stops[nextStopIndex]);
+                // Find the next stop AFTER the one we just attended.
+                // When isAtStop is true, nextStopAfterCurrent holds the correct next one.
+                const nextDrivingStop = nextStopAfterCurrent;
+                if (nextDrivingStop) {
+                  openInMaps(nextDrivingStop);
                 }
               }}
               className="bg-[#FF5A00] flex-row items-center justify-center py-6 rounded-xl active:opacity-90 disabled:opacity-70"

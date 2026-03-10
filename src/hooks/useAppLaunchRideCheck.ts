@@ -9,13 +9,10 @@ interface ActiveRideData {
     driverName: string | null;
     vehicleInfo: string | null;
     currentStopId: number | null;
+    direction: string | null;
 }
 
-/**
- * One-shot check on mount: fetches the active trip for the given user.
- * Calls onActiveRideFound if a trip is in progress.
- * Safety net for when the app was closed when the driver started the trip.
- */
+
 export function useAppLaunchRideCheck(
     userId: string | null | undefined,
     onActiveRideFound: (rideData: ActiveRideData) => void,

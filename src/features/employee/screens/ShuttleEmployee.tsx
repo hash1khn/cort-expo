@@ -9,6 +9,7 @@ import {
   TextInput,
   ImageBackground,
   ScrollView,
+  Image,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AntDesign, Entypo, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -58,6 +59,7 @@ import {
 } from '../store';
 import { useRideStartListener } from '../../../hooks/useRideStartListener';
 import FlipCard from '../components/FlipCard';
+import { AppHeader } from '../../shared/components/AppHeader';
 
 const PROFILE_SHEET_SNAP = ['65%'];
 const DROPOFF_SHEET_SNAP = ['45%'];
@@ -277,32 +279,13 @@ export default function NewHome() {
 
   return (
     <View style={{ paddingTop: insets.top }} className="bg-[#FFFF] flex-1">
+      <AppHeader />
+
       <ScrollView
         style={{ flex: 1 }}
         contentContainerStyle={{ paddingBottom: 24, paddingHorizontal: 20 }}
         showsVerticalScrollIndicator={false}
       >
-        <View className="flex-row justify-between items-center my-4">
-          <View className="flex-1">
-            <Pressable onPress={showHomeToast} hitSlop={8}>
-              <Text className="text-black text-4xl font-bold">
-                {/* Hey there, {firstName ? `${firstName}` : ' Muhammad'} */}
-                Home
-              </Text>
-            </Pressable>
-
-            {/* <Text className="text-text-muted text-xl mt-1">
-              Where do you want to go?
-            </Text> */}
-          </View>
-          <Pressable
-            onPress={handleOpenDrawer}
-            className="w-12 h-12 rounded-full items-center justify-center ml-3"
-          >
-            <AntDesign name="menu" size={22} color="black" />
-          </Pressable>
-        </View>
-
         {/* Status bar: purple card */}
         {/* <View className="px-4 mt-6">
           <RideStatusBar
@@ -312,7 +295,6 @@ export default function NewHome() {
           />
         </View> */}
         <FlipCard />
-        {/* <FlipCard /> */}
 
         {/* Chauffeur / Outstation card - opens dropoff sheet when dev outstation is enabled */}
         {/* <View className="px-4 mt-4">
@@ -398,34 +380,7 @@ export default function NewHome() {
             </View>
           </Pressable>
           <View className="gap-4 flex-1">
-            {/* <RideHistoryCardNew
-              pickup="Clifton"
-              destination="Tower"
-              status="completed"
-              timeOfRide="Today, 08:30 AM"
-              rideType="shuttle"
-              description="Sajjad, White Toyota Hiace"
-              onPress={() =>
-                router.push({
-                  pathname: '/employee/ride-details',
-                  params: { rideId: 'PO123RT' },
-                })
-              }
-            />
-            <RideHistoryCardNew
-              pickup="Tower"
-              destination="Clifton"
-              status="missed"
-              timeOfRide="Yesterday, 04:15 PM"
-              rideType="chauffeur"
-              description="Nadir, Black Toyota Camry"
-              onPress={() =>
-                router.push({
-                  pathname: '/employee/ride-details',
-                  params: { rideId: 'RO213KS' },
-                })
-              }
-            /> */}
+
             <CompactRideHistoryCard
               destination="Tower"
               date="Yesterday"

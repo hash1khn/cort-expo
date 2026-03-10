@@ -10,6 +10,7 @@ import {
   useLazyGetTripEmployeesQuery,
   ShuttleTrip,
 } from '../services/shuttleApi';
+import { AppHeader } from '../../shared/components/AppHeader';
 
 const ROUTE_DETAILS_LABELS = {
   en: {
@@ -212,11 +213,8 @@ export function ShuttleDriver() {
   if (isTodayTripLoading) {
     return (
       <SafeAreaView className="flex-1 bg-[#FFFFFF]" edges={['top']}>
+        <AppHeader />
         <ScrollView className="flex-1 px-5" showsVerticalScrollIndicator={false}>
-          {/* Header */}
-          <View className="flex-row items-center justify-end py-0">
-            <View className="w-10 h-10 rounded-full bg-[#EDEDEB]" />
-          </View>
 
           {/* Title skeleton */}
           <View className="mb-6 mt-4">
@@ -285,17 +283,8 @@ export function ShuttleDriver() {
 
   return (
     <SafeAreaView className="flex-1 bg-[#FFFFFF]" edges={['top']}>
+      <AppHeader />
       <ScrollView className="flex-1 px-5" showsVerticalScrollIndicator={false}>
-        {/* Header */}
-        <View className="flex-row items-center justify-end py-0">
-          <Pressable
-            hitSlop={12}
-            onPress={openDrawer}
-            className="p-2 -mr-2 rounded-full bg-[#EDEDEB]"
-          >
-            <Ionicons name="person-circle-outline" size={32} color="#000000" />
-          </Pressable>
-        </View>
 
         {/* Title Section */}
         <View className="mb-6">

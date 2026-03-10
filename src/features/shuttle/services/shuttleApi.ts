@@ -41,6 +41,7 @@ export type ShuttleTrip = {
   completed_at?: string | null;
   current_stop_id?: number | null;
   current_stop_arrived_at?: string | null;
+  current_stop_status?: 'AT_STOP' | 'EN_ROUTE' | null;
   routes?: Route | null;
 };
 
@@ -346,11 +347,38 @@ export const shuttleApi = baseApi.injectEndpoints({
                 trip.current_stop_id = data.current_stop_id ?? trip.current_stop_id;
                 trip.current_stop_arrived_at =
                   data.current_stop_arrived_at ?? trip.current_stop_arrived_at;
+                trip.current_stop_status = 'AT_STOP';
               }
             }),
           );
         } catch {
           // Cache not patched on failure
+        }
+      },
+    }),
+    proceedFromStop: builder.mutation<
+      ShuttleTrip,
+      { tripId: number }
+    >({
+      query: ({ tripId }) => ({
+        url: `/shuttle-trips/${tripId}/proceed-stop`,
+        method: 'PATCH',
+      }),
+      async onQueryStarted(
+        { tripId },
+        { dispatch, queryFulfilled },
+      ) {
+        // Optimistic update: immediately reflect EN_ROUTE in cache
+        const patch = dispatch(
+          shuttleApi.util.updateQueryData('getTodayTrip', undefined, (draft) => {
+            const trip = draft.find((t) => t.id === tripId);
+            if (trip) trip.current_stop_status = 'EN_ROUTE';
+          }),
+        );
+        try {
+          await queryFulfilled;
+        } catch {
+          patch.undo();
         }
       },
     }),
@@ -397,6 +425,7 @@ export const {
   useSubmitReturnAttendanceMutation,
   useStartTripMutation,
   useArriveAtStopMutation,
+  useProceedFromStopMutation,
   useCompleteTripMutation,
 } = shuttleApi;
 

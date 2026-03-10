@@ -5,6 +5,7 @@ import { Feather, Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useChauffeurStore, type ChauffeurBooking } from '../store';
 import { fontFamily } from '@/core/theme';
+import { AppHeader } from '../../shared/components/AppHeader';
 
 const Text = (props: React.ComponentProps<typeof RNText>) => {
   return <RNText {...props} style={[{ fontFamily }, props.style]} />;
@@ -107,16 +108,8 @@ export function ChauffeurHomeScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-[#FFFFFF]" edges={['top']}>
+      <AppHeader />
       <ScrollView className="flex-1 px-5" showsVerticalScrollIndicator={false}>
-        <View className="flex-row items-center justify-end py-0">
-          <Pressable
-            hitSlop={12}
-            onPress={() => router.push('/chauffeur/profile')}
-            className="p-2 -mr-2 rounded-full bg-[#EDEDEB]"
-          >
-            <Ionicons name="person-circle-outline" size={32} color="#000000" />
-          </Pressable>
-        </View>
 
         <View className="mb-6">
           <Text className="text-[34px] font-bold text-black">My Bookings</Text>

@@ -7,6 +7,7 @@ import { BottomSheetBackdrop, BottomSheetModal, BottomSheetView } from '@gorhom/
 import { SlideToStartTrip } from '../components';
 import {
   useGetTripEmployeesQuery,
+  useGetTripAttendanceQuery,
   useSubmitReturnAttendanceMutation,
   useCompleteTripMutation,
   useStartTripMutation,
@@ -63,6 +64,10 @@ export default function Return() {
     tripId as number,
     { skip: !tripId },
   );
+  const { data: tripAttendance = [], isLoading: isAttendanceLoading } = useGetTripAttendanceQuery(
+    tripId as number,
+    { skip: !tripId },
+  );
 
   const tripEmployeesRaw = realTripEmployeesRaw;
   const [submitReturnAttendance, { isLoading: isSubmitting }] = useSubmitReturnAttendanceMutation();
@@ -75,21 +80,64 @@ export default function Return() {
   const [employees, setEmployees] = useState<ReturnEmployee[]>([]);
   const [employeeForAbsent, setEmployeeForAbsent] = useState<ReturnEmployee | null>(null);
   const [sliderKey, setSliderKey] = useState(0);
+
+  // Derive returnTripStarted from the persisted trip status so that on crash
+  // recovery the screen immediately shows "Complete Trip" (not "Begin ride").
+  const tripAlreadyStarted =
+    activeTrip?.status === 'STARTED' || activeTrip?.status === 'IN_PROGRESS';
   const [returnTripStarted, setReturnTripStarted] = useState(false);
+
+  // Sync once the trip data arrives (covers the crash-recovery path where the
+  // component mounts before the RTK Query result is available).
+  useEffect(() => {
+    if (tripAlreadyStarted) {
+      setReturnTripStarted(true);
+    }
+  }, [tripAlreadyStarted]);
 
   useEffect(() => {
     if (!tripEmployeesRaw.length) return;
+    // Wait for attendance logs if the trip is already started
+    if (tripAlreadyStarted && isAttendanceLoading) return;
+
     setEmployees((prev) => {
       // Initialize only once when we get data for this trip
       if (prev.length > 0) return prev;
-      return tripEmployeesRaw.map((emp: TripEmployee) => ({
-        id: emp.id,
-        name: emp.fullName,
-        number: emp.phone ?? '',
-        status: null,
-      }));
+
+      const attendanceMap = new Map();
+      if (tripAlreadyStarted) {
+        tripAttendance.forEach((log) => {
+          attendanceMap.set(log.employeeId, log);
+        });
+      }
+
+      return tripEmployeesRaw.map((emp: TripEmployee) => {
+        let status: EmployeeStatus = null;
+
+        if (tripAlreadyStarted) {
+          const log = attendanceMap.get(emp.id);
+          if (log) {
+            const normalized = log.status?.toUpperCase();
+            if (normalized === 'PRESENT' || normalized === 'BOARDED') {
+              status = 'present';
+            } else if (normalized === 'ABSENT') {
+              status = 'absent';
+            }
+          } else {
+            // If a trip started but an employee has no log, they are absent by default
+            status = 'absent';
+          }
+        }
+
+        return {
+          id: emp.id,
+          name: emp.fullName,
+          number: emp.phone ?? '',
+          status,
+        };
+      });
     });
-  }, [tripEmployeesRaw]);
+  }, [tripEmployeesRaw, tripAlreadyStarted, tripAttendance, isAttendanceLoading]);
 
   const openStopsInMaps = useCallback((tripStops: Stop[]) => {
     if (!tripStops.length) return;
@@ -235,6 +283,50 @@ export default function Return() {
   const handleDismissAbsentSheet = useCallback(() => {
     setEmployeeForAbsent(null);
   }, []);
+
+  // We should also suspend the screen UI while attendance is loading on crash recovery
+  if (isTripsLoading || isEmployeesLoading || (tripAlreadyStarted && isAttendanceLoading)) {
+    return (
+      <SafeAreaView className="flex-1 bg-[#FFFFFF]" edges={['top']}>
+        <View className="flex-row items-center gap-2 ml-[-4px] px-6 mb-3">
+          <View className="w-6 h-6 rounded-full bg-[#EDEDEB]" />
+        </View>
+
+        <ScrollView className="flex-1 px-6" showsVerticalScrollIndicator={false}>
+          {/* Title skeleton */}
+          <View className="mb-6 mt-2">
+            <View className="h-10 w-48 rounded-2xl bg-[#EDEDEB] mb-2" />
+          </View>
+
+          {/* Section header skeleton */}
+          <View className="mb-6">
+            <View className="h-6 w-32 rounded-xl bg-[#EDEDEB] mb-2" />
+            <View className="h-4 w-64 rounded-xl bg-[#EDEDEB] mb-6" />
+
+            {/* Employee rows skeleton */}
+            {[1, 2, 3, 4, 5].map((i) => (
+              <View key={i} className="flex-row items-center py-4 border-b border-black/5">
+                <View className="w-14 h-14 rounded-full bg-[#EDEDEB] mr-3" />
+                <View className="flex-1 gap-2">
+                  <View className="h-4 w-32 rounded-lg bg-[#EDEDEB]" />
+                  <View className="h-3 w-24 rounded-lg bg-[#EDEDEB]" />
+                </View>
+                <View className="flex-row gap-3">
+                  <View className="w-[42px] h-[42px] rounded-full bg-[#EDEDEB]" />
+                  <View className="w-[42px] h-[42px] rounded-full bg-[#EDEDEB]" />
+                </View>
+              </View>
+            ))}
+          </View>
+        </ScrollView>
+
+        {/* Bottom button skeleton */}
+        <View className="absolute bottom-16 left-5 right-5">
+          <View className="h-[60px] w-full rounded-xl bg-[#EDEDEB]" />
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView className="flex-1 bg-[#FFFFFF]" edges={['top']}>

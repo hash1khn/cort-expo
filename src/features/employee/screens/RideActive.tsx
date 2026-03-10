@@ -102,24 +102,12 @@ export default function RideActive() {
   }>();
 
   const activeTripId = tripIdParam ? Number(tripIdParam) : 0;
-  const myPickupStopId = myPickupStopIdParam ? Number(myPickupStopIdParam) : null;
-
-  // Derive initials from driverName param
-  const driverName = driverNameParam ?? 'Driver';
-  const driverPhone = driverPhoneParam ?? '';
-  const vehicleDisplay = vehicleDisplayParam ?? '—';
-  const vehiclePlate = vehiclePlateParam ?? '—';
-  const driverInitials = driverName
-    .split(' ')
-    .map((n) => n[0] ?? '')
-    .join('')
-    .slice(0, 2)
-    .toUpperCase();
+  // Note: myPickupStopId is derived below from the API (crash-resilient) with this as fallback
 
   // ── Fetch trip data to get route stops ───────────────────────────────────
   const companyId = (user?.company_id ?? 0) as number;
   const employeeId = (user?.id ?? '') as string;
-  const { data: shuttleTrips = [] } = useGetShuttleTripsForEmployeeQuery(
+  const { data: shuttleTrips = [], isLoading: isTripsLoading } = useGetShuttleTripsForEmployeeQuery(
     { companyId, employeeId },
     { skip: !companyId || !employeeId },
   );
@@ -127,6 +115,29 @@ export default function RideActive() {
     () => shuttleTrips.find((t) => t.id === activeTripId),
     [shuttleTrips, activeTripId],
   );
+
+  // ── Derive display data from API (source of truth), with route params as fast-path fallback ──
+  const apiDriverName = activeTrip?.users?.full_name ?? null;
+  const apiDriverPhone = activeTrip?.users?.phone ?? null;
+  const apiVehicle = activeTrip?.routes?.vehicles;
+  const apiVehicleDisplay = apiVehicle ? `${apiVehicle.make} ${apiVehicle.model}`.trim() : null;
+  const apiVehiclePlate = apiVehicle?.plate_number ?? null;
+
+  const driverName = apiDriverName ?? driverNameParam ?? 'Driver';
+  const driverPhone = apiDriverPhone ?? driverPhoneParam ?? '';
+  const vehicleDisplay = apiVehicleDisplay ?? vehicleDisplayParam ?? '—';
+  const vehiclePlate = apiVehiclePlate ?? vehiclePlateParam ?? '—';
+  const driverInitials = driverName
+    .split(' ')
+    .map((n) => n[0] ?? '')
+    .join('')
+    .slice(0, 2)
+    .toUpperCase();
+
+  // ── myPickupStopId: prefer API (crash resilient) over route param ──────────
+  const apiPickupStopId = activeTrip?.my_pickup_stop_id ?? null;
+  const myPickupStopId = apiPickupStopId ?? (myPickupStopIdParam ? Number(myPickupStopIdParam) : null);
+
   /** Route stops for this trip, in sequence order, with valid coordinates */
   const routeStops = useMemo(
     () =>
@@ -138,13 +149,14 @@ export default function RideActive() {
 
   // ── Real-time state ──────────────────────────────────────────────────────
   const [driverCoord, setDriverCoord] = useState<LatLng | null>(null);
-  const [polylineOrigin, setPolylineOrigin] = useState<{ lat: number; lng: number } | undefined>(undefined);
 
   /**
-   * currentStopId: the stop ID the driver has most recently arrived at.
-   * Set by the `stop:arrived` WebSocket event.
+   * socketStopId: the stop ID most recently delivered by the socket.
+   * Null until the driver emits a STOP_ARRIVED event after this screen mounts.
+   * currentStopId derives from this first, then falls back to the API snapshot.
    */
-  const [currentStopId, setCurrentStopId] = useState<number | null>(null);
+  const [socketStopId, setSocketStopId] = useState<number | null>(null);
+  const currentStopId = socketStopId ?? activeTrip?.current_stop_id ?? null;
 
   /** True once the driver has arrived at THIS employee's pickup stop */
   const captainIsHere =
@@ -154,9 +166,9 @@ export default function RideActive() {
   const [scanBoarding, { isLoading: isBoardingLoading, isSuccess: isBoardingSuccess }] =
     useScanBoardingMutation();
 
-  // ── Polyline query (re-fetches when driver moves ~50m) ──────────────────
+  // ── Polyline query (fetched once) ──────────────────
   const { data: polylineData } = useGetShuttlePolylineQuery(
-    { tripId: activeTripId, driverLat: polylineOrigin?.lat, driverLng: polylineOrigin?.lng },
+    { tripId: activeTripId },
     { skip: activeTripId === 0 },
   );
 
@@ -164,24 +176,13 @@ export default function RideActive() {
   const handleLocationUpdate = useCallback(
     (data: { lat: number; lng: number }) => {
       setDriverCoord({ latitude: data.lat, longitude: data.lng });
-      // Re-fetch polyline with updated driver position; throttled by ~50m threshold
-      setPolylineOrigin((prev) => {
-        if (!prev) return { lat: data.lat, lng: data.lng };
-        const deltaLat = Math.abs(data.lat - prev.lat);
-        const deltaLng = Math.abs(data.lng - prev.lng);
-        // ~50m threshold (0.00045 degrees ≈ 50m)
-        if (deltaLat > 0.00045 || deltaLng > 0.00045) {
-          return { lat: data.lat, lng: data.lng };
-        }
-        return prev;
-      });
     },
     [],
   );
 
   const handleStopArrived = useCallback(
     (data: { stopId: number; stopName: string; arrivedAt: string }) => {
-      setCurrentStopId(data.stopId);
+      setSocketStopId(data.stopId);
     },
     [],
   );
@@ -202,19 +203,38 @@ export default function RideActive() {
 
   // ── Bottom Sheet refs & animation ─────────────────────────────────────────
   const bottomSheetRef = useRef<BottomSheet>(null);
+  const mapRef = useRef<MapView>(null);
   const snapPoints = useMemo(() => ['40%', '55%'], []);
   const animatedIndex = useSharedValue(0);
 
-  // ── Bottom Sheet Snap Logic ───────────────────────────────────────────────
-  // Snap to index 1 only when the driver arrives at THIS employee's stop.
-  // Snap back to 0 when the driver moves to any other stop.
+  // Animate map to the driver's position as soon as the first coordinate arrives.
+  // This fixes the stuck-at-Karachi issue with initialRegion being a one-time prop.
+  const hasAnimatedToDriver = useRef(false);
   useEffect(() => {
+    if (hasAnimatedToDriver.current || !driverCoord) return;
+    hasAnimatedToDriver.current = true;
+    mapRef.current?.animateToRegion(
+      {
+        latitude: driverCoord.latitude,
+        longitude: driverCoord.longitude,
+        latitudeDelta: 0.02,
+        longitudeDelta: 0.02,
+      },
+      600,
+    );
+  }, [driverCoord]);
+
+  // ── Bottom Sheet Snap Logic ───────────────────────────────────────────────
+  // Only snap once RTK Query data has resolved — prevents blank/premature sheet states.
+  // Snap to index 1 when the driver arrives at THIS employee's stop, back to 0 otherwise.
+  useEffect(() => {
+    if (isTripsLoading) return; // wait for data before triggering any snap
     if (captainIsHere) {
       bottomSheetRef.current?.snapToIndex(1);
     } else {
       bottomSheetRef.current?.snapToIndex(0);
     }
-  }, [captainIsHere]);
+  }, [captainIsHere, isTripsLoading]);
 
   // ── Animated profile styles ───────────────────────────────────────────────
   const smallProfileStyle = useAnimatedStyle(() => {
@@ -401,12 +421,13 @@ export default function RideActive() {
 
   return (
     <View style={styles.root}>
-      {/* Map View */}
+      {/* Map View — uses mapRef to animate to driver position when first coord arrives */}
       <MapView
+        ref={mapRef}
         style={styles.map}
         initialRegion={{
-          latitude: driverCoord?.latitude ?? 24.8607,
-          longitude: driverCoord?.longitude ?? 67.0104,
+          latitude: 24.8607,
+          longitude: 67.0104,
           latitudeDelta: 0.02,
           longitudeDelta: 0.02,
         }}
@@ -472,7 +493,7 @@ export default function RideActive() {
           );
         })}
 
-        {/* Simple shuttle marker */}
+        {/* Shuttle marker — flat with rotation on the Marker itself (no inner View transform) */}
         <Marker
           coordinate={driverCoord ?? { latitude: 24.8607, longitude: 67.0104 }}
           anchor={{ x: 0.5, y: 0.5 }}
@@ -480,12 +501,10 @@ export default function RideActive() {
           rotation={busHeading}
           style={{ zIndex: 100 }}
         >
-          <View style={{ transform: [{ rotate: `${busHeading}deg` }] }}>
-            <Image
-              source={require('../../../../assets/car_birdeye.png')}
-              style={{ width: 60, height: 60, resizeMode: 'contain' }}
-            />
-          </View>
+          <Image
+            source={require('../../../../assets/car_birdeye.png')}
+            style={{ width: 60, height: 60, resizeMode: 'contain' }}
+          />
         </Marker>
       </MapView>
 

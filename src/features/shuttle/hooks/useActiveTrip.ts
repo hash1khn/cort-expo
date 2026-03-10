@@ -46,9 +46,11 @@ export function useActiveTrip() {
   const activeTrip: ShuttleTrip | null = todayTrips.length > 0 ? todayTrips[0] : null;
   const tripId = activeTrip?.id;
 
-  const { stops, currentStop, nextStopAfterCurrent, nextStopIndex, isLastStop, rideStarted } = useMemo(() => {
+  const { stops, currentStop, nextStopAfterCurrent, nextStopIndex, isLastStop, rideStarted, isAtStop } = useMemo(() => {
     const stops = buildStops(activeTrip);
     const started = !!activeTrip?.started_at;
+    const stopStatus = activeTrip?.current_stop_status ?? null;
+
     if (!stops.length) {
       return {
         stops,
@@ -57,16 +59,39 @@ export function useActiveTrip() {
         nextStopIndex: 0,
         isLastStop: false,
         rideStarted: started,
+        isAtStop: false,
       };
     }
+
     const currentStopId = activeTrip?.current_stop_id ?? null;
     const indexOfCurrent = currentStopId == null ? -1 : stops.findIndex((s) => s.id === currentStopId);
-    const nextIndex = indexOfCurrent + 1;
-    const nextStopIndex = Math.min(nextIndex, stops.length - 1);
-    const isLastStop = indexOfCurrent === stops.length - 1 && indexOfCurrent >= 0;
-    const currentStop = stops[nextStopIndex] ?? null;
-    const nextStopAfterCurrent =
-      nextStopIndex + 1 < stops.length ? stops[nextStopIndex + 1] ?? null : null;
+
+    // AT_STOP means the driver is physically at current_stop_id, attendance sheet should be shown.
+    // EN_ROUTE or null means the driver is driving to the next stop after current_stop_id.
+    const driverIsAtStop = stopStatus === 'AT_STOP';
+
+    let currentStop: Stop | null;
+    let nextStopIndex: number;
+    let nextStopAfterCurrent: Stop | null;
+    let isLastStop: boolean;
+
+    if (driverIsAtStop && indexOfCurrent >= 0) {
+      // Show the stop the driver has arrived at
+      currentStop = stops[indexOfCurrent] ?? null;
+      nextStopIndex = indexOfCurrent;
+      isLastStop = indexOfCurrent === stops.length - 1;
+      nextStopAfterCurrent =
+        indexOfCurrent + 1 < stops.length ? stops[indexOfCurrent + 1] ?? null : null;
+    } else {
+      // Show the next stop to drive to (original logic)
+      const nextIndex = indexOfCurrent + 1;
+      nextStopIndex = Math.min(nextIndex, stops.length - 1);
+      isLastStop = indexOfCurrent === stops.length - 1 && indexOfCurrent >= 0;
+      currentStop = stops[nextStopIndex] ?? null;
+      nextStopAfterCurrent =
+        nextStopIndex + 1 < stops.length ? stops[nextStopIndex + 1] ?? null : null;
+    }
+
     return {
       stops,
       currentStop,
@@ -74,6 +99,7 @@ export function useActiveTrip() {
       nextStopIndex,
       isLastStop,
       rideStarted: started,
+      isAtStop: driverIsAtStop,
     };
   }, [activeTrip]);
 
@@ -86,6 +112,7 @@ export function useActiveTrip() {
     nextStopIndex,
     isLastStop,
     rideStarted,
+    isAtStop,
     isLoading,
   };
 }
