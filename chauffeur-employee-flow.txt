@@ -1,0 +1,83 @@
+Single day trip:incity:
+First we will need an api to start the ride which will start time and change status to otw.this will be for the driver(status will change to OTW)
+
+Then when the driver reaches the client he will change the status to ARRIVED
+
+
+When the client is onboarded the status is changed to in progress
+
+
+When the driver  drops off the client the status will be changed to dropped off
+
+
+When he reaches his home he will end the ride and the billing calculation Weill be done at this point,he can add toll/parking expense while ending ride, and calculate total hours in daily logs by calauatin it from Start time and end time if greater than 1 day count as full daywhich will be make is_full_day true.
+
+
+
+Incity multi days:
+First day flow:First we will need an api to start the ride which will start time and change status to otw. in the chauffeur bookings table and in the chauffeur daily logs table a row will be entered which will fill the required info here the status will be started initially STARTED when driver is leaving from his home and start time also recorded in the daily logs table row
+
+Then when the driver reaches the client he will change the status to ARRIVED in chuffer booking table and in the chauffeur daily logs table status will also change to arrived here too
+
+
+When the client is onboarded the status is changed to in progress In the chauffeur bookings table and in the daily logs table as wellthe status remains as in progress in the chauffeur table now until its last day dropped off
+
+When the driver  drops off the client the status will be changed to dropped off in the chauffeur daily logs table and drop off location and drop off time  not 
+
+driver will reach his home and end t ride which will change the status to completed in the daily logs table and end time  and total distance as welland billing logic will be triggered too
+
+
+
+
+2nd day:
+
+
+It will check if the trip Is of 3 days and only 1 row is there for that trip in the daily logs and status is completed then it means now we are one second day so the employee screen will see if he want the driver to arrive at his pickup location and boolean of is_requested will be true so this will help to show screen to the employee that ur ride is requested.
+
+
+he driver Weill be notified with his pickup location and and the driver will click on start which will change the status in the daily logs table to started and start time will be noted .at this point the employee will see that the driver is on the way (when the status is started)
+and when the driver arrives at the pickup location he Weill change the status to arrived.
+
+
+Now want the client is onboarded the status will be changed to in_progress and pickup time will be added in the daily logs table
+
+
+
+
+Now the driver will drop the  client and status will change to dropped_off in the daily logs table and dropogg location and drop-off time will also be added
+
+
+Now after dropping driver Weill reach his home and change the status to completed and total distance,endtime  will be counted for that day as well
+
+
+
+
+
+3 day:
+
+Same flow as 2nd , the only diffrence will be when the driver is ending rideit will also update the status of chauffeur bookings table to completed and he will need to upload all the toll/parking images, valuesand also sums up all the distances for each day and store total_distance_km in the chauffeur trip logs table 
+And this will trigger the billing logic as well 
+
+
+
+
+
+
+
+
+OUT STATION:
+
+Single day:
+
+
+And multiday both:
+
+
+First we will need an api to start the ride which will update the meter reading and meter reading image and start time and change status to otwthis will be for the driver(status will change to OTW)
+Now when the driver reaches the client location he will just change status to arrivedand when client onboarded the status will be changed to inprogress
+
+The ride will be ended only after he is back to where he started
+
+Cannot end ride in the middle of the trip
+ No need for daily trip logs in out station 
+Only addition at the trip start or end ask for meter reading/image as well

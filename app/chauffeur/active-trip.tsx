@@ -1,11 +1,9 @@
 import { ActiveTripScreen } from '@/features/chauffeur/screens/ActiveTripScreen';
-import { ChauffeurActiveTripScreen } from '@/features/chauffeur/screens/ChauffeurActiveTripScreen';
+import { EndRideScreen } from '@/features/chauffeur/screens/EndRide';
 import { DrawerScreenWrapper } from '@/features/shared/components/DrawerScreenWrapper';
 
-export default function ChauffeurActiveTripRoute() {
-  return (
-    <DrawerScreenWrapper>
-      <ActiveTripScreen />
-    </DrawerScreenWrapper>
-  );
+export default function EndRideRoute() {
+    return (
+        <ActiveTripScreen />
+    );
 }

@@ -45,11 +45,12 @@ const CustomToast = ({ title, message }: { title: string; message: string }) => 
   </View>
 );
 import { useAppDispatch, useAppSelector } from '../../../store/hooks';
-import { useRouter, useNavigation } from 'expo-router';
+import { useRouter, useNavigation, router } from 'expo-router';
 import { DrawerActions } from '@react-navigation/native';
 import { useFocusEffect } from 'expo-router';
-import { useGetChauffeurBookingsQuery } from '../services/bookingsApi';
+import { useGetChauffeurBookingsQuery, useGetEmployeeActiveChauffeurBookingQuery } from '../services/bookingsApi';
 import { useGetShuttleTripsForEmployeeQuery } from '../services/employeeShuttleApi';
+import { useChauffeurStatusListener } from '../../../hooks/useChauffeurStatusListener';
 import { CompactRideHistoryCard } from '../components/CompactRideHistoryCard';
 import { RideStatusBar, type UpcomingShuttleInfo } from '../components/RideStatusBar';
 import {
@@ -100,12 +101,33 @@ export default function NewHome() {
     { skip: !companyId || !employeeId },
   );
 
-  // Always keep a ref pointing at the latest trips so the socket callback
-  // (which closes over a stale value) can read fresh data after a refetch.
-  const shuttleTripsRef = useRef(shuttleTrips);
-  useEffect(() => {
-    shuttleTripsRef.current = shuttleTrips;
-  }, [shuttleTrips]);
+  const { 
+    data: activeChauffeurBooking, 
+    refetch: refetchActiveChauffeurBooking, 
+    isLoading: isActiveBookingLoading,
+    isFetching: isActiveBookingFetching
+  } = useGetEmployeeActiveChauffeurBookingQuery(
+    { companyId },
+    { skip: !companyId || !user?.enabled_services?.chauffeur },
+  );
+
+  const router = useRouter();
+  const navigation = useNavigation();
+
+  const handleOpenDrawer = useCallback(() => {
+    navigation.dispatch(DrawerActions.openDrawer());
+  }, [navigation]);
+
+  const firstName = user?.full_name?.split(' ')?.[0] ?? '';
+  const fullName = user?.full_name ?? 'Guest';
+  const initials = user?.full_name
+    ? user.full_name
+      .split(' ')
+      .map((n) => n[0])
+      .join('')
+      .slice(0, 2)
+      .toUpperCase()
+    : '?';
 
   const upcomingShuttle = useMemo((): UpcomingShuttleInfo | null => {
     const trip = shuttleTrips.find((t) => t.status !== 'COMPLETED') ?? shuttleTrips[0];
@@ -158,43 +180,134 @@ export default function NewHome() {
     }
   }, [chauffeurBookingsData, dispatch]);
 
-  const firstName = user?.full_name?.split(' ')?.[0] ?? '';
-  const fullName = user?.full_name ?? 'Guest';
-  const initials = user?.full_name
-    ? user.full_name
-      .split(' ')
-      .map((n) => n[0])
-      .join('')
-      .slice(0, 2)
-      .toUpperCase()
-    : '?';
+  // Always keep a ref pointing at the latest trips so the socket callback
+  // (which closes over a stale value) can read fresh data after a refetch.
+  const shuttleTripsRef = useRef(shuttleTrips);
+  useEffect(() => {
+    console.log('[ShuttleEmployee] Shuttle Trips updated:', JSON.stringify(shuttleTrips, null, 2));
+    shuttleTripsRef.current = shuttleTrips;
+  }, [shuttleTrips]);
 
-  const router = useRouter();
-  const navigation = useNavigation();
-
-  const handleOpenDrawer = useCallback(() => {
-    navigation.dispatch(DrawerActions.openDrawer());
-  }, [navigation]);
-
-  // Refetch whenever this screen comes back into focus (e.g. returning from RideActive).
-  // This ensures the next trip (e.g. evening/return) is automatically shown
-  // without the user having to pull-to-refresh.
+  // Refetch on focus, then immediately check if a trip is already active (e.g. after login
+  // while a ride was in progress). Using .unwrap() means we navigate from fresh API data
+  // in a single place — no extra refs or useEffects needed.
   useFocusEffect(
     useCallback(() => {
-      if (companyId && employeeId) {
-        refetchShuttleTrips();
+      if (!companyId || !employeeId) return;
+
+      refetchShuttleTrips().unwrap().then((trips) => {
+        console.log('[ShuttleEmployee] Trips on focus:', JSON.stringify(trips, null, 2));
+        const activeTrip = trips.find(
+          (t) => t.status === 'STARTED' || t.status === 'IN_PROGRESS',
+        );
+        if (!activeTrip) return;
+
+        const vehicle = activeTrip.routes?.vehicles;
+        router.push({
+          pathname: '/employee/ride-active',
+          params: {
+            tripId: String(activeTrip.id),
+            myPickupStopId: activeTrip.my_pickup_stop_id != null ? String(activeTrip.my_pickup_stop_id) : '',
+            driverName: activeTrip.users?.full_name ?? 'Driver',
+            driverPhone: activeTrip.users?.phone ?? '',
+            vehicleDisplay: vehicle ? `${vehicle.make} ${vehicle.model}`.trim() : '',
+            vehiclePlate: vehicle?.plate_number ?? '',
+            direction: activeTrip.direction ?? '',
+          },
+        });
+      }).catch(() => { });
+
+      // Chauffeur active booking check (only when company has chauffeur enabled)
+      if (user?.enabled_services?.chauffeur && companyId) {
+        refetchActiveChauffeurBooking().then(({ data: activeChauffeurBooking }) => {
+          if (!activeChauffeurBooking) return;
+
+          // ── Complex Navigation Logic based on Flow ──
+          const bStatus = activeChauffeurBooking.status;
+          const isOutstation = activeChauffeurBooking.trip_type === 'OUT_STATION';
+          const liveStatuses = ['OTW', 'ARRIVED', 'IN_PROGRESS']; // Removed DROPPED_OFF from liveStatuses so it goes home
+
+          if (isOutstation) {
+            // OUT_STATION: Direct status mapping
+            if (!liveStatuses.includes(bStatus)) return;
+          } else {
+            // IN_CITY: Depends on booking status AND today's log for multi-day
+            if (!liveStatuses.includes(bStatus) && bStatus !== 'IN_PROGRESS') return;
+
+            if (bStatus === 'IN_PROGRESS' && activeChauffeurBooking.today_log) {
+              const log = activeChauffeurBooking.today_log;
+              
+              // If the employee has already been dropped off or the day is completed, stay on home.
+              if (log.status === 'COMPLETED' || log.status === 'DROPPED_OFF') {
+                return;
+              }
+              // On Day 2+, if the log is pending and employee hasn't requested the driver yet, stay on home.
+              if (!log.is_requested && log.status !== 'STARTED' && log.status !== 'ARRIVED' && log.status !== 'IN_PROGRESS') {
+                return;
+              }
+            }
+          }
+
+          const driver = activeChauffeurBooking.users_chauffeur_bookings_driver_idTousers;
+          const vehicle = activeChauffeurBooking.vehicles;
+          router.push({
+            pathname: '/employee/ride-active',
+            params: {
+              mode: 'chauffeur',
+              bookingId: String(activeChauffeurBooking.id),
+              bookingStatus: activeChauffeurBooking.status,
+              tripType: activeChauffeurBooking.trip_type,
+              driverName: driver?.full_name ?? 'Chauffeur',
+              driverPhone: driver?.phone ?? '',
+              vehicleDisplay: vehicle ? `${vehicle.make ?? ''} ${vehicle.model ?? ''}`.trim() : '',
+              vehiclePlate: vehicle?.plate_number ?? '',
+            },
+          });
+        }).catch(() => { });
       }
-    }, [companyId, employeeId, refetchShuttleTrips]),
+    }, [companyId, employeeId, refetchShuttleTrips, refetchActiveChauffeurBooking, user?.enabled_services?.chauffeur, router]),
   );
 
-  // Navigate to active ride screen the moment a driver starts any trip.
-  // Both MORNING and EVENING trips are already SCHEDULED in the DB (generated daily),
-  // so they exist in the cached list. We read from the ref for a zero-latency
-  // navigation — no network wait before the screen opens.
+  // Store active chauffeur booking in a ref for zero-latency navigation inside socket listeners
+  const chauffeurBookingRef = useRef(activeChauffeurBooking);
+  useEffect(() => {
+    chauffeurBookingRef.current = activeChauffeurBooking;
+  }, [activeChauffeurBooking]);
+
+  useChauffeurStatusListener(
+    useCallback(
+      (data) => {
+        const booking = chauffeurBookingRef.current;
+        if (!booking || String(booking.id) !== String(data.bookingId)) return;
+
+        const liveStatuses = ['OTW', 'ARRIVED', 'IN_PROGRESS'];
+        if (liveStatuses.includes(data.status)) {
+           const driver = booking.users_chauffeur_bookings_driver_idTousers;
+           const vehicle = booking.vehicles;
+           router.push({
+             pathname: '/employee/ride-active',
+             params: {
+               mode: 'chauffeur',
+               bookingId: String(booking.id),
+               bookingStatus: data.status,
+               tripType: booking.trip_type,
+               driverName: driver?.full_name ?? 'Chauffeur',
+               driverPhone: driver?.phone ?? '',
+               vehicleDisplay: vehicle ? `${vehicle.make ?? ''} ${vehicle.model ?? ''}`.trim() : '',
+               vehiclePlate: vehicle?.plate_number ?? '',
+             },
+           });
+        }
+      },
+      [router]
+    )
+  );
+
+  // Navigate to active ride screen the moment a driver starts any shuttle trip.
   useRideStartListener(
-    useCallback((data) => {
+    useCallback((data: any) => {
       const trips = shuttleTripsRef.current;
-      const matchingTrip = trips.find((t) => t.id === data.tripId);
+      const matchingTrip = trips.find((t: any) => t.id === data.tripId);
       const myPickupStopId = matchingTrip?.my_pickup_stop_id ?? null;
       const driverPhone = matchingTrip?.users?.phone ?? '';
       const vehicle = matchingTrip?.routes?.vehicles;
@@ -294,7 +407,11 @@ export default function NewHome() {
             isLoading={isShuttleTripsLoading}
           />
         </View> */}
-        <FlipCard />
+        <FlipCard 
+          booking={activeChauffeurBooking} 
+          isLoading={isActiveBookingLoading || isActiveBookingFetching}
+          isChauffeurEnabled={user?.enabled_services?.chauffeur}
+        />
 
         {/* Chauffeur / Outstation card - opens dropoff sheet when dev outstation is enabled */}
         {/* <View className="px-4 mt-4">

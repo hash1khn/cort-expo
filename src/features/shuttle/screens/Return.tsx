@@ -18,6 +18,7 @@ import { fontFamily } from '@/core/theme';
 import { useToast } from '@/shared/ui/molecules/Toast';
 import { CustomToast } from '@/features/shared/components/CustomToast';
 import { useLanguage } from '@/features/shared/context/LanguageContext';
+import * as Location from 'expo-location';
 
 const AppText = ({ style, ...props }: any) => (
   <Text style={[{ fontFamily }, style]} {...props} />
@@ -204,9 +205,31 @@ export default function Return() {
         }).unwrap();
 
         if (activeTrip?.route_id) {
+          let driverLat: number | undefined;
+          let driverLng: number | undefined;
+          try {
+            const { status } = await Location.requestForegroundPermissionsAsync();
+            if (status === 'granted') {
+              let loc = await Location.getLastKnownPositionAsync();
+              if (!loc) {
+                loc = await Location.getCurrentPositionAsync({
+                  accuracy: Location.Accuracy.Balanced,
+                });
+              }
+              if (loc) {
+                driverLat = loc.coords.latitude;
+                driverLng = loc.coords.longitude;
+              }
+            }
+          } catch (error) {
+            console.warn('Could not fetch location:', error);
+          }
+
           await startTrip({
             route_id: activeTrip.route_id,
             direction: 'EVENING',
+            lat: driverLat,
+            lng: driverLng,
           }).unwrap();
         }
 

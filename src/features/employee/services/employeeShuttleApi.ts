@@ -22,6 +22,7 @@ export type ShuttleTripForEmployee = {
   started_at: string | null;
   completed_at: string | null;
   current_stop_id?: number | null;
+  current_stop_status?: 'AT_STOP' | 'EN_ROUTE' | null;
   current_stop_arrived_at?: string | null;
   /** The ID of this employee's designated pickup stop */
   my_pickup_stop_id?: number | null;

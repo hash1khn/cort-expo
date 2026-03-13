@@ -8,7 +8,9 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useAppDispatch, useAppSelector } from '../../../store/hooks';
 import { setIsOutstationDev } from '../store';
 import { useRideSocket } from '../../../hooks/useRideSocket';
+import { useChauffeurSocket } from '../../../hooks/useChauffeurSocket';
 import { useGetShuttlePolylineQuery, useGetShuttleTripsForEmployeeQuery } from '../services/employeeShuttleApi';
+import { useGetEmployeeActiveChauffeurBookingQuery } from '../services/bookingsApi';
 import { fontFamily } from '@/core/theme';
 import { useScanBoardingMutation } from '../services/boardingApi';
 import { useToast } from '@/shared/ui/molecules/Toast';
@@ -91,6 +93,10 @@ export default function RideActive() {
     vehicleDisplay: vehicleDisplayParam,
     vehiclePlate: vehiclePlateParam,
     direction: directionParam,
+    /** Chauffeur-mode params */
+    mode: modeParam,
+    bookingId: bookingIdParam,
+    bookingStatus: bookingStatusParam,
   } = useLocalSearchParams<{
     tripId?: string;
     myPickupStopId?: string;
@@ -99,29 +105,51 @@ export default function RideActive() {
     vehicleDisplay?: string;
     vehiclePlate?: string;
     direction?: string;
+    mode?: 'shuttle' | 'chauffeur';
+    bookingId?: string;
+    bookingStatus?: string;
   }>();
+
+  const mode = modeParam ?? 'shuttle';
+  const isChauffeurMode = mode === 'chauffeur';
+  const activeChauffeurBookingId = bookingIdParam ? Number(bookingIdParam) : 0;
 
   const activeTripId = tripIdParam ? Number(tripIdParam) : 0;
   // Note: myPickupStopId is derived below from the API (crash-resilient) with this as fallback
 
-  // ── Fetch trip data to get route stops ───────────────────────────────────
+  // ── Fetch trip data — Shuttle or Chauffeur ───────────────────────────────
   const companyId = (user?.company_id ?? 0) as number;
   const employeeId = (user?.id ?? '') as string;
+
   const { data: shuttleTrips = [], isLoading: isTripsLoading } = useGetShuttleTripsForEmployeeQuery(
     { companyId, employeeId },
-    { skip: !companyId || !employeeId },
+    { skip: !companyId || !employeeId || isChauffeurMode },
   );
   const activeTrip = useMemo(
     () => shuttleTrips.find((t) => t.id === activeTripId),
     [shuttleTrips, activeTripId],
   );
 
-  // ── Derive display data from API (source of truth), with route params as fast-path fallback ──
-  const apiDriverName = activeTrip?.users?.full_name ?? null;
-  const apiDriverPhone = activeTrip?.users?.phone ?? null;
-  const apiVehicle = activeTrip?.routes?.vehicles;
-  const apiVehicleDisplay = apiVehicle ? `${apiVehicle.make} ${apiVehicle.model}`.trim() : null;
-  const apiVehiclePlate = apiVehicle?.plate_number ?? null;
+  const { data: activeChauffeurBooking, isLoading: isChauffeurLoading } =
+    useGetEmployeeActiveChauffeurBookingQuery(
+      { companyId },
+      { skip: !companyId || !isChauffeurMode },
+    );
+
+  const isDataLoading = isChauffeurMode ? isChauffeurLoading : isTripsLoading;
+
+  // ── Derive display data — prefer API snapshot, fall back to route params ──
+  const apiDriverName = isChauffeurMode
+    ? (activeChauffeurBooking?.users_chauffeur_bookings_driver_idTousers?.full_name ?? null)
+    : (activeTrip?.users?.full_name ?? null);
+  const apiDriverPhone = isChauffeurMode
+    ? (activeChauffeurBooking?.users_chauffeur_bookings_driver_idTousers?.phone ?? null)
+    : (activeTrip?.users?.phone ?? null);
+  const apiVehicle = isChauffeurMode ? activeChauffeurBooking?.vehicles : activeTrip?.routes?.vehicles;
+  const apiVehicleDisplay = apiVehicle ? `${(apiVehicle as any).make ?? ''} ${(apiVehicle as any).model ?? ''}`.trim() : null;
+  const apiVehiclePlate = isChauffeurMode
+    ? (activeChauffeurBooking?.vehicles?.plate_number ?? null)
+    : (activeTrip?.routes?.vehicles?.plate_number ?? null);
 
   const driverName = apiDriverName ?? driverNameParam ?? 'Driver';
   const driverPhone = apiDriverPhone ?? driverPhoneParam ?? '';
@@ -138,7 +166,7 @@ export default function RideActive() {
   const apiPickupStopId = activeTrip?.my_pickup_stop_id ?? null;
   const myPickupStopId = apiPickupStopId ?? (myPickupStopIdParam ? Number(myPickupStopIdParam) : null);
 
-  /** Route stops for this trip, in sequence order, with valid coordinates */
+  /** Route stops for this trip, in sequence order, with valid coordinates (shuttle only) */
   const routeStops = useMemo(
     () =>
       (activeTrip?.routes?.route_stops ?? [])
@@ -146,6 +174,17 @@ export default function RideActive() {
         .sort((a, b) => a.sequence_order - b.sequence_order),
     [activeTrip],
   );
+
+  // ── Chauffeur: live booking status (socket takes priority over API snapshot) ──
+  const [chauffeurStatus, setChauffeurStatus] = useState<string>(
+    bookingStatusParam ?? activeChauffeurBooking?.status ?? 'OTW',
+  );
+  // Keep status in sync when the API updates (e.g. on mount / refetch)
+  useEffect(() => {
+    if (activeChauffeurBooking?.status) {
+      setChauffeurStatus(activeChauffeurBooking.status);
+    }
+  }, [activeChauffeurBooking?.status]);
 
   // ── Real-time state ──────────────────────────────────────────────────────
   const [driverCoord, setDriverCoord] = useState<LatLng | null>(null);
@@ -156,11 +195,16 @@ export default function RideActive() {
    * currentStopId derives from this first, then falls back to the API snapshot.
    */
   const [socketStopId, setSocketStopId] = useState<number | null>(null);
+  const [socketStopStatus, setSocketStopStatus] = useState<'AT_STOP' | 'EN_ROUTE' | null>(null);
   const currentStopId = socketStopId ?? activeTrip?.current_stop_id ?? null;
+  const currentStopStatus = socketStopStatus ?? activeTrip?.current_stop_status ?? 'EN_ROUTE';
 
-  /** True once the driver has arrived at THIS employee's pickup stop */
+  /** True once the driver has arrived at THIS employee's pickup stop and is currently AT_STOP */
   const captainIsHere =
-    currentStopId !== null && myPickupStopId !== null && currentStopId === myPickupStopId;
+    currentStopId !== null &&
+    myPickupStopId !== null &&
+    currentStopId === myPickupStopId &&
+    currentStopStatus === 'AT_STOP';
 
   // ── Boarding mutation ─────────────────────────────────────────────────────
   const [scanBoarding, { isLoading: isBoardingLoading, isSuccess: isBoardingSuccess }] =
@@ -183,6 +227,14 @@ export default function RideActive() {
   const handleStopArrived = useCallback(
     (data: { stopId: number; stopName: string; arrivedAt: string }) => {
       setSocketStopId(data.stopId);
+      setSocketStopStatus('AT_STOP');
+    },
+    [],
+  );
+
+  const handleRideProceeding = useCallback(
+    (data: { nextStopId: number | null; nextStopName: string | null; departedAt: string }) => {
+      setSocketStopStatus('EN_ROUTE');
     },
     [],
   );
@@ -192,13 +244,31 @@ export default function RideActive() {
     return () => clearTimeout(timer);
   }, []);
 
+  // Shuttle socket
   useRideSocket({
     tripId: activeTripId,
     userId,
     role: 'employee',
-    onLocationUpdate: handleLocationUpdate,
-    onStopArrived: handleStopArrived,
-    onRideEnded: handleRideEnded,
+    onLocationUpdate: isChauffeurMode ? undefined : handleLocationUpdate,
+    onStopArrived: isChauffeurMode ? undefined : handleStopArrived,
+    onRideProceeding: isChauffeurMode ? undefined : handleRideProceeding,
+    onRideEnded: isChauffeurMode ? undefined : handleRideEnded,
+  });
+
+  // Chauffeur socket
+  useChauffeurSocket({
+    bookingId: isChauffeurMode ? activeChauffeurBookingId : 0,
+    userId,
+    onLocationUpdate: isChauffeurMode ? handleLocationUpdate : undefined,
+    onStatusChange: isChauffeurMode
+      ? (data) => {
+          setChauffeurStatus(data.status);
+          if (data.status === 'DROPPED_OFF' || data.status === 'ENDED') {
+            handleRideEnded();
+          }
+        }
+      : undefined,
+    onRideEnded: isChauffeurMode ? handleRideEnded : undefined,
   });
 
   // ── Bottom Sheet refs & animation ─────────────────────────────────────────
@@ -228,13 +298,16 @@ export default function RideActive() {
   // Only snap once RTK Query data has resolved — prevents blank/premature sheet states.
   // Snap to index 1 when the driver arrives at THIS employee's stop, back to 0 otherwise.
   useEffect(() => {
-    if (isTripsLoading) return; // wait for data before triggering any snap
-    if (captainIsHere) {
+    if (isDataLoading) return;
+    const shouldExpand = isChauffeurMode
+      ? chauffeurStatus === 'ARRIVED'
+      : captainIsHere;
+    if (shouldExpand) {
       bottomSheetRef.current?.snapToIndex(1);
     } else {
       bottomSheetRef.current?.snapToIndex(0);
     }
-  }, [captainIsHere, isTripsLoading]);
+  }, [captainIsHere, isDataLoading, isChauffeurMode, chauffeurStatus]);
 
   // ── Animated profile styles ───────────────────────────────────────────────
   const smallProfileStyle = useAnimatedStyle(() => {
@@ -403,8 +476,20 @@ export default function RideActive() {
   }, [allRoutePoints, currentDriverPolylineIndex]);
 
   // ── Status text logic ─────────────────────────────────────────────────────
-  const statusText =
-    directionParam === 'EVENING'
+  const chauffeurStatusText = (() => {
+    switch (chauffeurStatus) {
+      case 'OTW':        return 'Chauffeur is on the way';
+      case 'ARRIVED':    return 'Chauffeur has arrived at your pickup';
+      case 'IN_PROGRESS': return "Sit tight, you're on your way";
+      case 'DROPPED_OFF': return "You've been dropped off";
+      case 'ENDED':      return 'Trip complete';
+      default:           return 'Chauffeur ride';
+    }
+  })();
+
+  const statusText = isChauffeurMode
+    ? chauffeurStatusText
+    : directionParam === 'EVENING'
       ? 'Ride in progress'
       : isBoardingSuccess
         ? "Sit tight, you're on the way"
@@ -459,8 +544,8 @@ export default function RideActive() {
           />
         )}
 
-        {/* Route stop markers */}
-        {routeStops.map((stop, index) => {
+        {/* Route stop markers — shuttle only */}
+        {!isChauffeurMode && routeStops.map((stop, index) => {
           const stopPolyIdx = stopPolylineIndices[index];
           const isPassed =
             arrivedPolylineIndex !== null &&
@@ -558,7 +643,9 @@ export default function RideActive() {
             {/* 2) Big/Centered Layout (visible at 55%) */}
             <Animated.View style={bigProfileStyle}>
               <View style={styles.captainCenterSection}>
-                <Text style={styles.captainRoleLabel}>YOUR CAPTAIN</Text>
+                <Text style={styles.captainRoleLabel}>
+                  {isChauffeurMode ? 'YOUR CHAUFFEUR' : 'YOUR CAPTAIN'}
+                </Text>
 
                 <View style={styles.avatarCircleBig}>
                   <Text style={styles.avatarInitialsBig}>{driverInitials}</Text>
@@ -591,8 +678,8 @@ export default function RideActive() {
               <Text style={styles.iconActionText}>Share ride</Text>
             </Pressable>
 
-            {/* Scan QR — visible only while not yet boarded (and NOT on return trips) */}
-            {!isBoardingSuccess && captainIsHere && directionParam !== 'EVENING' && (
+            {/* Scan QR — visible only for shuttle rides when captain is at stop and not yet boarded */}
+            {!isChauffeurMode && !isBoardingSuccess && captainIsHere && directionParam !== 'EVENING' && (
               <Pressable
                 style={styles.iconActionBtn}
                 onPress={handleScanQR}

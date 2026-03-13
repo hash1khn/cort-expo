@@ -1,23 +1,34 @@
 import React, { useState, useRef } from 'react';
-import { View, ScrollView, Pressable, Text as RNText, StyleSheet, Image, Modal, ActivityIndicator, Alert } from 'react-native';
+import { View, ScrollView, Pressable, Text as RNText, StyleSheet, Image, Modal, ActivityIndicator, Alert, TextInput } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather, Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { fontFamily } from '@/core/theme';
 import { useToast } from '@/shared/ui/molecules/Toast';
 import { CustomToast } from '@/features/shared/components/CustomToast';
+import { useEndDriverBookingMutation } from '../services/chauffeur.api';
 
 const Text = (props: React.ComponentProps<typeof RNText>) => {
     return <RNText {...props} style={[{ fontFamily }, props.style]} />;
 };
 
-const STEPS = ['Meter', 'Parking', 'Toll receipt'];
+// STEPS will now be determined inside the component based on tripType
 
 export function EndRideScreen() {
+    const { tripType, bookingId } = useLocalSearchParams<{ tripType: string; bookingId: string }>();
+    
+    const STEPS = React.useMemo(() => {
+        if (tripType === 'IN_CITY') {
+            return ['Parking', 'Toll receipt'];
+        }
+        return ['Meter', 'Parking', 'Toll receipt'];
+    }, [tripType]);
+
     const [currentStep, setCurrentStep] = useState(0);
     const insets = useSafeAreaInsets();
     const toast = useToast();
+    const [endRide, { isLoading: isEnding }] = useEndDriverBookingMutation();
 
     const [permission, requestPermission] = useCameraPermissions();
     const [isCameraOpen, setIsCameraOpen] = useState(false);
@@ -29,8 +40,12 @@ export function EndRideScreen() {
         2: [],
     });
 
+    const [meterValue, setMeterValue] = useState('');
+    const [parkingValue, setParkingValue] = useState('');
+    const [tollValue, setTollValue] = useState('');
+
     const handleNext = () => {
-        if (currentStep === 0 && photos[0].length === 0) {
+        if (STEPS[currentStep] === 'Meter' && photos[currentStep].length === 0) {
             toast.show(
                 <CustomToast
                     type="error"
@@ -45,7 +60,54 @@ export function EndRideScreen() {
             setCurrentStep((s) => s + 1);
         } else {
             // End the ride logic here
-            router.back();
+            handleEndRide();
+        }
+    };
+
+    const handleEndRide = async () => {
+        if (!bookingId) return;
+
+        const meterStep = STEPS.indexOf('Meter');
+        const parkingStep = STEPS.indexOf('Parking');
+        const tollStep = STEPS.indexOf('Toll receipt');
+
+        const meterUrl = meterStep !== -1 ? photos[meterStep]?.[0] : undefined;
+        const parkingUrl = parkingStep !== -1 ? photos[parkingStep]?.[0] : undefined;
+        const tollUrl = tollStep !== -1 ? photos[tollStep]?.[0] : undefined;
+
+        try {
+            await endRide({
+                bookingId: parseInt(bookingId),
+                body: {
+                    end_time: new Date().toISOString(),
+                    meter_reading_end: meterValue ? parseFloat(meterValue) : undefined,
+                    expense_parking: parkingValue ? parseFloat(parkingValue) : undefined,
+                    expense_toll: tollValue ? parseFloat(tollValue) : undefined,
+                    meter_reading_end_image_url: meterUrl,
+                    expense_parking_image_url: parkingUrl,
+                    expense_toll_image_url: tollUrl,
+                }
+            }).unwrap();
+
+            toast.show(
+                <CustomToast
+                    type="success"
+                    message="Ride ended successfully"
+                />,
+                { duration: 3000, position: 'top' }
+            );
+            
+            // Go back to home
+            router.push('/chauffeur');
+        } catch (err) {
+            console.error('End ride error:', err);
+            toast.show(
+                <CustomToast
+                    type="error"
+                    message="Failed to end ride. Please try again."
+                />,
+                { duration: 3500, position: 'top' }
+            );
         }
     };
 
@@ -74,10 +136,10 @@ export function EndRideScreen() {
             if (result?.uri) {
                 setPhotos((prev) => {
                     const updated = { ...prev };
-                    if (currentStep === 0) {
+                    if (STEPS[currentStep] === 'Meter') {
                         updated[currentStep] = [result.uri];
                     } else {
-                        updated[currentStep] = [...updated[currentStep], result.uri];
+                        updated[currentStep] = [...(updated[currentStep] || []), result.uri];
                     }
                     return updated;
                 });
@@ -200,7 +262,7 @@ export function EndRideScreen() {
                         <Ionicons name="camera-outline" size={48} color="#9CA3AF" />
                         <Text className="text-[#9CA3AF] text-sm mt-2 font-medium">Tap to upload {STEPS[currentStep].toLowerCase()} photo</Text>
                     </Pressable>
-                ) : currentStep === 0 ? (
+                ) : STEPS[currentStep] === 'Meter' ? (
                     <View>
                         <View className="w-full h-80 rounded-2xl overflow-hidden bg-black mb-4">
                             <Image source={{ uri: currentPhotos[0] }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
@@ -246,6 +308,51 @@ export function EndRideScreen() {
                     </View>
                 )}
 
+                <View className="mt-6">
+                    {STEPS[currentStep] === 'Meter' && (
+                        <View>
+                            <Text className="text-[#111827] text-sm font-bold mb-2">Meter Reading</Text>
+                            <TextInput
+                                placeholder="Enter meter reading"
+                                keyboardType="numeric"
+                                value={meterValue}
+                                onChangeText={setMeterValue}
+                                style={{ width: '100%', backgroundColor: '#F9FAFB', borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12, fontSize: 16, color: '#111827' }}
+                                placeholderTextColor="#9CA3AF"
+                                maxLength={8}
+                            />
+                        </View>
+                    )}
+                    {STEPS[currentStep] === 'Parking' && (
+                        <View>
+                            <Text className="text-[#111827] text-sm font-bold mb-2">Parking Expense</Text>
+                            <TextInput
+                                placeholder="Enter parking amount"
+                                keyboardType="numeric"
+                                value={parkingValue}
+                                onChangeText={setParkingValue}
+                                style={{ width: '100%', backgroundColor: '#F9FAFB', borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12, fontSize: 16, color: '#111827' }}
+                                placeholderTextColor="#9CA3AF"
+                                maxLength={8}
+                            />
+                        </View>
+                    )}
+                    {STEPS[currentStep] === 'Toll receipt' && (
+                        <View>
+                            <Text className="text-[#111827] text-sm font-bold mb-2">Toll Expense</Text>
+                            <TextInput
+                                placeholder="Enter toll amount"
+                                keyboardType="numeric"
+                                value={tollValue}
+                                onChangeText={setTollValue}
+                                style={{ width: '100%', backgroundColor: '#F9FAFB', borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12, fontSize: 16, color: '#111827' }}
+                                placeholderTextColor="#9CA3AF"
+                                maxLength={8}
+                            />
+                        </View>
+                    )}
+                </View>
+
             </ScrollView>
 
             {/* Bottom Navigation Buttons */}
@@ -266,9 +373,17 @@ export function EndRideScreen() {
                 )}
                 <Pressable
                     onPress={handleNext}
-                    className="flex-1 rounded-2xl py-4 items-center justify-center bg-[#FF5A00] active:opacity-90"
+                    disabled={isEnding}
+                    className="flex-1 rounded-2xl py-4 items-center justify-center bg-[#FF5A00] active:opacity-90 disabled:opacity-70"
                     style={{ paddingVertical: 14 }}
                 >
+                    {isEnding && (
+                        <ActivityIndicator
+                            size="small"
+                            color="#FFFFFF"
+                            style={{ marginRight: 8 }}
+                        />
+                    )}
                     <Text className="text-white text-[17px] font-bold">
                         {currentStep === STEPS.length - 1 ? 'End Ride' : 'Next'}
                     </Text>

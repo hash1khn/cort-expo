@@ -3,137 +3,9 @@ import { LinearGradient } from "expo-linear-gradient";
 import { StyleSheet, View, Text, Modal, Pressable } from "react-native";
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
-
 import { fontFamily } from '@/core/theme';
-
-// Bus station illustration
-
-
-const FrontContent = () => (
-    <View style={styles.frontContainer}>
-        {/* Top brand row */}
-        <View style={styles.brandRow}>
-            {/* <View style={styles.brandIconContainer}>
-                <MaterialCommunityIcons name="bus" size={18} color="#FFF" />
-            </View> */}
-            <Text style={styles.brandName}>Daily Shuttle</Text>
-        </View>
-
-        {/* Center illustration */}
-        <View style={styles.illustrationContainer}>
-            <Image
-                source={require('../../../../assets/city_bus_bro_2.png')}
-                style={styles.illustration}
-                contentFit="contain"
-                transition={0}
-            />
-        </View>
-
-        {/* Headline text */}
-        <View style={styles.headlineContainer}>
-            <Text style={styles.headlineText}>
-                {"North Nazimbad,\nTower"}
-                {/* <Text style={styles.asterisk}>*</Text> */}
-            </Text>
-        </View>
-
-        {/* Divider */}
-        <View style={styles.divider} />
-
-        {/* Stat footer row */}
-        <View style={styles.statRow}>
-            <View style={styles.statLeft}>
-                <Text style={styles.statNumber}>08:00 AM</Text>
-            </View>
-            <View style={styles.arrowContainer}>
-                <Text style={styles.flipHintText}>Tap for details</Text>
-                <MaterialCommunityIcons name="rotate-3d-variant" size={20} color="black" />
-            </View>
-        </View>
-    </View>
-);
-
-const BackContent = ({ onClose }: { onClose: () => void }) => (
-    <>
-        <LinearGradient
-            style={styles.gradient}
-            colors={["#F1F443", "#F1F443"]}
-        />
-        <View style={styles.backContent}>
-
-            {/* Header */}
-            <Text style={styles.backTitle}>Ride Details</Text>
-
-            {/* Captain avatar + info grid — grouped close together */}
-            <View style={styles.captainBlock}>
-
-                {/* Captain avatar */}
-                <View style={styles.captainSection}>
-                    <View style={styles.avatarCircle}>
-                        <Text style={styles.avatarInitials}>SJ</Text>
-                    </View>
-                    <Text style={styles.captainRole}>Your Captain</Text>
-                    <Text style={styles.captainName}>Sajjad Hussain</Text>
-                </View>
-
-                {/* Divider between avatar and grid */}
-                <View style={styles.backDivider} />
-
-                {/* 3-column info grid */}
-                <View style={styles.infoGrid}>
-                    {/* Vehicle */}
-                    <View style={styles.infoCell}>
-                        <View style={styles.infoIconBox}>
-                            <MaterialCommunityIcons name="bus" size={16} color="#000" />
-                        </View>
-                        <Text style={styles.infoCellLabel}>Vehicle</Text>
-                        <Text style={styles.infoCellValue}>ABC-1234</Text>
-                        <Text style={styles.infoCellSub}>Hiace • White</Text>
-                    </View>
-
-                    <View style={styles.gridSeparator} />
-
-                    {/* Pickup Time */}
-                    <View style={styles.infoCell}>
-                        <View style={styles.infoIconBox}>
-                            <Ionicons name="time-outline" size={16} color="#000" />
-                        </View>
-                        <Text style={styles.infoCellLabel}>Pickup Time</Text>
-                        <Text style={styles.infoCellValue}>08:00 AM</Text>
-                        <Text style={styles.infoCellSub}>Today</Text>
-                    </View>
-
-                    <View style={styles.gridSeparator} />
-
-                    {/* Stop */}
-                    <View style={styles.infoCell}>
-                        <View style={styles.infoIconBox}>
-                            <Ionicons name="location-outline" size={16} color="#000" />
-                        </View>
-                        <Text style={styles.infoCellLabel}>Stop</Text>
-                        <Text style={styles.infoCellValue}>Main Gate</Text>
-                        <Text style={styles.infoCellSub}>Sector 4</Text>
-                    </View>
-                </View>
-
-            </View>
-
-            {/* Divider below grid, same distance as the one above */}
-            <View style={styles.backDivider} />
-
-            {/* Call Captain button */}
-            <View style={styles.actionButton}>
-                <Text style={styles.buttonText}>Call Captain</Text>
-            </View>
-
-        </View>
-
-        <Pressable style={styles.crossButton} onPress={onClose} hitSlop={15}>
-            <Ionicons name="close" size={22} color="#000" />
-        </Pressable>
-    </>
-);
-
+import { EmployeeActiveChauffeurBooking } from "../services/bookingsApi";
+import * as Linking from 'expo-linking';
 import Animated, {
     useSharedValue,
     useAnimatedStyle,
@@ -141,15 +13,270 @@ import Animated, {
     interpolate,
     Extrapolation,
     runOnJS,
-    withTiming
+    withTiming,
+    withRepeat
 } from "react-native-reanimated";
 import { useWindowDimensions } from "react-native";
 import * as Haptics from "expo-haptics";
 
+interface FrontContentProps {
+    booking: EmployeeActiveChauffeurBooking | null;
+    isLoading?: boolean;
+    isChauffeurEnabled?: boolean;
+}
+
+const SkeletonItem = ({ style, color = 'rgba(255,255,255,0.4)' }: { style: any, color?: string }) => {
+    const opacity = useSharedValue(0.3);
+
+    React.useEffect(() => {
+        opacity.value = withRepeat(
+            withTiming(0.7, { duration: 800 }),
+            -1,
+            true
+        );
+    }, [opacity]);
+
+    const animatedStyle = useAnimatedStyle(() => ({
+        opacity: opacity.value,
+        backgroundColor: color,
+        borderRadius: 8,
+    }));
+
+    return <Animated.View style={[style, animatedStyle]} />;
+};
+
+const FrontContent = ({ booking, isLoading, isChauffeurEnabled }: FrontContentProps) => {
+    const isChauffeur = !!booking || isChauffeurEnabled;
+    const hasTrip = !!booking;
+
+    const completedDays = booking ? (booking.completed_days ?? 0) : 0;
+    const totalDays = booking ? (booking.total_days ?? 0) : 0;
+    const todayLog = booking?.today_log;
+    const todayStatus = todayLog?.status?.toUpperCase();
+    const isDroppedOff = todayStatus === 'DROPPED_OFF' || todayStatus === 'IN_PROGRESS';
+    
+    const tripType = booking?.trip_type === 'OUT_STATION' ? 'Outstation' : 'Incity trip';
+
+    const illustration = isChauffeur
+        ? require('../../../../assets/chauffeur-car.png')
+        : require('../../../../assets/city_bus_bro_2.png');
+
+    if (isLoading) {
+        return (
+            <View style={styles.frontContainer}>
+                <View style={styles.brandRow}>
+                    <SkeletonItem style={{ width: 120, height: 20 }} />
+                </View>
+                <View style={[styles.illustrationContainer, { opacity: 0.1 }]}>
+                    <Image source={illustration} style={styles.illustration} contentFit="contain" />
+                </View>
+                <View style={styles.headlineContainer}>
+                    <SkeletonItem style={{ width: '80%', height: 36, marginBottom: 8 }} />
+                    <SkeletonItem style={{ width: '60%', height: 36 }} />
+                </View>
+                <View style={styles.divider} />
+                <View style={styles.statRow}>
+                    <SkeletonItem style={{ width: 100, height: 28 }} />
+                    <SkeletonItem style={{ width: 80, height: 28, borderRadius: 10 }} />
+                </View>
+            </View>
+        );
+    }
+
+    const headline = hasTrip
+        ? `${tripType},\nDay ${completedDays}/${totalDays}`
+        : isChauffeur
+            ? "No trips scheduled"
+            : "North Nazimabad,\nTower";
+
+    return (
+        <View style={styles.frontContainer}>
+            {/* Top brand row */}
+            <View style={styles.brandRow}>
+                <Text style={styles.brandName}>{isChauffeur ? "Your Chauffeur" : "Daily Shuttle"}</Text>
+            </View>
+
+            {/* Center illustration */}
+            <View style={styles.illustrationContainer}>
+                <Image
+                    source={illustration}
+                    style={styles.illustration}
+                    contentFit="contain"
+                    transition={0}
+                />
+            </View>
+
+            {/* Headline text */}
+            <View style={[styles.headlineContainer, !hasTrip && isChauffeur && { alignItems: 'center' }]}>
+                <Text style={[styles.headlineText, !hasTrip && isChauffeur && { textAlign: 'center', marginBottom: 20 }]}>
+                    {headline}
+                </Text>
+            </View>
+
+            {/* Divider and Stat Row shown only if there is a trip or it's NOT a chauffeur empty state */}
+            {(!isChauffeur || hasTrip) && (
+                <>
+                    <View style={styles.divider} />
+                    <View style={styles.statRow}>
+                        <View style={styles.statLeft}>
+                            <Text style={styles.statNumber}>
+                                {hasTrip ? (
+                                    isDroppedOff ? "In Progress" : (booking.scheduled_for ? new Date(booking.scheduled_for).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "—")
+                                ) : "08:00 AM"}
+                            </Text>
+                        </View>
+                        <View style={styles.arrowContainer}>
+                            <Text style={styles.flipHintText}>Tap for details</Text>
+                            <MaterialCommunityIcons name="rotate-3d-variant" size={20} color="black" />
+                        </View>
+                    </View>
+                </>
+            )}
+        </View>
+    );
+};
+
+interface BackContentProps {
+    booking: EmployeeActiveChauffeurBooking | null;
+    onClose: () => void;
+}
+
+
+const BackContent = ({ booking, onClose }: BackContentProps) => {
+    const isChauffeur = !!booking;
+    const driver = booking?.users_chauffeur_bookings_driver_idTousers;
+    const vehicle = booking?.vehicles;
+    const todayLog = booking?.today_log;
+    const todayStatus = todayLog?.status?.toUpperCase();
+    const isDroppedOff = todayStatus === 'DROPPED_OFF' || todayStatus === 'IN_PROGRESS';
+    const showRequestCaptain = !!booking?.can_request_driver;
+
+    const driverName = driver?.full_name ?? (isChauffeur ? "Assigning..." : "Sajjad Hussain");
+    const driverPhone = driver?.phone;
+    const plateNumber = vehicle?.plate_number ?? (isChauffeur ? "—" : "ABC-1234");
+    const vehicleInfo = vehicle ? `${vehicle.make} • ${vehicle.color}` : (isChauffeur ? "—" : "Hiace • White");
+
+    const handleAction = () => {
+        if (showRequestCaptain) {
+            // Request logic can be added later if needed
+        } else if (driverPhone) {
+            Linking.openURL(`tel:${driverPhone}`);
+        }
+    };
+
+    const initials = driverName
+        .split(' ')
+        .map((n) => n[0])
+        .join('')
+        .slice(0, 2)
+        .toUpperCase();
+
+    return (
+        <>
+            <LinearGradient
+                style={styles.gradient}
+                colors={["#F1F443", "#F1F443"]}
+            />
+            <View style={styles.backContent}>
+
+                {/* Header */}
+                <Text style={styles.backTitle}>Ride Details</Text>
+
+                {/* Captain avatar + info grid — grouped close together */}
+                <View style={styles.captainBlock}>
+
+                    {/* Captain avatar */}
+                    <View style={styles.captainSection}>
+                        <View style={styles.avatarCircle}>
+                            <Text style={styles.avatarInitials}>{initials}</Text>
+                        </View>
+                        <Text style={styles.captainRole}>Your Captain</Text>
+                        <Text style={styles.captainName}>{driverName}</Text>
+                    </View>
+
+                    {/* Divider between avatar and grid */}
+                    <View style={styles.backDivider} />
+
+                    {/* 3-column info grid */}
+                    <View style={styles.infoGrid}>
+                        {/* Vehicle */}
+                        <View style={styles.infoCell}>
+                            <View style={styles.infoIconBox}>
+                                <MaterialCommunityIcons name="bus" size={16} color="#000" />
+                            </View>
+                            <Text style={styles.infoCellLabel}>Vehicle</Text>
+                            <Text style={styles.infoCellValue}>{plateNumber}</Text>
+                            <Text style={styles.infoCellSub}>{vehicleInfo}</Text>
+                        </View>
+
+                        <View style={styles.gridSeparator} />
+
+                        {/* Pickup Time */}
+                        <View style={styles.infoCell}>
+                            <View style={styles.infoIconBox}>
+                                <Ionicons name="time-outline" size={16} color="#000" />
+                            </View>
+                            <Text style={styles.infoCellLabel}>Pickup Time</Text>
+                            <Text style={styles.infoCellValue}>
+                                {isChauffeur ? (
+                                    isDroppedOff ? "In Progress" : (booking.scheduled_for ? new Date(booking.scheduled_for).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "—")
+                                ) : "08:00 AM"}
+                            </Text>
+                            <Text style={styles.infoCellSub}>Today</Text>
+                        </View>
+
+                        <View style={styles.gridSeparator} />
+
+                        {/* Stop */}
+                        <View style={styles.infoCell}>
+                            <View style={styles.infoIconBox}>
+                                <Ionicons name="location-outline" size={16} color="#000" />
+                            </View>
+                            <Text style={styles.infoCellLabel}>{isChauffeur ? "Pickup" : "Stop"}</Text>
+                            <Text style={styles.infoCellValue}>{isChauffeur ? (booking.pickup_address?.split(',')[0] ?? "—") : "Main Gate"}</Text>
+                            <Text style={styles.infoCellSub}>{isChauffeur ? "" : "Sector 4"}</Text>
+                        </View>
+                    </View>
+
+                </View>
+
+                {/* Divider below grid, same distance as the one above */}
+                <View style={styles.backDivider} />
+
+                {/* Call Captain button */}
+                <Pressable onPress={handleAction}>
+                    <View style={styles.actionButton}>
+                        <Text style={styles.buttonText}>{showRequestCaptain ? "Request Captain" : "Call Captain"}</Text>
+                    </View>
+                </Pressable>
+
+            </View>
+
+            <Pressable style={styles.crossButton} onPress={onClose} hitSlop={15}>
+                <Ionicons name="close" size={22} color="#000" />
+            </Pressable>
+        </>
+    );
+};
+
+
+
+
 const CARD_WIDTH = 370;
 const CARD_HEIGHT = 420;
 
-export default function CorporateShuttleCard() {
+export default function CorporateShuttleCard({
+    booking = null,
+    isLoading = false,
+    isChauffeurEnabled = false
+}: {
+    booking?: EmployeeActiveChauffeurBooking | null;
+    isLoading?: boolean;
+    isChauffeurEnabled?: boolean;
+}) {
+    const showBack = !!booking; // Only allow flipping if there is a trip
+
+
     const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = useWindowDimensions();
     const cardRef = React.useRef<View>(null);
 
@@ -161,7 +288,9 @@ export default function CorporateShuttleCard() {
     const progress = useSharedValue(0);
 
     const openModal = () => {
+        if (!showBack) return; // Disable modal if there's no trip
         cardRef.current?.measure((x, y, w, h, pageX, pageY) => {
+
             measX.value = pageX;
             measY.value = pageY;
             progress.value = 0; // Hard reset before component mounts
@@ -276,10 +405,12 @@ export default function CorporateShuttleCard() {
             <Animated.View ref={cardRef} style={[{ width: CARD_WIDTH, height: CARD_HEIGHT }, inlineCardStyle]}>
                 <Pressable onPress={openModal} style={{ flex: 1 }}>
                     <View style={[StyleSheet.absoluteFill, { borderRadius: 28, overflow: 'hidden' }]}>
-                        <FrontContent />
+                        <FrontContent booking={booking} isLoading={isLoading} isChauffeurEnabled={isChauffeurEnabled} />
                     </View>
                 </Pressable>
             </Animated.View>
+
+
 
             {/* Full Screen Animated Modal */}
             <Modal visible={modalVisible} transparent animationType="none">
@@ -293,13 +424,15 @@ export default function CorporateShuttleCard() {
 
                         {/* Front Side */}
                         <Animated.View style={[styles.cardAbsolute, frontAnimatedStyle]}>
-                            <FrontContent />
+                            <FrontContent booking={booking} isLoading={isLoading} isChauffeurEnabled={isChauffeurEnabled} />
                         </Animated.View>
+
 
                         {/* Back Side */}
                         <Animated.View style={[styles.cardAbsolute, backAnimatedStyle]}>
-                            <BackContent onClose={closeModal} />
+                            <BackContent booking={booking} onClose={closeModal} />
                         </Animated.View>
+
 
                     </Animated.View>
                 </View>

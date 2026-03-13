@@ -1,252 +1,318 @@
-import React, { useCallback, useState } from 'react';
-import { Linking, Modal, Pressable, Text as RNText, View, ScrollView } from 'react-native';
+import React from 'react';
+import { ActivityIndicator, Pressable, Text as RNText, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Feather, Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { useChauffeurStore, type ChauffeurBooking } from '../store';
 import { fontFamily } from '@/core/theme';
 import { AppHeader } from '../../shared/components/AppHeader';
+import {
+  useGetDriverActiveBookingQuery,
+  type ActiveBooking,
+  getActiveLog,
+  isFirstDayNotStarted,
+  isBetweenDays,
+} from '../services/chauffeur.api';
 
-const Text = (props: React.ComponentProps<typeof RNText>) => {
-  return <RNText {...props} style={[{ fontFamily }, props.style]} />;
-};
+const Text = (props: React.ComponentProps<typeof RNText>) => (
+  <RNText {...props} style={[{ fontFamily }, props.style]} />
+);
 
-function BookingCard({
+// ─── Status helpers ───────────────────────────────────────────────────────────
+
+function statusLabel(status: ActiveBooking['status']): string {
+  const map: Record<string, string> = {
+    PENDING: 'Pending',
+    ASSIGNED: 'Assigned',
+    OTW: 'On The Way',
+    ARRIVED: 'Arrived',
+    IN_PROGRESS: 'In Progress',
+    DROPPED_OFF: 'Dropped Off',
+    ENDED: 'Ended',
+    COMPLETED: 'Completed',
+    CANCELLED: 'Cancelled',
+  };
+  return map[status] ?? status;
+}
+
+function statusColor(status: ActiveBooking['status']): string {
+  const map: Record<string, string> = {
+    PENDING: '#6B7280',
+    ASSIGNED: '#F59E0B',
+    OTW: '#3B82F6',
+    ARRIVED: '#8B5CF6',
+    IN_PROGRESS: '#10B981',
+    DROPPED_OFF: '#F97316',
+    ENDED: '#6B7280',
+    COMPLETED: '#6B7280',
+    CANCELLED: '#EF4444',
+  };
+  return map[status] ?? '#6B7280';
+}
+
+// ─── Active Booking Card ──────────────────────────────────────────────────────
+
+function ActiveBookingCard({
   booking,
-  onPress,
-  showButton = false,
-  onButtonPress,
+  onStartTrip,
+  onViewDetails,
 }: {
-  booking: ChauffeurBooking;
-  onPress: () => void;
-  showButton?: boolean;
-  onButtonPress?: () => void;
+  booking: ActiveBooking;
+  onStartTrip: () => void;
+  onViewDetails: () => void;
 }) {
+  const passenger = booking.users_chauffeur_bookings_passenger_idTousers;
+  const vehicle = booking.vehicles;
+  const todayLog = getActiveLog(booking.chauffeur_trip_daily_logs);
+  const tripNotYetStarted = isFirstDayNotStarted(booking);
+  const betweenDays = isBetweenDays(booking);
+
+  const completedDays = booking.chauffeur_trip_daily_logs.filter(
+    (l) => l.status === 'COMPLETED',
+  ).length;
+  const totalDays = booking.no_of_days ?? 1;
+  const isMultiDay = totalDays > 1;
+  const currentDay = completedDays + (todayLog ? 1 : 0);
+
+  // Show "Start Trip" ONLY when we are genuinely ready to start the day:
+  // Day 1: Trip not yet started and booking is purely ASSIGNED.
+  // Day 2+: todayLog exists AND it was requested AND hasn't actually started (has no start_time).
+  const isDay2ReadyToStart = !!(todayLog && todayLog.is_requested && !todayLog.start_time);
+  const showStartButton = (tripNotYetStarted && booking.status === 'ASSIGNED') || isDay2ReadyToStart;
+
+  // "Continue Trip" is shown if it's not a start condition, not between days, and the trip is active today
+  const isTripActiveToday = !showStartButton && !betweenDays && todayLog && todayLog.start_time;
+
   return (
     <Pressable
-      onPress={onPress}
-      className="rounded-3xl p-5 bg-[#EDEDEB] mb-4 active:opacity-90 shadow-sm"
+      onPress={onViewDetails}
+      className="rounded-3xl bg-[#EDEDEB] mb-4 overflow-hidden active:opacity-90"
     >
-      <View className="flex-row items-center justify-between mb-3">
-        <View className="flex-row items-center gap-2">
-          <View className="p-2 bg-white rounded-xl">
+      {/* Header row */}
+      <View className="flex-row items-center justify-between px-5 pt-5 pb-4">
+        <View className="flex-row items-center gap-3">
+          <View className="w-10 h-10 rounded-xl bg-white items-center justify-center">
             <Ionicons name="car-sport" size={20} color="#000000" />
           </View>
-          <Text className="text-black font-bold text-lg">{booking.passengerName}</Text>
+          <View>
+            <Text
+              className="text-black font-bold text-[17px]"
+              numberOfLines={1}
+            >
+              {passenger?.full_name ?? 'Passenger'}
+            </Text>
+            {passenger?.phone && (
+              <Text className="text-[#6B7280] text-[13px] font-medium">
+                {passenger.phone}
+              </Text>
+            )}
+          </View>
         </View>
-        <View className="px-3 py-1.5 rounded-xl bg-black">
-          <Text className="text-sm font-bold text-white">{booking.pickupTime}</Text>
-        </View>
-      </View>
-      <View className="flex-row items-center gap-3">
-        <Text className="text-black text-xl font-bold">{booking.pickup}</Text>
-        <Feather name="arrow-right" size={20} color="#6B7280" />
-        <Text className="text-black text-xl font-bold flex-1" numberOfLines={1}>
-          {booking.dropoff}
-        </Text>
-      </View>
-      <Text className="text-[#6B7280] text-sm mt-1 font-medium">{booking.dateLabel}</Text>
 
-      {showButton && (
+        {/* Status badge */}
+        <View
+          className="px-3 py-1.5 rounded-xl"
+          style={{ backgroundColor: statusColor(booking.status) + '20' }}
+        >
+          <Text
+            className="text-xs font-bold"
+            style={{ color: statusColor(booking.status) }}
+          >
+            {statusLabel(booking.status)}
+          </Text>
+        </View>
+      </View>
+
+      {/* Trip info */}
+      <View className="px-5 pb-4 gap-2">
+        {/* Pickup */}
+        {booking.pickup_address ? (
+          <View className="flex-row items-start gap-2">
+            <Ionicons name="location" size={16} color="#FF5A00" style={{ marginTop: 2 }} />
+            <Text className="text-black text-[14px] font-semibold flex-1" numberOfLines={2}>
+              {booking.pickup_address}
+            </Text>
+          </View>
+        ) : null}
+
+        {/* Destination cities */}
+        {booking.destination_cities?.length > 0 ? (
+          <View className="flex-row items-start gap-2">
+            <Ionicons name="flag" size={16} color="#6B7280" style={{ marginTop: 2 }} />
+            <Text className="text-[#6B7280] text-[14px] font-medium flex-1" numberOfLines={1}>
+              {booking.destination_cities.join(', ')}
+            </Text>
+          </View>
+        ) : null}
+
+        {/* Trip type / days */}
+        <View className="flex-row items-center gap-4 mt-1">
+          <View className="flex-row items-center gap-1.5">
+            <MaterialCommunityIcons
+              name={booking.trip_type === 'OUT_STATION' ? 'map-marker-distance' : 'city'}
+              size={14}
+              color="#6B7280"
+            />
+            <Text className="text-[#6B7280] text-[13px] font-medium">
+              {booking.trip_type === 'OUT_STATION' ? 'Outstation' : 'In-City'}
+            </Text>
+          </View>
+
+          {isMultiDay && (
+            <View className="flex-row items-center gap-1.5">
+              <Ionicons name="calendar-outline" size={14} color="#6B7280" />
+              <Text className="text-[#6B7280] text-[13px] font-medium">
+                {betweenDays
+                  ? `Day ${completedDays} of ${totalDays} done`
+                  : todayLog
+                    ? `Day ${currentDay} of ${totalDays}`
+                    : `${totalDays} days`}
+              </Text>
+            </View>
+          )}
+
+          {vehicle?.plate_number && (
+            <View className="flex-row items-center gap-1.5">
+              <MaterialCommunityIcons name="car" size={14} color="#6B7280" />
+              <Text className="text-[#6B7280] text-[13px] font-medium">
+                {vehicle.plate_number}
+              </Text>
+            </View>
+          )}
+        </View>
+      </View>
+
+      {/* Between-days info banner */}
+      {betweenDays && (
+        <View className="mx-4 mb-4 rounded-xl bg-[#FFF7ED] px-4 py-3 flex-row items-center gap-2">
+          <Ionicons name="time-outline" size={16} color="#F97316" />
+          <Text className="text-[#F97316] text-[13px] font-semibold flex-1">
+            Waiting for passenger to request next pickup
+          </Text>
+        </View>
+      )}
+
+      {/* Start button — only on first day before trip has begun */}
+      {showStartButton && (
         <Pressable
           onPress={(e) => {
             e.stopPropagation();
-            onButtonPress?.();
+            onStartTrip();
           }}
-          className="flex-row items-center justify-center gap-2 py-1 rounded-xl mt-4 bg-[#FF5A00] active:scale-[0.98]"
+          className="mx-4 mb-5 flex-row items-center justify-center gap-2 py-4 rounded-xl bg-[#FF5A00] active:opacity-90"
         >
           <Ionicons name="play-sharp" size={18} color="#FFFFFF" />
-          <Text className="text-white text-lg font-bold py-2">Start</Text>
+          <Text className="text-white text-[16px] font-bold">Start Trip</Text>
         </Pressable>
+      )}
+
+      {/* "Continue" label for in-progress trips (no re-start needed) */}
+      {isTripActiveToday && (
+        <View className="px-5 pb-4">
+          <Pressable
+            onPress={(e) => {
+              e.stopPropagation();
+              onViewDetails();
+            }}
+            className="flex-row items-center justify-center gap-2 py-3 rounded-xl bg-black active:opacity-80"
+          >
+            <Text className="text-white text-[15px] font-bold">Continue Trip</Text>
+            <Ionicons name="arrow-forward" size={16} color="#FFFFFF" />
+          </Pressable>
+        </View>
       )}
     </Pressable>
   );
 }
 
+// ─── Empty State ──────────────────────────────────────────────────────────────
+
+function EmptyState() {
+  return (
+    <View className="rounded-3xl bg-[#EDEDEB] py-10 px-4 items-center">
+      <Ionicons name="calendar-outline" size={48} color="#6B7280" />
+      <Text className="text-[#6B7280] text-lg font-medium mt-3 text-center">
+        No active booking
+      </Text>
+      <Text className="text-[#6B7280]/60 text-sm mt-1 text-center">
+        You'll see your assigned trip here when ready.
+      </Text>
+    </View>
+  );
+}
+
+// ─── Main Screen ──────────────────────────────────────────────────────────────
+
 export function ChauffeurHomeScreen() {
-  const { bookings, setSelectedBooking } = useChauffeurStore();
-  const [showRequestModal, setShowRequestModal] = useState(false);
+  const { data: activeBooking, isLoading, isError, refetch } = useGetDriverActiveBookingQuery();
 
-  // Merge them for indexed rendering or just map through bookings directly
-  // if you want to follow the "first, second, third" logic precisely.
-  const displayBookings = bookings;
-
-  const devBooking: ChauffeurBooking | undefined = bookings[0];
-
-  const handleBookingPress = (booking: ChauffeurBooking) => {
-    setSelectedBooking(booking.id);
-    router.push('/chauffeur/booking-detail');
-  };
-
-  const handleStartTrip = (booking: ChauffeurBooking) => {
-    setSelectedBooking(booking.id);
-    if (booking.isOutstation) {
-      router.push('/chauffeur/start-ride');
-    } else {
-      router.push('/chauffeur/active-trip');
-    }
-  };
-
-  const handleDevOpenRequest = () => {
-    if (devBooking) {
-      setSelectedBooking(devBooking.id);
-      setShowRequestModal(true);
-    }
-  };
-
-  const handleDevProceedToTrip = useCallback(() => {
-    setShowRequestModal(false);
-    router.push('/chauffeur/active-trip');
-  }, []);
-
-  const today = new Date();
-  const dateStr = today.toLocaleDateString('en-US', {
+  const today = new Date().toLocaleDateString('en-US', {
     month: 'long',
     day: 'numeric',
     year: 'numeric',
   });
 
+  const handleStartTrip = () => {
+    if (!activeBooking) return;
+    if (activeBooking.trip_type === 'OUT_STATION') {
+      router.push('/chauffeur/active-trip');
+    } else {
+      router.push('/chauffeur/active-trip');
+    }
+  };
+
+  const handleViewDetails = () => {
+    router.push('/chauffeur/active-trip');
+  };
+
   return (
     <SafeAreaView className="flex-1 bg-[#FFFFFF]" edges={['top']}>
       <AppHeader />
-      <ScrollView className="flex-1 px-5" showsVerticalScrollIndicator={false}>
-
+      <ScrollView
+        className="flex-1 px-5"
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: 40 }}
+      >
         <View className="mb-6">
-          <Text className="text-[34px] font-bold text-black">My Bookings</Text>
-          <Text className="text-[#6B7280] text-base font-medium">{dateStr}</Text>
+          <Text className="text-[34px] font-bold text-black">My Booking</Text>
+          <Text className="text-[#6B7280] text-base font-medium">{today}</Text>
         </View>
 
-        <View className="mt-2">
-          {displayBookings.map((booking, index) => (
-            <BookingCard
-              key={booking.id}
-              booking={booking}
-              onPress={() => handleBookingPress(booking)}
-              showButton={index === 0 || index === 2}
-              onButtonPress={() => handleStartTrip(booking)}
-            />
-          ))}
-        </View>
-
-        {displayBookings.length === 0 && (
-          <View className="rounded-3xl bg-[#EDEDEB] py-8 px-4 items-center">
-            <Ionicons name="calendar-outline" size={48} color="#6B7280" />
-            <Text className="text-[#6B7280] text-lg font-medium mt-3 text-center">
-              No assigned bookings
-            </Text>
-            <Text className="text-[#6B7280]/60 text-sm mt-1 text-center">
-              You will see pre-assigned trips here.
-            </Text>
+        {isLoading && (
+          <View className="items-center py-12">
+            <ActivityIndicator size="large" color="#FF5A00" />
+            <Text className="text-[#6B7280] mt-3 font-medium">Loading your booking…</Text>
           </View>
         )}
 
-        <View className="mb-8" />
-      </ScrollView>
-
-      {__DEV__ && devBooking && (
-        <View className="px-5 pb-6">
-          <Pressable
-            onPress={handleDevOpenRequest}
-            className="py-3 rounded-2xl bg-[#EDEDEB] items-center justify-center"
-          >
-            <Text className="text-black text-xs font-medium">
-              DEV: Open passenger request modal
+        {isError && !isLoading && (
+          <View className="rounded-3xl bg-[#FFF1F0] px-5 py-6 items-center">
+            <Ionicons name="alert-circle-outline" size={36} color="#EF4444" />
+            <Text className="text-[#EF4444] font-semibold mt-2 text-center">
+              Could not load booking
             </Text>
-          </Pressable>
-        </View>
-      )}
-
-      <Modal
-        visible={showRequestModal}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowRequestModal(false)}
-      >
-        <View
-          style={{
-            flex: 1,
-            backgroundColor: 'rgba(0,0,0,0.45)',
-            justifyContent: 'center',
-            alignItems: 'center',
-            paddingHorizontal: 24,
-          }}
-        >
-          <View
-            style={{
-              width: '100%',
-              borderRadius: 10,
-              backgroundColor: '#ffffff',
-              paddingHorizontal: 20,
-              paddingVertical: 24,
-            }}
-          >
-            <Text
-              style={{
-                fontSize: 18,
-                fontWeight: '600',
-                color: '#111827',
-                textAlign: 'center',
-                marginBottom: 16,
-              }}
+            <Pressable
+              onPress={refetch}
+              className="mt-4 px-6 py-2.5 rounded-xl bg-[#EF4444] active:opacity-80"
             >
-              {(devBooking?.passengerName ?? 'Abdul Rasheed')} has requested your arrival
-            </Text>
-            <Text
-              style={{
-                fontSize: 13,
-                fontWeight: '500',
-                color: '#6B7280',
-                textAlign: 'center',
-              }}
-            >
-              Next destination
-            </Text>
-            <Text
-              style={{
-                fontSize: 24,
-                fontWeight: '700',
-                color: '#111827',
-                textAlign: 'center',
-                marginTop: 4,
-                marginBottom: 20,
-              }}
-            >
-              {devBooking?.dropoff ?? 'Destination'}
-            </Text>
-
-            <View
-              style={{
-                flexDirection: 'row',
-                justifyContent: 'space-between',
-                columnGap: 12,
-              }}
-            >
-              <Pressable
-                onPress={handleDevProceedToTrip}
-                style={{
-                  flex: 1,
-                  borderRadius: 12,
-                  paddingVertical: 14,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  backgroundColor: '#FF5A00',
-                }}
-              >
-                <Text
-                  style={{
-                    color: '#ffffff',
-                    fontSize: 16,
-                    fontWeight: '700',
-                  }}
-                >
-                  Proceed to trip
-                </Text>
-              </Pressable>
-
-            </View>
+              <Text className="text-white font-bold">Retry</Text>
+            </Pressable>
           </View>
-        </View>
-      </Modal>
+        )}
+
+        {!isLoading && !isError && (
+          <View className="mt-2">
+            {activeBooking ? (
+              <ActiveBookingCard
+                booking={activeBooking}
+                onStartTrip={handleStartTrip}
+                onViewDetails={handleViewDetails}
+              />
+            ) : (
+              <EmptyState />
+            )}
+          </View>
+        )}
+      </ScrollView>
     </SafeAreaView>
   );
 }

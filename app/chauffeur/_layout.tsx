@@ -21,10 +21,7 @@ export default function ChauffeurHomeLayout() {
           drawerContent={(props) => <ChauffeurDrawerContent {...props} />}
         >
           <Drawer.Screen name="index" options={hideDrawerItem} />
-          <Drawer.Screen name="booking-detail" options={hideDrawerItem} />
-          <Drawer.Screen name="start-ride" options={hideDrawerItem} />
           <Drawer.Screen name="active-trip" options={hideDrawerItem} />
-          <Drawer.Screen name="profile" options={hideDrawerItem} />
           <Drawer.Screen name="end-ride" options={hideDrawerItem} />
         </Drawer>
       </View>

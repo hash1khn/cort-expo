@@ -4,6 +4,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { EmployeeDrawerContent } from '@/features/employee/components/EmployeeDrawerContent';
 
 const hideDrawerItem = { drawerItemStyle: { display: 'none' as const } };
+const disableSwipe = { ...hideDrawerItem, swipeEnabled: false };
 
 export default function Layout() {
   return (
@@ -22,9 +23,9 @@ export default function Layout() {
         >
           <Drawer.Screen name="index" options={hideDrawerItem} />
           <Drawer.Screen name="rides" options={hideDrawerItem} />
-          <Drawer.Screen name="qr-scanner" options={hideDrawerItem} />
-          <Drawer.Screen name="ride-details" options={hideDrawerItem} />
-          <Drawer.Screen name="ride-active" options={hideDrawerItem} />
+          <Drawer.Screen name="qr-scanner" options={disableSwipe} />
+          <Drawer.Screen name="ride-details" options={disableSwipe} />
+          <Drawer.Screen name="ride-active" options={disableSwipe} />
         </Drawer>
       </View>
     </GestureHandlerRootView>
