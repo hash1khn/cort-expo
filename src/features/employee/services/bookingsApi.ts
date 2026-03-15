@@ -169,10 +169,24 @@ export const bookingsApi = baseApi.injectEndpoints({
         response.data ?? null,
       providesTags: ['ChauffeurBooking'],
     }),
+
+    requestNextDayPickup: builder.mutation<
+      any,
+      { companyId: number; bookingId: number; pickup_location: string }
+    >({
+      query: ({ companyId, bookingId, pickup_location }) => ({
+        url: `/employee/companies/${companyId}/chauffeur-bookings/${bookingId}/request-driver`,
+        method: 'POST',
+        body: { pickup_location },
+      }),
+      invalidatesTags: ['ChauffeurBooking'],
+    }),
   }),
 });
 
 export const {
   useGetChauffeurBookingsQuery,
   useGetEmployeeActiveChauffeurBookingQuery,
+  useRequestNextDayPickupMutation,
 } = bookingsApi;
+

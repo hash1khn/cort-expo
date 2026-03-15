@@ -1,10 +1,11 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { ActivityIndicator, Pressable, Text as RNText, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { fontFamily } from '@/core/theme';
 import { AppHeader } from '../../shared/components/AppHeader';
+import { RequestedModal } from '../components/RequestedModal';
 import {
   useGetDriverActiveBookingQuery,
   type ActiveBooking,
@@ -82,10 +83,14 @@ function ActiveBookingCard({
   // "Continue Trip" is shown if it's not a start condition, not between days, and the trip is active today
   const isTripActiveToday = !showStartButton && !betweenDays && todayLog && todayLog.start_time;
 
+  // If betweenDays, card should not be pushable
+  const isCardPressable = !betweenDays;
   return (
     <Pressable
-      onPress={onViewDetails}
+      onPress={isCardPressable ? onViewDetails : undefined}
+      disabled={!isCardPressable}
       className="rounded-3xl bg-[#EDEDEB] mb-4 overflow-hidden active:opacity-90"
+      style={isCardPressable ? undefined : { opacity: 0.7 }}
     >
       {/* Header row */}
       <View className="flex-row items-center justify-between px-5 pt-5 pb-4">
@@ -244,12 +249,24 @@ function EmptyState() {
 
 export function ChauffeurHomeScreen() {
   const { data: activeBooking, isLoading, isError, refetch } = useGetDriverActiveBookingQuery();
+  const [isRequestModalVisible, setIsRequestModalVisible] = useState(false);
 
   const today = new Date().toLocaleDateString('en-US', {
     month: 'long',
     day: 'numeric',
     year: 'numeric',
   });
+
+  // Check if we should show the day 2+ request modal
+  useEffect(() => {
+    if (activeBooking) {
+      const todayLog = getActiveLog(activeBooking.chauffeur_trip_daily_logs ?? []);
+      const isDay2ReadyToStart = !!(todayLog && todayLog.is_requested && !todayLog.start_time);
+      if (isDay2ReadyToStart) {
+        setIsRequestModalVisible(true);
+      }
+    }
+  }, [activeBooking]);
 
   const handleStartTrip = () => {
     if (!activeBooking) return;
@@ -263,6 +280,16 @@ export function ChauffeurHomeScreen() {
   const handleViewDetails = () => {
     router.push('/chauffeur/active-trip');
   };
+
+  const handleStartFromModal = () => {
+    setIsRequestModalVisible(false);
+    handleStartTrip();
+  };
+
+  // Get employee name and pickup location for modal
+  const employeeName = activeBooking?.users_chauffeur_bookings_passenger_idTousers?.full_name ?? 'Employee';
+  const todayLog = getActiveLog(activeBooking?.chauffeur_trip_daily_logs ?? []);
+  const pickupLocation = todayLog?.pickup_location || activeBooking?.pickup_address || 'Pickup location';
 
   return (
     <SafeAreaView className="flex-1 bg-[#FFFFFF]" edges={['top']}>
@@ -313,6 +340,16 @@ export function ChauffeurHomeScreen() {
           </View>
         )}
       </ScrollView>
+
+      {/* Day 2+ Request Modal */}
+      <RequestedModal
+        visible={isRequestModalVisible}
+        employeeName={employeeName}
+        pickupLocation={pickupLocation}
+        onStart={handleStartFromModal}
+        onClose={() => setIsRequestModalVisible(false)}
+      />
     </SafeAreaView>
   );
 }
+

@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { View, ScrollView, Pressable, Text as RNText, StyleSheet, Image, Modal, ActivityIndicator, Alert, TextInput } from 'react-native';
+import { View, ScrollView, Pressable, Text as RNText, StyleSheet, Image, Modal, ActivityIndicator, Alert, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -56,6 +56,17 @@ export function EndRideScreen() {
             return;
         }
 
+        if (STEPS[currentStep] === 'Meter' && !meterValue.trim()) {
+            toast.show(
+                <CustomToast
+                    type="error"
+                    message={'Meter reading is mandatory'}
+                />,
+                { duration: 3500, position: 'top', backgroundColor: '#ff4545' },
+            );
+            return;
+        }
+
         if (currentStep < STEPS.length - 1) {
             setCurrentStep((s) => s + 1);
         } else {
@@ -99,7 +110,31 @@ export function EndRideScreen() {
             
             // Go back to home
             router.push('/chauffeur');
-        } catch (err) {
+        } catch (err: any) {
+            // If the trip was already ENDED in a previous attempt (idempotent retry),
+            // treat it as success and navigate home instead of showing an error.
+            const errMessage: string = err?.data?.message ?? '';
+            if (err?.status === 400 && errMessage.includes('ENDED')) {
+                router.push('/chauffeur');
+                return;
+            }
+            if (err?.status === 400 && errMessage.includes('greater than meter_reading_start')) {
+                toast.show(
+                    <CustomToast
+                        type="error"
+                        message="Reading should be greater than start reading"
+                    />,
+                    { duration: 3500, position: 'top' }
+                );
+                
+                const meterStepIndex = STEPS.indexOf('Meter');
+                if (meterStepIndex !== -1) {
+                    setCurrentStep(meterStepIndex);
+                } else {
+                    setCurrentStep(0);
+                }
+                return;
+            }
             console.error('End ride error:', err);
             toast.show(
                 <CustomToast
@@ -157,17 +192,32 @@ export function EndRideScreen() {
     return (
         <SafeAreaView className="flex-1 bg-[#FFFFFF]" edges={['top']}>
             <View className="flex-row items-center px-4 py-3 pb-0">
-                <Pressable onPress={() => router.back()} hitSlop={12} className="p-2 -ml-2">
+                <Pressable 
+                    onPress={() => {
+                        if (currentStep > 0) {
+                            handlePrev();
+                        } else {
+                            router.back();
+                        }
+                    }} 
+                    hitSlop={12} 
+                    className="p-2 -ml-2"
+                >
                     <Feather name="chevron-left" size={28} color="black" />
                 </Pressable>
             </View>
 
-            <ScrollView
-                className="flex-1 px-6 pt-2"
-                showsVerticalScrollIndicator={false}
-                contentContainerStyle={{ paddingBottom: 100 }} // Reserve space for buttons
+            <KeyboardAvoidingView 
+                style={{ flex: 1 }} 
+                behavior={Platform.OS === 'ios' ? 'padding' : undefined}
             >
-                <View className="mb-4">
+                <ScrollView
+                    className="flex-1 px-6 pt-2"
+                    showsVerticalScrollIndicator={false}
+                    contentContainerStyle={{ paddingBottom: 100 }} // Reserve space for buttons
+                    keyboardShouldPersistTaps="handled"
+                >
+                    <View className="mb-4">
                     <Text className="text-[34px] font-bold text-black">
                         End Ride
                     </Text>
@@ -354,6 +404,7 @@ export function EndRideScreen() {
                 </View>
 
             </ScrollView>
+            </KeyboardAvoidingView>
 
             {/* Bottom Navigation Buttons */}
             <View
@@ -374,7 +425,7 @@ export function EndRideScreen() {
                 <Pressable
                     onPress={handleNext}
                     disabled={isEnding}
-                    className="flex-1 rounded-2xl py-4 items-center justify-center bg-[#FF5A00] active:opacity-90 disabled:opacity-70"
+                    className="flex-1 flex-row rounded-2xl py-4 items-center justify-center bg-[#FF5A00] active:opacity-90 disabled:opacity-70"
                     style={{ paddingVertical: 14 }}
                 >
                     {isEnding && (

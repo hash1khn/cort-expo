@@ -2,18 +2,27 @@ import React from 'react';
 import {
   Pressable,
   StyleSheet,
-  Text,
+  Text as RNText,
   View,
-  StatusBar,
   Platform,
-  Image,
   Dimensions,
 } from 'react-native';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  useAnimatedScrollHandler,
+  interpolate,
+  Extrapolation,
+} from 'react-native-reanimated';
+import type { SharedValue } from 'react-native-reanimated'; // ✅ correct type import
+import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { colors, typography } from '../../../core/theme';
+import { colors, typography, fontFamily } from '../../../core/theme';
 import { CortButton } from '@/components';
-import AnimatedMeshGradient from '@/shared/ui/organisms/mesh-gradient';
-import type { IMeshGradientColor } from '@/shared/ui/organisms/mesh-gradient/types';
+
+const Text = (props: React.ComponentProps<typeof RNText>) => {
+  return <RNText {...props} style={[{ fontFamily }, props.style]} />;
+};
 
 const { width, height } = Dimensions.get('window');
 
@@ -22,161 +31,249 @@ type Props = {
   onApplyAsChauffeur?: () => void;
 };
 
-export function GetStartedScreen({ onGetStarted, onApplyAsChauffeur }: Props) {
+const CAROUSEL_DATA = [
+  {
+    id: '1',
+    image: require('../../../../assets/user_onboard.svg'),
+    title: 'Your Commute, Simplified',
+    subtitle: 'Safe • On-Time • Tracked',
+  },
+  {
+    id: '2',
+    image: require('../../../../assets/car_pool.svg'),
+    title: 'Safe & Secure',
+    subtitle: 'Chauffeurs you can trust.',
+  },
+  {
+    id: '3',
+    image: require('../../../../assets/bus_stop.svg'),
+    title: 'Destinations on time',
+    subtitle: 'Shuttles for every route.',
+  },
+];
 
+// ---------------------------------------------------------------------------
+// Carousel Item
+// ---------------------------------------------------------------------------
+type CarouselItemProps = {
+  item: (typeof CAROUSEL_DATA)[0];
+  index: number;
+  scrollX: SharedValue<number>; // ✅ use SharedValue<number> directly
+};
+
+function CarouselItem({ item, index, scrollX }: CarouselItemProps) {
+  const animatedStyle = useAnimatedStyle(() => {
+    const scale = interpolate(
+      scrollX.value,
+      [(index - 1) * width, index * width, (index + 1) * width],
+      [0.8, 1, 0.8],
+      Extrapolation.CLAMP
+    );
+    const opacity = interpolate(
+      scrollX.value,
+      [(index - 1) * width, index * width, (index + 1) * width],
+      [0.4, 1, 0.4],
+      Extrapolation.CLAMP
+    );
+    return { transform: [{ scale }], opacity };
+  });
+
+  return (
+    <View style={styles.slide}>
+      {/*
+        expo-image doesn't need createAnimatedComponent — we apply the
+        animated style to a wrapping Animated.View instead, which is simpler
+        and avoids any compatibility issues.
+      */}
+      <Animated.View style={[styles.illustrationWrapper, animatedStyle]}>
+        <Image
+          source={item.image}
+          style={styles.illustration}
+          contentFit="contain"
+        />
+      </Animated.View>
+      <View style={styles.textContainer}>
+        <Text style={styles.heading}>{item.title}</Text>
+        <Text style={styles.body}>{item.subtitle}</Text>
+      </View>
+    </View>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Dot Indicator
+// ---------------------------------------------------------------------------
+type DotIndicatorProps = {
+  index: number;
+  scrollX: SharedValue<number>; // ✅
+};
+
+function DotIndicator({ index, scrollX }: DotIndicatorProps) {
+  const animatedStyle = useAnimatedStyle(() => {
+    const dotWidth = interpolate(
+      scrollX.value,
+      [(index - 1) * width, index * width, (index + 1) * width],
+      [8, 20, 8],
+      Extrapolation.CLAMP
+    );
+    const opacity = interpolate(
+      scrollX.value,
+      [(index - 1) * width, index * width, (index + 1) * width],
+      [0.2, 1, 0.2],
+      Extrapolation.CLAMP
+    );
+    return {
+      width: dotWidth,
+      opacity,
+      backgroundColor: colors.orange,
+    };
+  });
+
+  return <Animated.View style={[styles.indicator, animatedStyle]} />;
+}
+
+// ---------------------------------------------------------------------------
+// Main Screen
+// ---------------------------------------------------------------------------
+export function GetStartedScreen({ onGetStarted, onApplyAsChauffeur }: Props) {
+  const scrollX = useSharedValue(0);
+
+  const scrollHandler = useAnimatedScrollHandler((event) => {
+    scrollX.value = event.contentOffset.x;
+  });
 
   return (
     <View style={styles.root}>
-      <StatusBar barStyle="dark-content" backgroundColor={colors.white} />
       <SafeAreaView style={styles.safeArea}>
-
-
         {/* Header: Logo */}
         <View style={styles.header}>
           <Image
             source={require('../../../../assets/cort-without-at-your.png')}
             style={styles.logoImage}
-            resizeMode="contain"
+            contentFit="contain"
           />
         </View>
 
-        {/* Content: Hero Image */}
-        <View style={styles.heroContainer} className="">
-          <Image
-            source={require('../../../../assets/imagee.png')}
-            style={styles.heroImage}
-            resizeMode="contain"
+        {/* Middle: Carousel */}
+        <View style={styles.carouselContainer}>
+          <Animated.FlatList
+            data={CAROUSEL_DATA}
+            renderItem={({ item, index }) => (
+              <CarouselItem item={item} index={index} scrollX={scrollX} />
+            )}
+            horizontal
+            pagingEnabled
+            showsHorizontalScrollIndicator={false}
+            onScroll={scrollHandler}
+            scrollEventThrottle={16}
+            keyExtractor={(item) => item.id}
           />
         </View>
 
-        {/* Footer: Text & CTA */}
-        <View style={styles.footer} className="">
-          <View style={styles.textBlock}>
-            <Text style={styles.heading}>
-              Your Commute, Simplified
-            </Text>
-            <Text style={styles.body}>
-              Safe • On-Time • Tracked
-            </Text>
-          </View>
+        {/* Pagination Dots */}
+        <View style={styles.indicatorContainer}>
+          {CAROUSEL_DATA.map((_, i) => (
+            <DotIndicator key={i} index={i} scrollX={scrollX} />
+          ))}
+        </View>
 
+        {/* Footer: Buttons */}
+        <View style={styles.footer}>
           <CortButton
             title="Get Started"
             onPress={onGetStarted}
             variant="primary"
-            disabled={false}
           />
-
-          <Pressable
-            onPress={onApplyAsChauffeur}
-            style={({ pressed }) => [
-              styles.linkContainer,
-              pressed && styles.linkPressed
-            ]}
-          >
-            <Text style={styles.linkText} className="text-center mt-8 mb-4">Apply as a chauffeur</Text>
+          <Pressable onPress={onApplyAsChauffeur} style={styles.linkContainer}>
+            <Text style={styles.linkText}>Apply as a chauffeur</Text>
           </Pressable>
         </View>
       </SafeAreaView>
     </View>
-
   );
 }
 
 const styles = StyleSheet.create({
-
   root: {
     flex: 1,
-    backgroundColor: colors.white,
+    backgroundColor: '#FFFFFF',
   },
   safeArea: {
     flex: 1,
   },
   header: {
-    height: 60,
-    justifyContent: 'center',
+    height: 80,
     alignItems: 'center',
-    marginTop: 10,
+    justifyContent: 'center',
+    marginTop: 20,
   },
   logoImage: {
-    width: 125, // Smaller logo at the top
-    height: 40,
+    width: 150,
+    height: 50,
   },
-  heroContainer: {
-    flexGrow: 1,
+  carouselContainer: {
+    flex: 1,
     justifyContent: 'center',
+  },
+  slide: {
+    width: width,
     alignItems: 'center',
+    justifyContent: 'center',
     paddingHorizontal: 20,
   },
-
-  heroImage: {
-    width: width * 0.9,
-    height: width * 0.9, // Keep it somewhat square-ish for the illustration
-    maxHeight: height * 0.45,
-  },
-  footer: {
-    paddingHorizontal: 24,
-    paddingBottom: Platform.OS === 'ios' ? 20 : 32,
-    paddingTop: 20,
-  },
-  textBlock: {
+  illustrationWrapper: {
+    width: width * 0.8,
+    height: height * 0.35,
     marginBottom: 40,
+  },
+  illustration: {
+    width: '100%',
+    height: '100%',
+  },
+  textContainer: {
     alignItems: 'center',
+    width: '100%',
   },
   heading: {
-    fontFamily: typography.family.semibold,
-    fontSize: 28,
-    color: colors.navy,
-    marginBottom: 12,
+    fontSize: 26,
+    fontWeight: '600',
+    width: '100%',
+    color: '#141414',
     textAlign: 'center',
+    marginBottom: 12,
     letterSpacing: -0.5,
   },
   body: {
-    fontFamily: typography.family.regular,
     fontSize: 16,
     color: colors.text,
-    lineHeight: 24,
     textAlign: 'center',
-    paddingHorizontal: 10,
+    lineHeight: 24,
+    opacity: 0.7,
   },
-  cta: {
-    height: 56,
-    borderRadius: 28, // Pill shape
-    backgroundColor: colors.orange,
-    alignItems: 'center',
+  indicatorContainer: {
+    flexDirection: 'row',
     justifyContent: 'center',
-    width: '100%',
+    alignItems: 'center',
+    marginVertical: 32,
   },
-  shadow: {
-    shadowColor: colors.orange,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.35,
-    shadowRadius: 16,
-    elevation: 8,
+  indicator: {
+    height: 8,
+    borderRadius: 4,
+    marginHorizontal: 4,
   },
-  ctaPressed: {
-    opacity: 0.9,
-    transform: [{ scale: 0.98 }]
-  },
-  ctaText: {
-    fontFamily: typography.family.semibold,
-    fontSize: 18,
-    color: colors.white,
+  footer: {
+    paddingHorizontal: 24,
+    paddingBottom: Platform.OS === 'ios' ? 20 : 40,
   },
   linkContainer: {
-    marginTop: 20,
+    marginTop: 16,
     paddingVertical: 12,
     alignItems: 'center',
-    width: '100%',
-  },
-  linkPressed: {
-    opacity: 0.6,
   },
   linkText: {
-    fontFamily: typography.family.regular,
-    fontWeight: '700',
     fontSize: 15,
-    alignItems: 'center',
-    color: colors.navy// Use Navy for secondary link to distinguish from CTA
+    fontWeight: '500',
+    color: colors.navy,
+    textDecorationLine: 'underline',
   },
 });

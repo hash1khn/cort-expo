@@ -179,11 +179,21 @@ export default function RideActive() {
   const [chauffeurStatus, setChauffeurStatus] = useState<string>(
     bookingStatusParam ?? activeChauffeurBooking?.status ?? 'OTW',
   );
-  // Keep status in sync when the API updates (e.g. on mount / refetch)
+  // Ordered progression used to prevent stale API data from rolling back a
+  // socket-provided status (e.g. API cache = ASSIGNED overwriting socket ARRIVED).
+  const STATUS_ORDER = ['ASSIGNED', 'OTW', 'ARRIVED', 'IN_PROGRESS', 'DROPPED_OFF', 'ENDED', 'COMPLETED'];
+  const chauffeurStatusRef = React.useRef(chauffeurStatus);
+  useEffect(() => { chauffeurStatusRef.current = chauffeurStatus; }, [chauffeurStatus]);
+  // Keep status in sync when the API updates — but only advance, never roll back.
   useEffect(() => {
-    if (activeChauffeurBooking?.status) {
-      setChauffeurStatus(activeChauffeurBooking.status);
+    if (!activeChauffeurBooking?.status) return;
+    const apiStatus = activeChauffeurBooking.status;
+    const currentIdx = STATUS_ORDER.indexOf(chauffeurStatusRef.current);
+    const apiIdx = STATUS_ORDER.indexOf(apiStatus);
+    if (apiIdx > currentIdx) {
+      setChauffeurStatus(apiStatus);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeChauffeurBooking?.status]);
 
   // ── Real-time state ──────────────────────────────────────────────────────

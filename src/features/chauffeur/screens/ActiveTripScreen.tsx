@@ -57,7 +57,7 @@ function deriveTripStep(status: TripStatus | undefined, todayLog: ChauffeurDaily
 
 export function ActiveTripScreen() {
     const bottomSheetRef = useRef<BottomSheet>(null);
-    const snapPoints = useMemo(() => ['35%'], []);
+    const snapPoints = useMemo(() => ['38%'], []);
     const [isModalVisible, setIsModalVisible] = useState(false);
     const toast = useToast();
 
@@ -84,6 +84,11 @@ export function ActiveTripScreen() {
     const totalDays = activeBooking?.no_of_days ?? 1;
     const completedDays = activeBooking?.chauffeur_trip_daily_logs?.filter(l => l.status === 'COMPLETED').length ?? 0;
     const isMultiDayIntermediateEnd = activeBooking?.trip_type === 'IN_CITY' && totalDays > 1 && (completedDays + 1) < totalDays;
+
+    const isDay2Onwards = activeBooking?.trip_type === 'IN_CITY' && completedDays > 0;
+    const displayPickupAddress = (isDay2Onwards && activeLog?.pickup_location) 
+        ? activeLog.pickup_location 
+        : activeBooking?.pickup_address;
 
     const passengerName =
         activeBooking?.users_chauffeur_bookings_passenger_idTousers?.full_name ?? 'Passenger';
@@ -189,8 +194,8 @@ export function ActiveTripScreen() {
                 }).unwrap();
                 
                 // Automatically open maps after starting the trip if address exists
-                if (activeBooking.pickup_address) {
-                    const url = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(activeBooking.pickup_address)}`;
+                if (displayPickupAddress) {
+                    const url = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(displayPickupAddress)}`;
                     Linking.openURL(url).catch(() => {
                         showError('Could not open Google Maps');
                     });
@@ -261,7 +266,7 @@ export function ActiveTripScreen() {
             />
 
             {/* Header Strip */}
-            <SafeAreaView style={styles.headerContainer} edges={['top']}>
+            <SafeAreaView style={styles.headerContainer} className='rounded-b-3xl' edges={['top']}>
                 <View style={styles.headerContent}>
                     <Pressable style={styles.backButton} onPress={() => router.back()}>
                         <Ionicons name="chevron-back" size={24} color="#000" />
@@ -276,6 +281,7 @@ export function ActiveTripScreen() {
                 ref={bottomSheetRef}
                 index={0}
                 snapPoints={snapPoints}
+                enableDynamicSizing={false}
                 enablePanDownToClose={false}
                 handleIndicatorStyle={styles.sheetHandle}
                 backgroundStyle={styles.sheetBackground}
@@ -291,21 +297,21 @@ export function ActiveTripScreen() {
                         </View>
                     </View>
 
-                    {activeBooking?.pickup_address && (
+                    {displayPickupAddress && (
                         <View style={styles.addressSection}>
                             <View style={styles.addressInfo}>
                                 <Ionicons name="location-outline" size={20} color="#666" />
                                 <View style={styles.addressTextContainer}>
                                     <Text style={styles.addressLabel}>PICKUP ADDRESS</Text>
                                     <Text style={styles.addressValue} numberOfLines={2}>
-                                        {activeBooking.pickup_address}
+                                        {displayPickupAddress}
                                     </Text>
                                 </View>
                             </View>
                             <Pressable 
                                 style={styles.navigateSmallButton}
                                 onPress={() => {
-                                    const url = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(activeBooking.pickup_address!)}`;
+                                    const url = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(displayPickupAddress)}`;
                                     Linking.openURL(url);
                                 }}
                             >

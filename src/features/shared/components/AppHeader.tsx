@@ -18,7 +18,7 @@ export function AppHeader() {
                 hitSlop={12}
                 className="w-12 h-12 rounded-full items-center justify-center absolute left-4"
             >
-                <AntDesign name="menu" size={24} color="black" />
+                <AntDesign name="menu" size={20} color="black" />
             </Pressable>
             <View className="flex-row items-center">
                 <Image

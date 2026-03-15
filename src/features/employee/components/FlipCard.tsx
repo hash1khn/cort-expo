@@ -4,8 +4,11 @@ import { StyleSheet, View, Text, Modal, Pressable } from "react-native";
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { fontFamily } from '@/core/theme';
-import { EmployeeActiveChauffeurBooking } from "../services/bookingsApi";
+import { EmployeeActiveChauffeurBooking, useRequestNextDayPickupMutation } from "../services/bookingsApi";
+import { ShuttleTripForEmployee } from "../services/employeeShuttleApi";
 import * as Linking from 'expo-linking';
+import { useToast } from '@/shared/ui/molecules/Toast';
+import { CustomToast } from '@/features/shared/components/CustomToast';
 import Animated, {
     useSharedValue,
     useAnimatedStyle,
@@ -18,11 +21,25 @@ import Animated, {
 } from "react-native-reanimated";
 import { useWindowDimensions } from "react-native";
 import * as Haptics from "expo-haptics";
+import * as Location from 'expo-location';
+import { useRouter } from 'expo-router';
+
+// Formats "HH:MM:SS" or "HH:MM" strings to "H:MM AM/PM"
+function formatEta(eta: string | null): string {
+    if (!eta) return '—';
+    const match = eta.match(/^(\d{1,2}):(\d{2})/);
+    if (!match) return eta;
+    const h = parseInt(match[1], 10);
+    const ampm = h >= 12 ? 'PM' : 'AM';
+    return `${h % 12 || 12}:${match[2]} ${ampm}`;
+}
 
 interface FrontContentProps {
     booking: EmployeeActiveChauffeurBooking | null;
+    shuttleTrip?: ShuttleTripForEmployee | null;
     isLoading?: boolean;
     isChauffeurEnabled?: boolean;
+    isShuttleEnabled?: boolean;
 }
 
 const SkeletonItem = ({ style, color = 'rgba(255,255,255,0.4)' }: { style: any, color?: string }) => {
@@ -45,21 +62,27 @@ const SkeletonItem = ({ style, color = 'rgba(255,255,255,0.4)' }: { style: any, 
     return <Animated.View style={[style, animatedStyle]} />;
 };
 
-const FrontContent = ({ booking, isLoading, isChauffeurEnabled }: FrontContentProps) => {
-    const isChauffeur = !!booking || isChauffeurEnabled;
-    const hasTrip = !!booking;
+const FrontContent = ({ booking, shuttleTrip, isLoading, isChauffeurEnabled, isShuttleEnabled }: FrontContentProps) => {
+    const isChauffeurMode = !!booking || isChauffeurEnabled;
+    const hasTrip = !!booking || !!shuttleTrip;
 
-    const completedDays = booking ? (booking.completed_days ?? 0) : 0;
-    const totalDays = booking ? (booking.total_days ?? 0) : 0;
-    const todayLog = booking?.today_log;
-    const todayStatus = todayLog?.status?.toUpperCase();
-    const isDroppedOff = todayStatus === 'DROPPED_OFF' || todayStatus === 'IN_PROGRESS';
-    
+    // Chauffeur-specific
+    const completedDays = booking?.completed_days ?? 0;
+    const totalDays = booking?.total_days ?? 0;
+    const todayStatus = booking?.today_log?.status?.toUpperCase();
+    const isChauffeurActive = todayStatus === 'DROPPED_OFF' || todayStatus === 'IN_PROGRESS';
     const tripType = booking?.trip_type === 'OUT_STATION' ? 'Outstation' : 'Incity trip';
 
-    const illustration = isChauffeur
-        ? require('../../../../assets/chauffeur-car.png')
-        : require('../../../../assets/city_bus_bro_2.png');
+    // Shuttle-specific
+    const shuttleStatus = shuttleTrip?.status?.toUpperCase();
+    const isShuttleActive = shuttleStatus === 'STARTED' || shuttleStatus === 'IN_PROGRESS';
+    const shuttlePickupTime = formatEta(shuttleTrip?.my_pickup_stop?.morning_eta ?? null);
+    const routeName = shuttleTrip?.routes?.name ?? 'Daily Shuttle';
+
+    const isShuttleMode = !!shuttleTrip && !booking;
+    const illustration = isShuttleMode
+        ? require('../../../../assets/city_bus_bro_2.png')
+        : require('../../../../assets/chauffeur-car.png');
 
     if (isLoading) {
         return (
@@ -83,17 +106,29 @@ const FrontContent = ({ booking, isLoading, isChauffeurEnabled }: FrontContentPr
         );
     }
 
-    const headline = hasTrip
+    const headline = booking
         ? `${tripType},\nDay ${completedDays}/${totalDays}`
-        : isChauffeur
-            ? "No trips scheduled"
-            : "North Nazimabad,\nTower";
+        : shuttleTrip
+            ? routeName
+            : isChauffeurMode
+                ? 'No trips scheduled'
+                : isShuttleEnabled
+                    ? 'No schedule\ntoday'
+                    : '—';
+
+    const isEmptyState = !hasTrip && isChauffeurMode;
+
+    const timeDisplay = booking
+        ? (isChauffeurActive ? 'In Progress' : (booking.scheduled_for ? new Date(booking.scheduled_for).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'))
+        : shuttleTrip
+            ? (isShuttleActive ? 'In Progress' : shuttlePickupTime)
+            : '—';
 
     return (
         <View style={styles.frontContainer}>
             {/* Top brand row */}
             <View style={styles.brandRow}>
-                <Text style={styles.brandName}>{isChauffeur ? "Your Chauffeur" : "Daily Shuttle"}</Text>
+                <Text style={styles.brandName}>{isShuttleMode ? 'Daily Shuttle' : 'Your Chauffeur'}</Text>
             </View>
 
             {/* Center illustration */}
@@ -107,23 +142,19 @@ const FrontContent = ({ booking, isLoading, isChauffeurEnabled }: FrontContentPr
             </View>
 
             {/* Headline text */}
-            <View style={[styles.headlineContainer, !hasTrip && isChauffeur && { alignItems: 'center' }]}>
-                <Text style={[styles.headlineText, !hasTrip && isChauffeur && { textAlign: 'center', marginBottom: 20 }]}>
+            <View style={[styles.headlineContainer, isEmptyState && { alignItems: 'center' }]}>
+                <Text style={[styles.headlineText, isEmptyState && { textAlign: 'center', marginBottom: 20 }]}>
                     {headline}
                 </Text>
             </View>
 
-            {/* Divider and Stat Row shown only if there is a trip or it's NOT a chauffeur empty state */}
-            {(!isChauffeur || hasTrip) && (
+            {/* Divider and stat row — hidden only for chauffeur empty state */}
+            {!isEmptyState && (
                 <>
                     <View style={styles.divider} />
                     <View style={styles.statRow}>
                         <View style={styles.statLeft}>
-                            <Text style={styles.statNumber}>
-                                {hasTrip ? (
-                                    isDroppedOff ? "In Progress" : (booking.scheduled_for ? new Date(booking.scheduled_for).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "—")
-                                ) : "08:00 AM"}
-                            </Text>
+                            <Text style={styles.statNumber}>{timeDisplay}</Text>
                         </View>
                         <View style={styles.arrowContainer}>
                             <Text style={styles.flipHintText}>Tap for details</Text>
@@ -138,27 +169,116 @@ const FrontContent = ({ booking, isLoading, isChauffeurEnabled }: FrontContentPr
 
 interface BackContentProps {
     booking: EmployeeActiveChauffeurBooking | null;
+    shuttleTrip?: ShuttleTripForEmployee | null;
     onClose: () => void;
 }
 
 
-const BackContent = ({ booking, onClose }: BackContentProps) => {
-    const isChauffeur = !!booking;
+const BackContent = ({ booking, shuttleTrip, onClose }: BackContentProps) => {
+    const isChauffeurMode = !!booking;
     const driver = booking?.users_chauffeur_bookings_driver_idTousers;
-    const vehicle = booking?.vehicles;
-    const todayLog = booking?.today_log;
-    const todayStatus = todayLog?.status?.toUpperCase();
+    const chauffeurVehicle = booking?.vehicles;
+    const todayStatus = booking?.today_log?.status?.toUpperCase();
     const isDroppedOff = todayStatus === 'DROPPED_OFF' || todayStatus === 'IN_PROGRESS';
     const showRequestCaptain = !!booking?.can_request_driver;
 
-    const driverName = driver?.full_name ?? (isChauffeur ? "Assigning..." : "Sajjad Hussain");
-    const driverPhone = driver?.phone;
-    const plateNumber = vehicle?.plate_number ?? (isChauffeur ? "—" : "ABC-1234");
-    const vehicleInfo = vehicle ? `${vehicle.make} • ${vehicle.color}` : (isChauffeur ? "—" : "Hiace • White");
+    const shuttleVehicle = shuttleTrip?.routes?.vehicles;
+    const shuttleDriver = shuttleTrip?.users;
 
-    const handleAction = () => {
-        if (showRequestCaptain) {
-            // Request logic can be added later if needed
+    const toast = useToast();
+    const router = useRouter();
+    const [requestNextDayPickup, { isLoading: isRequesting }] = useRequestNextDayPickupMutation();
+
+    const driverName = isChauffeurMode
+        ? (driver?.full_name ?? 'Assigning...')
+        : (shuttleDriver?.full_name ?? 'Assigning...');
+    const driverPhone = isChauffeurMode ? driver?.phone : shuttleDriver?.phone;
+    const plateNumber = isChauffeurMode
+        ? (chauffeurVehicle?.plate_number ?? '—')
+        : (shuttleVehicle?.plate_number ?? '—');
+    const vehicleInfo = isChauffeurMode
+        ? (chauffeurVehicle ? `${chauffeurVehicle.make} • ${chauffeurVehicle.color}` : '—')
+        : (shuttleVehicle ? `${shuttleVehicle.make} • ${shuttleVehicle.model}` : '—');
+
+    const handleAction = async () => {
+        if (showRequestCaptain && booking) {
+            try {
+                let pickupAddress = booking.pickup_address ?? 'Current Location';
+
+                // Attempt to get current location for the pickup address
+                const { status } = await Location.requestForegroundPermissionsAsync();
+                if (status !== 'granted') {
+                    toast.show(
+                        <CustomToast
+                            type="error"
+                            message="Location permission is needed"
+                        />,
+                        { duration: 3500, position: 'top' }
+                    );
+                    return;
+                }
+
+                const loc = await Location.getCurrentPositionAsync({
+                    accuracy: Location.Accuracy.Balanced,
+                });
+                    
+                if (loc) {
+                    const reverseGeocoded = await Location.reverseGeocodeAsync({
+                        latitude: loc.coords.latitude,
+                        longitude: loc.coords.longitude,
+                    });
+                    
+                    if (reverseGeocoded.length > 0) {
+                        const addr = reverseGeocoded[0];
+                        const fullAddr = [addr.name, addr.street, addr.district, addr.city]
+                            .filter(Boolean)
+                            .join(', ');
+                        if (fullAddr) pickupAddress = fullAddr;
+                    }
+                }
+
+                await requestNextDayPickup({
+                    companyId: booking.companies?.id ?? 0,
+                    bookingId: booking.id,
+                    pickup_location: pickupAddress
+                }).unwrap();
+
+                // Close the modal
+                onClose();
+
+                // On success, navigate to waiting screen
+                toast.show(
+                    <CustomToast
+                        type="success"
+                        message="Captain has been notified!"
+                    />,
+                    { duration: 2000, position: 'top' }
+                );
+
+                // Navigate to waiting screen
+                router.push({
+                    pathname: '/employee/waiting',
+                    params: {
+                        mode: 'chauffeur',
+                        bookingId: String(booking.id),
+                        bookingStatus: booking.status,
+                        tripType: booking.trip_type,
+                        driverName: driver?.full_name ?? 'Captain',
+                        driverPhone: driver?.phone ?? '',
+                        vehicleDisplay: chauffeurVehicle ? `${chauffeurVehicle.make ?? ''} ${chauffeurVehicle.model ?? ''}`.trim() : '',
+                        vehiclePlate: chauffeurVehicle?.plate_number ?? '',
+                    },
+                });
+            } catch (error) {
+                console.error("Failed to request next day pickup", error);
+                toast.show(
+                    <CustomToast
+                        type="error"
+                        message="Failed to request captain. Please try again."
+                    />,
+                    { duration: 3500, position: 'top' }
+                );
+            }
         } else if (driverPhone) {
             Linking.openURL(`tel:${driverPhone}`);
         }
@@ -166,7 +286,7 @@ const BackContent = ({ booking, onClose }: BackContentProps) => {
 
     const initials = driverName
         .split(' ')
-        .map((n) => n[0])
+        .map((n: string) => n[0])
         .join('')
         .slice(0, 2)
         .toUpperCase();
@@ -218,23 +338,31 @@ const BackContent = ({ booking, onClose }: BackContentProps) => {
                             </View>
                             <Text style={styles.infoCellLabel}>Pickup Time</Text>
                             <Text style={styles.infoCellValue}>
-                                {isChauffeur ? (
-                                    isDroppedOff ? "In Progress" : (booking.scheduled_for ? new Date(booking.scheduled_for).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "—")
-                                ) : "08:00 AM"}
+                                {isChauffeurMode
+                                    ? (isDroppedOff ? 'In Progress' : (booking!.scheduled_for ? new Date(booking!.scheduled_for).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'))
+                                    : (shuttleTrip?.status?.toUpperCase() === 'STARTED' || shuttleTrip?.status?.toUpperCase() === 'IN_PROGRESS'
+                                        ? 'In Progress'
+                                        : formatEta(shuttleTrip?.my_pickup_stop?.morning_eta ?? null))}
                             </Text>
                             <Text style={styles.infoCellSub}>Today</Text>
                         </View>
 
                         <View style={styles.gridSeparator} />
 
-                        {/* Stop */}
+                        {/* Stop / Pickup */}
                         <View style={styles.infoCell}>
                             <View style={styles.infoIconBox}>
                                 <Ionicons name="location-outline" size={16} color="#000" />
                             </View>
-                            <Text style={styles.infoCellLabel}>{isChauffeur ? "Pickup" : "Stop"}</Text>
-                            <Text style={styles.infoCellValue}>{isChauffeur ? (booking.pickup_address?.split(',')[0] ?? "—") : "Main Gate"}</Text>
-                            <Text style={styles.infoCellSub}>{isChauffeur ? "" : "Sector 4"}</Text>
+                            <Text style={styles.infoCellLabel}>{isChauffeurMode ? 'Pickup' : 'Stop'}</Text>
+                            <Text style={styles.infoCellValue}>
+                                {isChauffeurMode
+                                    ? (booking!.pickup_address?.split(',')[0] ?? '—')
+                                    : (shuttleTrip?.my_pickup_stop?.name ?? '—')}
+                            </Text>
+                            <Text style={styles.infoCellSub}>
+                                {isChauffeurMode ? '' : (shuttleTrip?.routes?.name ?? '')}
+                            </Text>
                         </View>
                     </View>
 
@@ -243,11 +371,21 @@ const BackContent = ({ booking, onClose }: BackContentProps) => {
                 {/* Divider below grid, same distance as the one above */}
                 <View style={styles.backDivider} />
 
-                {/* Call Captain button */}
-                <Pressable onPress={handleAction}>
-                    <View style={styles.actionButton}>
-                        <Text style={styles.buttonText}>{showRequestCaptain ? "Request Captain" : "Call Captain"}</Text>
-                    </View>
+                {/* Action button */}
+                <Pressable onPress={handleAction} disabled={isRequesting}>
+                    {({ pressed }) => (
+                        <View style={[
+                            styles.actionButton,
+                            pressed && { backgroundColor: '#333', opacity: 0.8 },
+                            isRequesting && styles.actionButtonLoading
+                        ]}>
+                            <Text style={styles.buttonText}>
+                                {isChauffeurMode
+                                    ? (showRequestCaptain ? (isRequesting ? 'Requesting...' : 'Request Captain') : 'Call Captain')
+                                    : 'Call Driver'}
+                            </Text>
+                        </View>
+                    )}
                 </Pressable>
 
             </View>
@@ -267,14 +405,18 @@ const CARD_HEIGHT = 420;
 
 export default function CorporateShuttleCard({
     booking = null,
+    shuttleTrip = null,
     isLoading = false,
-    isChauffeurEnabled = false
+    isChauffeurEnabled = false,
+    isShuttleEnabled = false,
 }: {
     booking?: EmployeeActiveChauffeurBooking | null;
+    shuttleTrip?: ShuttleTripForEmployee | null;
     isLoading?: boolean;
     isChauffeurEnabled?: boolean;
+    isShuttleEnabled?: boolean;
 }) {
-    const showBack = !!booking; // Only allow flipping if there is a trip
+    const showBack = !!booking || !!shuttleTrip; // Allow flipping when any trip data is present
 
 
     const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = useWindowDimensions();
@@ -405,7 +547,7 @@ export default function CorporateShuttleCard({
             <Animated.View ref={cardRef} style={[{ width: CARD_WIDTH, height: CARD_HEIGHT }, inlineCardStyle]}>
                 <Pressable onPress={openModal} style={{ flex: 1 }}>
                     <View style={[StyleSheet.absoluteFill, { borderRadius: 28, overflow: 'hidden' }]}>
-                        <FrontContent booking={booking} isLoading={isLoading} isChauffeurEnabled={isChauffeurEnabled} />
+                        <FrontContent booking={booking} shuttleTrip={shuttleTrip} isLoading={isLoading} isChauffeurEnabled={isChauffeurEnabled} isShuttleEnabled={isShuttleEnabled} />
                     </View>
                 </Pressable>
             </Animated.View>
@@ -424,13 +566,13 @@ export default function CorporateShuttleCard({
 
                         {/* Front Side */}
                         <Animated.View style={[styles.cardAbsolute, frontAnimatedStyle]}>
-                            <FrontContent booking={booking} isLoading={isLoading} isChauffeurEnabled={isChauffeurEnabled} />
+                            <FrontContent booking={booking} shuttleTrip={shuttleTrip} isLoading={isLoading} isChauffeurEnabled={isChauffeurEnabled} isShuttleEnabled={isShuttleEnabled} />
                         </Animated.View>
 
 
                         {/* Back Side */}
                         <Animated.View style={[styles.cardAbsolute, backAnimatedStyle]}>
-                            <BackContent booking={booking} onClose={closeModal} />
+                            <BackContent booking={booking} shuttleTrip={shuttleTrip} onClose={closeModal} />
                         </Animated.View>
 
 
@@ -719,6 +861,10 @@ const styles = StyleSheet.create({
         paddingVertical: 14,
         borderRadius: 14,
         alignItems: "center",
+    },
+    actionButtonLoading: {
+        backgroundColor: "#6B7280",
+        opacity: 0.7,
     },
     buttonText: {
         color: "#F1F443",

@@ -46,13 +46,13 @@ const CustomToast = ({ title, message }: { title: string; message: string }) => 
 );
 import { useAppDispatch, useAppSelector } from '../../../store/hooks';
 import { useRouter, useNavigation, router } from 'expo-router';
-import { DrawerActions } from '@react-navigation/native';
-import { useFocusEffect } from 'expo-router';
+import { DrawerActions, useIsFocused } from '@react-navigation/native';
 import { useGetChauffeurBookingsQuery, useGetEmployeeActiveChauffeurBookingQuery } from '../services/bookingsApi';
 import { useGetShuttleTripsForEmployeeQuery } from '../services/employeeShuttleApi';
+import type { ShuttleTripForEmployee } from '../services/employeeShuttleApi';
 import { useChauffeurStatusListener } from '../../../hooks/useChauffeurStatusListener';
 import { CompactRideHistoryCard } from '../components/CompactRideHistoryCard';
-import { RideStatusBar, type UpcomingShuttleInfo } from '../components/RideStatusBar';
+import { RideStatusBar } from '../components/RideStatusBar';
 import {
   setIsWaitingForDriverResponse,
   setOutstationDropoff,
@@ -87,6 +87,11 @@ export default function NewHome() {
 
   const companyId = (user?.company_id ?? 0) as number;
   const employeeId = (user?.id ?? '') as string;
+  
+  // Solution B: Service checks to prevent unnecessary API calls
+  const hasChauffeur = user?.enabled_services?.chauffeur ?? false;
+  const hasShuttle = user?.enabled_services?.shuttle ?? false;
+
   const { data: chauffeurBookingsData } = useGetChauffeurBookingsQuery(
     { companyId, employeeId },
     { skip: !companyId || !employeeId },
@@ -98,7 +103,7 @@ export default function NewHome() {
     refetch: refetchShuttleTrips,
   } = useGetShuttleTripsForEmployeeQuery(
     { companyId, employeeId },
-    { skip: !companyId || !employeeId },
+    { skip: !companyId || !employeeId || !hasShuttle },
   );
 
   const { 
@@ -108,11 +113,12 @@ export default function NewHome() {
     isFetching: isActiveBookingFetching
   } = useGetEmployeeActiveChauffeurBookingQuery(
     { companyId },
-    { skip: !companyId || !user?.enabled_services?.chauffeur },
+    { skip: !companyId || !hasChauffeur },
   );
 
   const router = useRouter();
   const navigation = useNavigation();
+  const isFocused = useIsFocused();
 
   const handleOpenDrawer = useCallback(() => {
     navigation.dispatch(DrawerActions.openDrawer());
@@ -129,21 +135,12 @@ export default function NewHome() {
       .toUpperCase()
     : '?';
 
-  const upcomingShuttle = useMemo((): UpcomingShuttleInfo | null => {
-    const trip = shuttleTrips.find((t) => t.status !== 'COMPLETED') ?? shuttleTrips[0];
-    if (!trip) return null;
-    const routeName = trip.routes?.name ?? 'Shuttle';
-    const driverName = trip.users?.full_name ?? '—';
-    let nextShuttleTime = '—';
-    if (trip.started_at) {
-      const d = new Date(trip.started_at);
-      nextShuttleTime = d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
-    } else if (trip.trip_date) {
-      const d = new Date(trip.trip_date);
-      nextShuttleTime = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-    }
-    return { routeName, driverName, nextShuttleTime };
-  }, [shuttleTrips]);
+  // Derive the most relevant shuttle trip for the FlipCard
+  // (first non-completed, or first trip if all completed)
+  const shuttleTripForCard = useMemo((): ShuttleTripForEmployee | null => {
+    if (!hasShuttle || shuttleTrips.length === 0) return null;
+    return shuttleTrips.find((t) => t.status !== 'COMPLETED') ?? shuttleTrips[0];
+  }, [shuttleTrips, hasShuttle]);
 
   useEffect(() => {
     if (
@@ -184,72 +181,96 @@ export default function NewHome() {
   // (which closes over a stale value) can read fresh data after a refetch.
   const shuttleTripsRef = useRef(shuttleTrips);
   useEffect(() => {
-    console.log('[ShuttleEmployee] Shuttle Trips updated:', JSON.stringify(shuttleTrips, null, 2));
     shuttleTripsRef.current = shuttleTrips;
   }, [shuttleTrips]);
 
-  // Refetch on focus, then immediately check if a trip is already active (e.g. after login
-  // while a ride was in progress). Using .unwrap() means we navigate from fresh API data
-  // in a single place — no extra refs or useEffects needed.
-  useFocusEffect(
-    useCallback(() => {
-      if (!companyId || !employeeId) return;
+  // Solution A: Watch API data and navigate to active ride when detected
+  // This handles app crash recovery and initial mount navigation without unnecessary refetches
+  const hasNavigatedToActiveRideRef = useRef(false);
 
-      refetchShuttleTrips().unwrap().then((trips) => {
-        console.log('[ShuttleEmployee] Trips on focus:', JSON.stringify(trips, null, 2));
-        const activeTrip = trips.find(
-          (t) => t.status === 'STARTED' || t.status === 'IN_PROGRESS',
-        );
-        if (!activeTrip) return;
+  // Reset navigation flag when component unmounts (e.g., navigating away from employee stack)
+  useEffect(() => {
+    return () => {
+      hasNavigatedToActiveRideRef.current = false;
+    };
+  }, []);
 
-        const vehicle = activeTrip.routes?.vehicles;
+  // Watch the API data and navigate when an active ride is detected
+  useEffect(() => {
+    // Skip if we've already navigated this session
+    if (hasNavigatedToActiveRideRef.current) return;
+    
+    // Wait for data to finish loading before checking
+    if (isShuttleTripsLoading || isActiveBookingLoading) return;
+    
+    // Skip if no company/employee ID
+    if (!companyId || !employeeId) return;
+
+    // ── Check Shuttle ──
+    const activeTrip = shuttleTrips.find(
+      (t) => t.status === 'STARTED' || t.status === 'IN_PROGRESS'
+    );
+    
+    if (activeTrip) {
+      hasNavigatedToActiveRideRef.current = true;
+      const vehicle = activeTrip.routes?.vehicles;
+      router.push({
+        pathname: '/employee/ride-active',
+        params: {
+          tripId: String(activeTrip.id),
+          myPickupStopId: activeTrip.my_pickup_stop_id != null ? String(activeTrip.my_pickup_stop_id) : '',
+          driverName: activeTrip.users?.full_name ?? 'Driver',
+          driverPhone: activeTrip.users?.phone ?? '',
+          vehicleDisplay: vehicle ? `${vehicle.make} ${vehicle.model}`.trim() : '',
+          vehiclePlate: vehicle?.plate_number ?? '',
+          direction: activeTrip.direction ?? '',
+        },
+      });
+      return; // Exit early after navigating
+    }
+
+    // ── Check Chauffeur ──
+    if (!hasChauffeur || !activeChauffeurBooking) return;
+
+    const bStatus = activeChauffeurBooking.status;
+    const isOutstation = activeChauffeurBooking.trip_type === 'OUT_STATION';
+    const liveStatuses = ['OTW', 'ARRIVED', 'IN_PROGRESS'];
+    const driver = activeChauffeurBooking.users_chauffeur_bookings_driver_idTousers;
+    const vehicle = activeChauffeurBooking.vehicles;
+
+    if (isOutstation) {
+      // OUT_STATION: Direct status mapping based on booking status
+      if (liveStatuses.includes(bStatus)) {
+        hasNavigatedToActiveRideRef.current = true;
         router.push({
           pathname: '/employee/ride-active',
           params: {
-            tripId: String(activeTrip.id),
-            myPickupStopId: activeTrip.my_pickup_stop_id != null ? String(activeTrip.my_pickup_stop_id) : '',
-            driverName: activeTrip.users?.full_name ?? 'Driver',
-            driverPhone: activeTrip.users?.phone ?? '',
-            vehicleDisplay: vehicle ? `${vehicle.make} ${vehicle.model}`.trim() : '',
+            mode: 'chauffeur',
+            bookingId: String(activeChauffeurBooking.id),
+            bookingStatus: activeChauffeurBooking.status,
+            tripType: activeChauffeurBooking.trip_type,
+            driverName: driver?.full_name ?? 'Chauffeur',
+            driverPhone: driver?.phone ?? '',
+            vehicleDisplay: vehicle ? `${vehicle.make ?? ''} ${vehicle.model ?? ''}`.trim() : '',
             vehiclePlate: vehicle?.plate_number ?? '',
-            direction: activeTrip.direction ?? '',
           },
         });
-      }).catch(() => { });
+      }
+    } else {
+      // IN_CITY (multiday): use chauffeur_trip_daily_logs directly.
+      // today_log is computed by calendar date and will be null for next-day pickup logs
+      // (log_date is tomorrow but server's "today" is still today).
+      // Instead, mirror the backend's own targetLog logic: first non-COMPLETED daily log.
+      const dailyLogs = activeChauffeurBooking.chauffeur_trip_daily_logs || [];
+      const sortedLogs = [...dailyLogs].sort(
+        (a, b) => new Date(a.log_date).getTime() - new Date(b.log_date).getTime()
+      );
+      const targetLog = sortedLogs.find((l) => l.status !== 'COMPLETED') ?? null;
 
-      // Chauffeur active booking check (only when company has chauffeur enabled)
-      if (user?.enabled_services?.chauffeur && companyId) {
-        refetchActiveChauffeurBooking().then(({ data: activeChauffeurBooking }) => {
-          if (!activeChauffeurBooking) return;
-
-          // ── Complex Navigation Logic based on Flow ──
-          const bStatus = activeChauffeurBooking.status;
-          const isOutstation = activeChauffeurBooking.trip_type === 'OUT_STATION';
-          const liveStatuses = ['OTW', 'ARRIVED', 'IN_PROGRESS']; // Removed DROPPED_OFF from liveStatuses so it goes home
-
-          if (isOutstation) {
-            // OUT_STATION: Direct status mapping
-            if (!liveStatuses.includes(bStatus)) return;
-          } else {
-            // IN_CITY: Depends on booking status AND today's log for multi-day
-            if (!liveStatuses.includes(bStatus) && bStatus !== 'IN_PROGRESS') return;
-
-            if (bStatus === 'IN_PROGRESS' && activeChauffeurBooking.today_log) {
-              const log = activeChauffeurBooking.today_log;
-              
-              // If the employee has already been dropped off or the day is completed, stay on home.
-              if (log.status === 'COMPLETED' || log.status === 'DROPPED_OFF') {
-                return;
-              }
-              // On Day 2+, if the log is pending and employee hasn't requested the driver yet, stay on home.
-              if (!log.is_requested && log.status !== 'STARTED' && log.status !== 'ARRIVED' && log.status !== 'IN_PROGRESS') {
-                return;
-              }
-            }
-          }
-
-          const driver = activeChauffeurBooking.users_chauffeur_bookings_driver_idTousers;
-          const vehicle = activeChauffeurBooking.vehicles;
+      if (targetLog) {
+        if (targetLog.start_time !== null) {
+          // Driver has started (start_time set) → ride is active
+          hasNavigatedToActiveRideRef.current = true;
           router.push({
             pathname: '/employee/ride-active',
             params: {
@@ -263,10 +284,36 @@ export default function NewHome() {
               vehiclePlate: vehicle?.plate_number ?? '',
             },
           });
-        }).catch(() => { });
+        } else if (targetLog.is_requested === true) {
+          // Employee has requested but driver hasn't started yet → waiting screen
+          hasNavigatedToActiveRideRef.current = true;
+          router.push({
+            pathname: '/employee/waiting',
+            params: {
+              mode: 'chauffeur',
+              bookingId: String(activeChauffeurBooking.id),
+              bookingStatus: activeChauffeurBooking.status,
+              tripType: activeChauffeurBooking.trip_type,
+              driverName: driver?.full_name ?? 'Captain',
+              driverPhone: driver?.phone ?? '',
+              vehicleDisplay: vehicle ? `${vehicle.make ?? ''} ${vehicle.model ?? ''}`.trim() : '',
+              vehiclePlate: vehicle?.plate_number ?? '',
+            },
+          });
+        }
+        // is_requested=false → stay home, no navigation
       }
-    }, [companyId, employeeId, refetchShuttleTrips, refetchActiveChauffeurBooking, user?.enabled_services?.chauffeur, router]),
-  );
+    }
+  }, [
+    shuttleTrips,
+    activeChauffeurBooking,
+    isShuttleTripsLoading,
+    isActiveBookingLoading,
+    companyId,
+    employeeId,
+    hasChauffeur,
+    router,
+  ]);
 
   // Store active chauffeur booking in a ref for zero-latency navigation inside socket listeners
   const chauffeurBookingRef = useRef(activeChauffeurBooking);
@@ -277,6 +324,11 @@ export default function NewHome() {
   useChauffeurStatusListener(
     useCallback(
       (data) => {
+        // Guard: if user has navigated to a child screen (waiting / ride-active),
+        // ShuttleEmployee is still mounted in the stack but not focused.
+        // Without this guard, double-navigation conflicts silently fail.
+        if (!isFocused) return;
+
         const booking = chauffeurBookingRef.current;
         if (!booking || String(booking.id) !== String(data.bookingId)) return;
 
@@ -299,7 +351,7 @@ export default function NewHome() {
            });
         }
       },
-      [router]
+      [router, isFocused]
     )
   );
 
@@ -408,9 +460,11 @@ export default function NewHome() {
           />
         </View> */}
         <FlipCard 
-          booking={activeChauffeurBooking} 
-          isLoading={isActiveBookingLoading || isActiveBookingFetching}
-          isChauffeurEnabled={user?.enabled_services?.chauffeur}
+          booking={activeChauffeurBooking ?? null} 
+          shuttleTrip={shuttleTripForCard}
+          isLoading={hasChauffeur ? (isActiveBookingLoading || isActiveBookingFetching) : isShuttleTripsLoading}
+          isChauffeurEnabled={hasChauffeur}
+          isShuttleEnabled={hasShuttle}
         />
 
         {/* Chauffeur / Outstation card - opens dropoff sheet when dev outstation is enabled */}
