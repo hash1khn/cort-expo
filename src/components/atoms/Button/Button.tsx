@@ -13,7 +13,7 @@ type Props = {
 };
 
 const VARIANT_CONTAINER: Record<Variant, string> = {
-  primary: "bg-orange-500",
+  primary: "bg-[#FF5A00]",
   navy: "bg-[#0B1C2D]",
   outline: "bg-transparent border-2 border-red-500",
 };

@@ -49,10 +49,9 @@ import { useRouter, useNavigation, router } from 'expo-router';
 import { DrawerActions, useIsFocused } from '@react-navigation/native';
 import { useGetChauffeurBookingsQuery, useGetEmployeeActiveChauffeurBookingQuery } from '../services/bookingsApi';
 import { useGetShuttleTripsForEmployeeQuery } from '../services/employeeShuttleApi';
-import type { ShuttleTripForEmployee } from '../services/employeeShuttleApi';
 import { useChauffeurStatusListener } from '../../../hooks/useChauffeurStatusListener';
 import { CompactRideHistoryCard } from '../components/CompactRideHistoryCard';
-import { RideStatusBar } from '../components/RideStatusBar';
+import { RideStatusBar, type UpcomingShuttleInfo } from '../components/RideStatusBar';
 import {
   setIsWaitingForDriverResponse,
   setOutstationDropoff,
@@ -135,12 +134,21 @@ export default function NewHome() {
       .toUpperCase()
     : '?';
 
-  // Derive the most relevant shuttle trip for the FlipCard
-  // (first non-completed, or first trip if all completed)
-  const shuttleTripForCard = useMemo((): ShuttleTripForEmployee | null => {
-    if (!hasShuttle || shuttleTrips.length === 0) return null;
-    return shuttleTrips.find((t) => t.status !== 'COMPLETED') ?? shuttleTrips[0];
-  }, [shuttleTrips, hasShuttle]);
+  const upcomingShuttle = useMemo((): UpcomingShuttleInfo | null => {
+    const trip = shuttleTrips.find((t) => t.status !== 'COMPLETED') ?? shuttleTrips[0];
+    if (!trip) return null;
+    const routeName = trip.routes?.name ?? 'Shuttle';
+    const driverName = trip.users?.full_name ?? '—';
+    let nextShuttleTime = '—';
+    if (trip.started_at) {
+      const d = new Date(trip.started_at);
+      nextShuttleTime = d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+    } else if (trip.trip_date) {
+      const d = new Date(trip.trip_date);
+      nextShuttleTime = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+    }
+    return { routeName, driverName, nextShuttleTime };
+  }, [shuttleTrips]);
 
   useEffect(() => {
     if (
@@ -181,6 +189,7 @@ export default function NewHome() {
   // (which closes over a stale value) can read fresh data after a refetch.
   const shuttleTripsRef = useRef(shuttleTrips);
   useEffect(() => {
+    console.log('[ShuttleEmployee] Shuttle Trips updated:', JSON.stringify(shuttleTrips, null, 2));
     shuttleTripsRef.current = shuttleTrips;
   }, [shuttleTrips]);
 
@@ -460,11 +469,9 @@ export default function NewHome() {
           />
         </View> */}
         <FlipCard 
-          booking={activeChauffeurBooking ?? null} 
-          shuttleTrip={shuttleTripForCard}
-          isLoading={hasChauffeur ? (isActiveBookingLoading || isActiveBookingFetching) : isShuttleTripsLoading}
-          isChauffeurEnabled={hasChauffeur}
-          isShuttleEnabled={hasShuttle}
+          booking={activeChauffeurBooking} 
+          isLoading={isActiveBookingLoading || isActiveBookingFetching}
+          isChauffeurEnabled={user?.enabled_services?.chauffeur}
         />
 
         {/* Chauffeur / Outstation card - opens dropoff sheet when dev outstation is enabled */}
