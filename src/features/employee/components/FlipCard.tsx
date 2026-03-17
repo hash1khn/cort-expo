@@ -243,32 +243,27 @@ const BackContent = ({ booking, shuttleTrip, onClose }: BackContentProps) => {
                     pickup_location: pickupAddress
                 }).unwrap();
 
-                // Close the modal
+                // Close the modal and start flip animation
                 onClose();
 
-                // On success, navigate to waiting screen
-                toast.show(
-                    <CustomToast
-                        type="success"
-                        message="Captain has been notified!"
-                    />,
-                    { duration: 2000, position: 'top' }
-                );
-
-                // Navigate to waiting screen
-                router.push({
-                    pathname: '/employee/waiting',
-                    params: {
-                        mode: 'chauffeur',
-                        bookingId: String(booking.id),
-                        bookingStatus: booking.status,
-                        tripType: booking.trip_type,
-                        driverName: driver?.full_name ?? 'Captain',
-                        driverPhone: driver?.phone ?? '',
-                        vehicleDisplay: chauffeurVehicle ? `${chauffeurVehicle.make ?? ''} ${chauffeurVehicle.model ?? ''}`.trim() : '',
-                        vehiclePlate: chauffeurVehicle?.plate_number ?? '',
-                    },
-                });
+                // Wait for flip animation to complete (~500ms) before navigating
+                // This prevents visual glitches from overlapping animations
+                setTimeout(() => {
+                    // Navigate to waiting screen after animation completes
+                    router.push({
+                        pathname: '/employee/waiting',
+                        params: {
+                            mode: 'chauffeur',
+                            bookingId: String(booking.id),
+                            bookingStatus: booking.status,
+                            tripType: booking.trip_type,
+                            driverName: driver?.full_name ?? 'Captain',
+                            driverPhone: driver?.phone ?? '',
+                            vehicleDisplay: chauffeurVehicle ? `${chauffeurVehicle.make ?? ''} ${chauffeurVehicle.model ?? ''}`.trim() : '',
+                            vehiclePlate: chauffeurVehicle?.plate_number ?? '',
+                        },
+                    });
+                }, 500);
             } catch (error) {
                 console.error("Failed to request next day pickup", error);
                 toast.show(
@@ -373,19 +368,11 @@ const BackContent = ({ booking, shuttleTrip, onClose }: BackContentProps) => {
 
                 {/* Action button */}
                 <Pressable onPress={handleAction} disabled={isRequesting}>
-                    {({ pressed }) => (
-                        <View style={[
-                            styles.actionButton,
-                            pressed && { backgroundColor: '#333', opacity: 0.8 },
-                            isRequesting && styles.actionButtonLoading
-                        ]}>
-                            <Text style={styles.buttonText}>
-                                {isChauffeurMode
-                                    ? (showRequestCaptain ? (isRequesting ? 'Requesting...' : 'Request Captain') : 'Call Captain')
-                                    : 'Call Driver'}
-                            </Text>
-                        </View>
-                    )}
+                    <View style={[styles.actionButton, isRequesting && styles.actionButtonLoading]}>
+                        <Text style={styles.buttonText}>
+                            {showRequestCaptain ? (isRequesting ? "Requesting..." : "Request Captain") : "Call Captain"}
+                        </Text>
+                    </View>
                 </Pressable>
 
             </View>
@@ -863,8 +850,8 @@ const styles = StyleSheet.create({
         alignItems: "center",
     },
     actionButtonLoading: {
-        backgroundColor: "#6B7280",
-        opacity: 0.7,
+        backgroundColor: "#4a4a4a",
+        opacity: 0.8,
     },
     buttonText: {
         color: "#F1F443",

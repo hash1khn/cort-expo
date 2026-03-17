@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { View, Pressable, StyleSheet, Text as RNText, Image } from 'react-native';
+import { Image as ExpoImage } from 'expo-image';
 import MapView, { Marker, Polyline } from 'react-native-maps';
 import { Ionicons, MaterialCommunityIcons, Octicons } from '@expo/vector-icons';
 import BottomSheet, { BottomSheetView } from '@gorhom/bottom-sheet';
@@ -349,12 +350,22 @@ export default function EmployeeHomeMap() {
             coordinate={stop}
             anchor={{ x: 0.5, y: 0.5 }}
           >
-            <View style={styles.vehicleMarker}>
-              <MaterialCommunityIcons name="map-marker" size={22} color="white" />
-            </View>
+            <ExpoImage
+              source={require('../../../../assets/stop.svg')}
+              style={{ width: 25, height: 25 }}
+              contentFit="contain"
+            />
           </Marker>
         ))}
-
+        {/* Destination / End stop */}
+        <Marker
+          coordinate={destination}
+          anchor={{ x: 0.5, y: 0.5 }}
+        >
+          <View style={styles.endStopMarker}>
+            <MaterialCommunityIcons name="flag-checkered" size={20} color="white" />
+          </View>
+        </Marker>
         {/* Simple shuttle marker */}
         {driverCoord && (
           <Marker
@@ -526,6 +537,20 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 4,
     elevation: 8,
+  },
+  endStopMarker: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#FF5A00', // emerald-500
+    alignItems: 'center',
+    justifyContent: 'center',
+   
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+    elevation: 5,
   },
   floatingButtons: {
     position: 'absolute',

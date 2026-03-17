@@ -2,7 +2,7 @@ export const colors = {
   // Brand
   white: '#FFFFFF',
   navy: '#0c225e',
-  orange: '#f47f00',
+  orange: '#FF5A00',
   purple: '#670e4c',
   red: '#D32F2F',
 

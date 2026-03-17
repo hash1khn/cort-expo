@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { ActivityIndicator, Pressable, Text as RNText, ScrollView, View } from 'react-native';
+import React, { useState, useEffect, useCallback } from 'react';
+import { ActivityIndicator, Pressable, RefreshControl, Text as RNText, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
@@ -250,6 +250,16 @@ function EmptyState() {
 export function ChauffeurHomeScreen() {
   const { data: activeBooking, isLoading, isError, refetch } = useGetDriverActiveBookingQuery();
   const [isRequestModalVisible, setIsRequestModalVisible] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const handleRefresh = useCallback(async () => {
+    setIsRefreshing(true);
+    try {
+      await refetch();
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, [refetch]);
 
   const today = new Date().toLocaleDateString('en-US', {
     month: 'long',
@@ -298,6 +308,14 @@ export function ChauffeurHomeScreen() {
         className="flex-1 px-5"
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 40 }}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={handleRefresh}
+            tintColor="#FF5A00"
+            colors={['#FF5A00']}
+          />
+        }
       >
         <View className="mb-6">
           <Text className="text-[34px] font-bold text-black">My Booking</Text>

@@ -176,12 +176,14 @@ export const chauffeurApi = baseApi.injectEndpoints({
         bookingId: number;
         meter_reading_start?: number;
         meter_reading_start_image_url?: string;
+        driver_lat?: number;
+        driver_lng?: number;
       }
     >({
-      query: ({ bookingId, meter_reading_start, meter_reading_start_image_url }) => ({
+      query: ({ bookingId, meter_reading_start, meter_reading_start_image_url, driver_lat, driver_lng }) => ({
         url: `/driver/bookings/${bookingId}/start`,
         method: 'PATCH',
-        body: { meter_reading_start, meter_reading_start_image_url },
+        body: { meter_reading_start, meter_reading_start_image_url, driver_lat, driver_lng },
       }),
       invalidatesTags: ['ChauffeurBooking'],
       async onQueryStarted(_args, { dispatch, queryFulfilled }) {

@@ -1,11 +1,12 @@
-import React, { useMemo, useRef, useState } from 'react';
-import { StyleSheet, Text as RNText, View, Pressable, Modal, ActivityIndicator, Linking, TextInput, Image, ScrollView, Alert } from 'react-native';
+import React, { useMemo, useRef, useState, useCallback } from 'react';
+import { StyleSheet, Text as RNText, View, Pressable, Modal, ActivityIndicator, Linking, TextInput, Image, ScrollView, Alert, TouchableWithoutFeedback, Keyboard } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
+import BottomSheet, { BottomSheetView, BottomSheetBackdrop } from '@gorhom/bottom-sheet';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import MapView from 'react-native-maps';
 import { Ionicons } from '@expo/vector-icons';
-import BottomSheet, { BottomSheetView } from '@gorhom/bottom-sheet';
 import { router } from 'expo-router';
+import * as Location from 'expo-location';
+import Animated, { FadeIn, FadeOut, LinearTransition } from 'react-native-reanimated';
 import { fontFamily } from '@/core/theme';
 import {
     useGetDriverActiveBookingQuery,
@@ -56,10 +57,15 @@ function deriveTripStep(status: TripStatus | undefined, todayLog: ChauffeurDaily
 }
 
 export function ActiveTripScreen() {
-    const bottomSheetRef = useRef<BottomSheet>(null);
-    const snapPoints = useMemo(() => ['38%'], []);
-    const [isModalVisible, setIsModalVisible] = useState(false);
+    const confirmSheetRef = useRef<BottomSheet>(null);
     const toast = useToast();
+
+    const renderBackdrop = useCallback(
+        (props: any) => (
+            <BottomSheetBackdrop {...props} disappearsOnIndex={-1} appearsOnIndex={0} pressBehavior="none" />
+        ),
+        []
+    );
 
     // Outstation Start State
     const [permission, requestPermission] = useCameraPermissions();
@@ -99,6 +105,28 @@ export function ActiveTripScreen() {
         .toUpperCase()
         .slice(0, 2);
 
+    const illustrationSource = useMemo(() => {
+        switch (tripStep) {
+            case 'START_TRIP': return require('@/../assets/points.png');
+            case 'MARK_ARRIVED': return require('@/../assets/waiting.png');
+            case 'RESUME_TRIP': return require('@/../assets/passenger_coming.png');
+            case 'MARK_DROPPED_OFF': return require('@/../assets/otw.png');
+            case 'END_RIDE': return require('@/../assets/return.png');
+            default: return require('@/../assets/points.png');
+        }
+    }, [tripStep]);
+
+    const punchline = useMemo(() => {
+        switch (tripStep) {
+            case 'START_TRIP': return 'Lets start the trip! Your passenger is expecting arrival.';
+            case 'MARK_ARRIVED': return 'Almost there! Mark arrived so the passenger knows.';
+            case 'RESUME_TRIP': return 'Passenger is coming! Ready to go?';
+            case 'MARK_DROPPED_OFF': return 'You are on your way. Good luck and travel safe.';
+            case 'END_RIDE': return 'Lets head back home. Great work today!';
+            default: return 'Ready for your next ride?';
+        }
+    }, [tripStep]);
+
     const showError = (message: string) => {
         toast.show(
             <CustomToast type="error" message={message} />,
@@ -126,8 +154,8 @@ export function ActiveTripScreen() {
         const id = activeBooking.id;
 
         if (tripStep === 'START_TRIP') {
-            // Confirmation modal handles the API call
-            setIsModalVisible(true);
+            // Confirmation sheet handles the API call
+            confirmSheetRef.current?.snapToIndex(0);
         } else if (tripStep === 'MARK_ARRIVED') {
             try {
                 await markArrived({ bookingId: id }).unwrap();
@@ -141,12 +169,12 @@ export function ActiveTripScreen() {
                 showError('Could not resume trip. Please try again.');
             }
         } else if (tripStep === 'MARK_DROPPED_OFF') {
-            // Confirmation modal handles the API call
-            setIsModalVisible(true);
+            // Confirmation sheet handles the API call
+            confirmSheetRef.current?.snapToIndex(0);
         } else if (tripStep === 'END_RIDE') {
             if (isMultiDayIntermediateEnd) {
-                // Multi-day intermediate end - no toll/parking required, just end the log directly via modal
-                setIsModalVisible(true);
+                // Multi-day intermediate end - no toll/parking required, just end the log directly via sheet
+                confirmSheetRef.current?.snapToIndex(0);
             } else {
                 // Final trip complete - must collect expenses on the end-ride screen
                 router.push({
@@ -183,13 +211,31 @@ export function ActiveTripScreen() {
                     showError('Meter reading and photo are required for OUT_STATION trips.');
                     return;
                 }
+
+                // ── Capture Driver Location (for polyline) ────────────────────────────────
+                let currentPos: Location.LocationObject | null = null;
+                try {
+                    const { status } = await Location.requestForegroundPermissionsAsync();
+                    if (status === 'granted') {
+                        currentPos = await Location.getCurrentPositionAsync({
+                            accuracy: Location.Accuracy.Balanced,
+                        });
+                    }
+                } catch (err) {
+                    console.warn('Failed to capture start location', err);
+                    // allow proceed without location
+                }
                 
-                setIsModalVisible(false);
+                confirmSheetRef.current?.close();
                 await startDriverBooking({ 
                     bookingId: id,
                     ...(isOutstation ? {
                         meter_reading_start: parseFloat(startMeterValue),
                         meter_reading_start_image_url: startMeterPhoto!,
+                    } : {}),
+                    ...(currentPos ? {
+                        driver_lat: currentPos.coords.latitude,
+                        driver_lng: currentPos.coords.longitude,
                     } : {})
                 }).unwrap();
                 
@@ -205,14 +251,14 @@ export function ActiveTripScreen() {
             }
         } else if (tripStep === 'MARK_DROPPED_OFF') {
             try {
-                setIsModalVisible(false);
+                confirmSheetRef.current?.close();
                 await markDropoff({ bookingId: id }).unwrap();
             } catch {
                 showError('Could not mark as dropped off. Please try again.');
             }
         } else if (tripStep === 'END_RIDE') {
             try {
-                setIsModalVisible(false);
+                confirmSheetRef.current?.close();
                 await endTrip({ bookingId: id, body: {} }).unwrap();
                 router.push('/chauffeur');
             } catch {
@@ -253,20 +299,8 @@ export function ActiveTripScreen() {
 
     return (
         <View style={styles.root}>
-            {/* Map View */}
-            <MapView
-                style={StyleSheet.absoluteFillObject}
-                initialRegion={{
-                    latitude: 37.618,
-                    longitude: -122.375,
-                    latitudeDelta: 0.05,
-                    longitudeDelta: 0.05,
-                }}
-                showsUserLocation
-            />
-
             {/* Header Strip */}
-            <SafeAreaView style={styles.headerContainer} className='rounded-b-3xl' edges={['top']}>
+            <SafeAreaView style={styles.headerContainer} className='' edges={['top']}>
                 <View style={styles.headerContent}>
                     <Pressable style={styles.backButton} onPress={() => router.back()}>
                         <Ionicons name="chevron-back" size={24} color="#000" />
@@ -276,17 +310,29 @@ export function ActiveTripScreen() {
                 </View>
             </SafeAreaView>
 
-            {/* Bottom Sheet Details */}
-            <BottomSheet
-                ref={bottomSheetRef}
-                index={0}
-                snapPoints={snapPoints}
-                enableDynamicSizing={false}
-                enablePanDownToClose={false}
-                handleIndicatorStyle={styles.sheetHandle}
-                backgroundStyle={styles.sheetBackground}
-            >
-                <BottomSheetView style={styles.sheetContent}>
+            <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+                <View style={styles.illustrationContainer}>
+                    <View style={styles.illustrationFrame}>
+                        <Animated.View
+                            key={tripStep}
+                            entering={FadeIn.duration(280)}
+                            exiting={FadeOut.duration(200)}
+                            layout={LinearTransition.duration(240)}
+                            style={styles.illustrationLayer}
+                        >
+                            <Image
+                                source={illustrationSource}
+                                style={styles.illustration}
+                                resizeMode="contain"
+                            />
+                        </Animated.View>
+                    </View>
+                    <Text style={styles.punchline}>{punchline}</Text>
+                </View>
+
+                <View style={styles.divider} />
+
+                <View style={styles.mainContent} >
                     <View style={styles.passengerRow}>
                         <View style={styles.avatarCircle}>
                             <Text style={styles.avatarInitials}>{initials}</Text>
@@ -297,7 +343,7 @@ export function ActiveTripScreen() {
                         </View>
                     </View>
 
-                    {displayPickupAddress && (
+                    {!!displayPickupAddress && (
                         <View style={styles.addressSection}>
                             <View style={styles.addressInfo}>
                                 <Ionicons name="location-outline" size={20} color="#666" />
@@ -320,93 +366,100 @@ export function ActiveTripScreen() {
                         </View>
                     )}
 
-                    <View style={styles.divider} />
-
-                    <Pressable
-                        style={[styles.primaryButton, isAnyLoading && styles.primaryButtonDisabled]}
-                        disabled={isAnyLoading || !activeBooking}
-                        onPress={handleButtonPress}
-                    >
-                        {isAnyLoading && (
-                            <ActivityIndicator
-                                size="small"
-                                color="#FFFFFF"
-                                style={{ marginRight: 8 }}
-                            />
-                        )}
-                        <Text style={styles.primaryButtonText}>{buttonLabel()}</Text>
-                    </Pressable>
-                </BottomSheetView>
-            </BottomSheet>
-
-            {/* Confirmation Modal */}
-            <Modal
-                transparent
-                visible={isModalVisible && !isCameraOpen}
-                animationType="fade"
-                onRequestClose={() => setIsModalVisible(false)}
-            >
-                <View style={styles.modalOverlay}>
-                    <View style={styles.modalContent}>
-                        <Ionicons name="alert-circle-sharp" size={36} color="#FF5A00" style={{ marginBottom: 16 }} />
-                        <Text style={styles.modalTitle}>{modalTitle}</Text>
-                        
-                        {isOutstationStart ? (
-                            <View style={{ width: '100%', marginBottom: 20 }}>
-                                <Text style={[styles.modalSubtitle, { textAlign: 'left', marginBottom: 8 }]}>Meter Reading</Text>
-                                <TextInput
-                                    style={styles.input}
-                                    placeholder="Enter start meter"
-                                    keyboardType="numeric"
-                                    value={startMeterValue}
-                                    onChangeText={setStartMeterValue}
-                                    placeholderTextColor="#9CA3AF"
-                                    maxLength={8}
+                    <View style={styles.actionContainer}>
+                        <Pressable
+                            style={[styles.primaryButton, (isAnyLoading || !activeBooking) && styles.primaryButtonDisabled]}
+                            disabled={isAnyLoading || !activeBooking}
+                            onPress={handleButtonPress}
+                        >
+                            {isAnyLoading && (
+                                <ActivityIndicator
+                                    size="small"
+                                    color="#FFFFFF"
+                                    style={{ marginRight: 8 }}
                                 />
-                                
-                                <Text style={[styles.modalSubtitle, { textAlign: 'left', marginTop: 16, marginBottom: 8 }]}>Meter Photo</Text>
-                                {startMeterPhoto ? (
-                                    <View>
-                                        <Image source={{ uri: startMeterPhoto }} style={{ width: '100%', height: 120, borderRadius: 12, marginBottom: 8 }} resizeMode="cover" />
-                                        <Pressable onPress={() => setStartMeterPhoto(null)} style={{ paddingVertical: 8, alignItems: 'center', backgroundColor: '#F3F4F6', borderRadius: 8 }}>
-                                            <Text style={{ color: '#FF5A00', fontWeight: 'bold' }}>Retake Photo</Text>
-                                        </Pressable>
-                                    </View>
-                                ) : (
-                                    <Pressable
-                                        onPress={handleOpenCamera}
-                                        style={{ height: 120, borderRadius: 12, backgroundColor: '#F9FAFB', borderWidth: 1, borderColor: '#FF5A00', borderStyle: 'dashed', alignItems: 'center', justifyContent: 'center' }}
-                                    >
-                                        <Ionicons name="camera-outline" size={32} color="#9CA3AF" />
-                                        <Text style={{ color: '#9CA3AF', fontSize: 13, marginTop: 8, fontWeight: '500' }}>Tap to capture meter photo</Text>
-                                    </Pressable>
-                                )}
-                            </View>
-                        ) : (
-                            <Text style={styles.modalSubtitle}>{modalSubtitle}</Text>
-                        )}
-
-                        <Pressable
-                            style={[
-                                styles.modalButton, 
-                                styles.modalButtonPrimary,
-                                (isOutstationStart && !canSubmitOutstationStart) && { opacity: 0.5 }
-                            ]}
-                            disabled={isOutstationStart && !canSubmitOutstationStart}
-                            onPress={handleModalConfirm}
-                        >
-                            <Text style={styles.modalButtonPrimaryText}>{modalConfirmLabel}</Text>
-                        </Pressable>
-
-                        <Pressable
-                            style={[styles.modalButton, styles.modalButtonSecondary]}
-                            onPress={() => setIsModalVisible(false)}
-                        >
-                            <Text style={styles.modalButtonSecondaryText}>Cancel</Text>
+                            )}
+                            <Text style={styles.primaryButtonText}>{buttonLabel()}</Text>
                         </Pressable>
                     </View>
                 </View>
-            </Modal>
+            </ScrollView>
+
+            {/* Confirmation Bottom Sheet */}
+            <BottomSheet
+                ref={confirmSheetRef}
+                index={-1}
+                enableDynamicSizing
+                backdropComponent={renderBackdrop}
+                enablePanDownToClose={false}
+                backgroundStyle={{ borderRadius: 28 }}
+            >
+                <BottomSheetView style={styles.sheetContent}>
+                    <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+                        <View style={{ width: '100%', alignItems: 'center' }}>
+                            <Ionicons name="alert-circle-sharp" size={36} color="#FF5A00" style={{ marginBottom: 16 }} />
+                            <Text style={styles.modalTitle}>{modalTitle}</Text>
+                            
+                            {isOutstationStart ? (
+                                <View style={{ width: '100%', marginBottom: 20 }}>
+                                    <Text style={[styles.modalSubtitle, { textAlign: 'left', marginBottom: 8 }]}>Meter Reading</Text>
+                                    <TextInput
+                                        style={styles.input}
+                                        placeholder="Enter start meter"
+                                        keyboardType="numeric"
+                                        value={startMeterValue}
+                                        onChangeText={setStartMeterValue}
+                                        placeholderTextColor="#9CA3AF"
+                                        maxLength={8}
+                                     
+                                        onSubmitEditing={Keyboard.dismiss}
+                                    />
+                                    
+                                    <Text style={[styles.modalSubtitle, { textAlign: 'left', marginTop: 16, marginBottom: 8 }]}>Meter Photo</Text>
+                                    {startMeterPhoto ? (
+                                        <Pressable onPress={handleOpenCamera} style={{ width: '100%', borderRadius: 12, overflow: 'hidden', marginBottom: 8 }}>
+                                            <Image source={{ uri: startMeterPhoto }} style={{ width: '100%', height: 120, borderRadius: 12 }} resizeMode="cover" />
+                                            <View style={{ position: 'absolute', bottom: 6, right: 6, backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4, flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                                <Ionicons name="camera-outline" size={14} color="#fff" />
+                                                <Text style={{ color: '#fff', fontSize: 11, fontWeight: '600' }}>Tap to retake</Text>
+                                            </View>
+                                        </Pressable>
+                                    ) : (
+                                        <Pressable
+                                            onPress={handleOpenCamera}
+                                            style={{ height: 120, borderRadius: 12, backgroundColor: '#F9FAFB', borderWidth: 1, borderColor: '#FF5A00', borderStyle: 'dashed', alignItems: 'center', justifyContent: 'center' }}
+                                        >
+                                            <Ionicons name="camera-outline" size={32} color="#9CA3AF" />
+                                            <Text style={{ color: '#9CA3AF', fontSize: 13, marginTop: 8, fontWeight: '500' }}>Tap to capture meter photo</Text>
+                                        </Pressable>
+                                    )}
+                                </View>
+                            ) : (
+                                <Text style={styles.modalSubtitle}>{modalSubtitle}</Text>
+                            )}
+
+                            <Pressable
+                                style={[
+                                    styles.modalButton, 
+                                    styles.modalButtonPrimary,
+                                    (isOutstationStart && !canSubmitOutstationStart) && { opacity: 0.5 }
+                                ]}
+                                disabled={isOutstationStart && !canSubmitOutstationStart}
+                                onPress={handleModalConfirm}
+                            >
+                                <Text style={styles.modalButtonPrimaryText}>{modalConfirmLabel}</Text>
+                            </Pressable>
+
+                            <Pressable
+                                style={[styles.modalButton, styles.modalButtonSecondary]}
+                                onPress={() => confirmSheetRef.current?.close()}
+                            >
+                                <Text style={styles.modalButtonSecondaryText}>Cancel</Text>
+                            </Pressable>
+                        </View>
+                    </TouchableWithoutFeedback>
+                </BottomSheetView>
+            </BottomSheet>
 
             {/* Camera Fullscreen Modal */}
             <Modal visible={isCameraOpen} animationType="slide">
@@ -435,11 +488,7 @@ const styles = StyleSheet.create({
     root: { flex: 1, backgroundColor: '#FFFFFF' },
     headerContainer: {
         backgroundColor: '#FFFFFF',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-        elevation: 4,
+    
         zIndex: 10,
     },
     headerContent: {
@@ -449,6 +498,46 @@ const styles = StyleSheet.create({
         paddingHorizontal: 16,
         paddingBottom: 16,
         paddingTop: 8,
+    },
+    scrollContent: {
+        paddingBottom: 40,
+    },
+    illustrationContainer: {
+        alignItems: 'center',
+        paddingVertical: 40,
+        paddingHorizontal: 24,
+    },
+    illustrationFrame: {
+        width: '100%',
+        height: 220,
+        marginBottom: 20,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    illustrationLayer: {
+        ...StyleSheet.absoluteFillObject,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    illustration: {
+        width: '100%',
+        height: 220,
+    },
+    punchline: {
+        fontSize: 18,
+        fontWeight: '700',
+        color: '#374151',
+        textAlign: 'center',
+        lineHeight: 24,
+    },
+    mainContent: {
+        paddingHorizontal: 24,
+        flexDirection: 'column',
+      
+            justifyContent:'space-between'
+    },
+    actionContainer: {
+        marginTop: 30,
     },
     backButton: {
         width: 40,
@@ -463,28 +552,6 @@ const styles = StyleSheet.create({
         fontWeight: '700',
         color: '#000',
         textAlign: 'center',
-    },
-    sheetBackground: {
-        backgroundColor: '#FFF',
-        borderTopLeftRadius: 28,
-        borderTopRightRadius: 28,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: -4 },
-        shadowOpacity: 0.1,
-        shadowRadius: 10,
-        elevation: 10,
-    },
-    sheetHandle: {
-        backgroundColor: '#D1D5DB',
-        width: 48,
-        height: 5,
-        borderRadius: 3,
-    },
-    sheetContent: {
-        flex: 1,
-        paddingHorizontal: 24,
-        paddingTop: 10,
-        paddingBottom: 30,
     },
     passengerRow: {
         flexDirection: 'row',
@@ -556,7 +623,8 @@ const styles = StyleSheet.create({
     divider: {
         height: 1,
         backgroundColor: '#E5E7EB',
-        marginVertical: 20,
+        marginVertical: 30,
+        marginHorizontal: 24,
     },
     primaryButton: {
         display: 'flex',
@@ -628,6 +696,13 @@ const styles = StyleSheet.create({
         color: '#374151',
         fontSize: 17,
         fontWeight: '700',
+    },
+    sheetContent: {
+        paddingHorizontal: 24,
+        paddingTop: 8,
+        paddingBottom: 40,
+        alignItems: 'center',
+        width: '100%',
     },
     input: {
         width: '100%',

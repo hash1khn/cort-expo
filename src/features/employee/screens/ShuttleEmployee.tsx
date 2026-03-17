@@ -10,6 +10,8 @@ import {
   ImageBackground,
   ScrollView,
   Image,
+  RefreshControl,
+  InteractionManager,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AntDesign, Entypo, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -45,7 +47,7 @@ const CustomToast = ({ title, message }: { title: string; message: string }) => 
   </View>
 );
 import { useAppDispatch, useAppSelector } from '../../../store/hooks';
-import { useRouter, useNavigation, router } from 'expo-router';
+import { useRouter, useNavigation, router, useLocalSearchParams } from 'expo-router';
 import { DrawerActions, useIsFocused } from '@react-navigation/native';
 import { useGetChauffeurBookingsQuery, useGetEmployeeActiveChauffeurBookingQuery } from '../services/bookingsApi';
 import { useGetShuttleTripsForEmployeeQuery } from '../services/employeeShuttleApi';
@@ -65,6 +67,7 @@ const PROFILE_SHEET_SNAP = ['65%'];
 const DROPOFF_SHEET_SNAP = ['45%'];
 
 export default function NewHome() {
+  const { refreshToken } = useLocalSearchParams<{ refreshToken?: string }>();
   const user = useAppSelector((state) => state.auth.user);
   const { isOutstationDev, isWaitingForDriverResponse } = useAppSelector(
     (state) => state.employeeRide,
@@ -243,12 +246,14 @@ export default function NewHome() {
 
     const bStatus = activeChauffeurBooking.status;
     const isOutstation = activeChauffeurBooking.trip_type === 'OUT_STATION';
-    const liveStatuses = ['OTW', 'ARRIVED', 'IN_PROGRESS'];
     const driver = activeChauffeurBooking.users_chauffeur_bookings_driver_idTousers;
     const vehicle = activeChauffeurBooking.vehicles;
 
     if (isOutstation) {
       // OUT_STATION: Direct status mapping based on booking status
+      if (bStatus === 'DROPPED_OFF') return;
+      
+      const liveStatuses = ['OTW', 'ARRIVED', 'IN_PROGRESS'];
       if (liveStatuses.includes(bStatus)) {
         hasNavigatedToActiveRideRef.current = true;
         router.push({
@@ -277,6 +282,8 @@ export default function NewHome() {
       const targetLog = sortedLogs.find((l) => l.status !== 'COMPLETED') ?? null;
 
       if (targetLog) {
+        if (targetLog.status === 'DROPPED_OFF') return;
+        
         if (targetLog.start_time !== null) {
           // Driver has started (start_time set) → ride is active
           hasNavigatedToActiveRideRef.current = true;
@@ -396,8 +403,49 @@ export default function NewHome() {
   );
 
   const insets = useSafeAreaInsets();
+  const scrollViewRef = useRef<ScrollView>(null);
 
   const [isCalling, setIsCalling] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const handleRefresh = useCallback(async () => {
+    // Avoid duplicate refreshes if already refreshing
+    if (isRefreshing) return;
+    
+    setIsRefreshing(true);
+    try {
+      const tasks: Promise<any>[] = [];
+      if (companyId && employeeId && hasShuttle) tasks.push(refetchShuttleTrips());
+      if (companyId && hasChauffeur) tasks.push(refetchActiveChauffeurBooking());
+      
+      // Batch all refetch operations in parallel
+      if (tasks.length > 0) {
+        await Promise.all(tasks);
+      }
+    } catch (error) {
+      console.error('Refresh error:', error);
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, [companyId, employeeId, hasShuttle, hasChauffeur, refetchShuttleTrips, refetchActiveChauffeurBooking, isRefreshing]);
+
+  const lastHandledRefreshTokenRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!isFocused || !refreshToken) return;
+    if (lastHandledRefreshTokenRef.current === refreshToken) return;
+
+    lastHandledRefreshTokenRef.current = refreshToken;
+    
+    // Optimized scroll-to-top: use requestAnimationFrame for better frame timing
+    requestAnimationFrame(() => {
+      scrollViewRef.current?.scrollTo({ y: 0, animated: false });
+      
+      // Defer refresh until current interaction completes to avoid blocking UI thread
+      InteractionManager.runAfterInteractions(() => {
+        handleRefresh();
+      });
+    });
+  }, [isFocused, refreshToken, handleRefresh]);
 
   const handleCallDriver = useCallback(() => {
     setIsCalling(true);
@@ -456,9 +504,18 @@ export default function NewHome() {
       <AppHeader />
 
       <ScrollView
+        ref={scrollViewRef}
         style={{ flex: 1 }}
         contentContainerStyle={{ paddingBottom: 24, paddingHorizontal: 20 }}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={handleRefresh}
+            tintColor="#FF5A00"
+            colors={['#FF5A00']}
+          />
+        }
       >
         {/* Status bar: purple card */}
         {/* <View className="px-4 mt-6">
@@ -561,8 +618,8 @@ export default function NewHome() {
 
             <CompactRideHistoryCard
               destination="Tower"
-              date="Yesterday"
-              rideType="Shuttle"
+              date="Oct 15"
+              rideType="Chauffeur"
               timeOfDropoff="14:52"
               onPress={() =>
                 router.push({
@@ -574,7 +631,7 @@ export default function NewHome() {
             <CompactRideHistoryCard
               destination="Clifton"
               date="Oct 24"
-              rideType="Shuttle"
+              rideType="Chauffeur"
               timeOfDropoff="22:10"
               onPress={() =>
                 router.push({

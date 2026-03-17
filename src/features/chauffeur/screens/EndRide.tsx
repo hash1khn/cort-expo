@@ -259,6 +259,50 @@ export function EndRideScreen() {
                         );
                     })}
                 </View>
+                                 <View className="mt-2 mb-4">
+                    {STEPS[currentStep] === 'Meter' && (
+                        <View>
+                            <Text className="text-[#111827] text-base font-bold mb-3">Meter Reading</Text>
+                            <TextInput
+                                placeholder="Enter meter reading"
+                                keyboardType="numeric"
+                                value={meterValue}
+                                onChangeText={setMeterValue}
+                                style={{ width: '100%', backgroundColor: '#F9FAFB', borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12, fontSize: 16, color: '#111827' }}
+                                placeholderTextColor="#9CA3AF"
+                                maxLength={8}
+                            />
+                        </View>
+                    )}
+                    {STEPS[currentStep] === 'Parking' && (
+                        <View>
+                            <Text className="text-[#111827] text-sm font-bold mb-2">Parking Expense</Text>
+                            <TextInput
+                                placeholder="Enter parking amount"
+                                keyboardType="numeric"
+                                value={parkingValue}
+                                onChangeText={setParkingValue}
+                                style={{ width: '100%', backgroundColor: '#F9FAFB', borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12, fontSize: 16, color: '#111827' }}
+                                placeholderTextColor="#9CA3AF"
+                                maxLength={8}
+                            />
+                        </View>
+                    )}
+                    {STEPS[currentStep] === 'Toll receipt' && (
+                        <View>
+                            <Text className="text-[#111827] text-sm font-bold mb-2">Toll Expense</Text>
+                            <TextInput
+                                placeholder="Enter toll amount"
+                                keyboardType="numeric"
+                                value={tollValue}
+                                onChangeText={setTollValue}
+                                style={{ width: '100%', backgroundColor: '#F9FAFB', borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12, fontSize: 16, color: '#111827' }}
+                                placeholderTextColor="#9CA3AF"
+                                maxLength={8}
+                            />
+                        </View>
+                    )}
+                </View>
 
                 {/* Render Dynamic Photo Upload Area */}
                 {currentPhotos.length === 0 ? (
@@ -315,51 +359,7 @@ export function EndRideScreen() {
                     </View>
                 )}
 
-                <View className="mt-6">
-                    {STEPS[currentStep] === 'Meter' && (
-                        <View>
-                            <Text className="text-[#111827] text-sm font-bold mb-2">Meter Reading</Text>
-                            <TextInput
-                                placeholder="Enter meter reading"
-                                keyboardType="numeric"
-                                value={meterValue}
-                                onChangeText={setMeterValue}
-                                style={{ width: '100%', backgroundColor: '#F9FAFB', borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12, fontSize: 16, color: '#111827' }}
-                                placeholderTextColor="#9CA3AF"
-                                maxLength={8}
-                            />
-                        </View>
-                    )}
-                    {STEPS[currentStep] === 'Parking' && (
-                        <View>
-                            <Text className="text-[#111827] text-sm font-bold mb-2">Parking Expense</Text>
-                            <TextInput
-                                placeholder="Enter parking amount"
-                                keyboardType="numeric"
-                                value={parkingValue}
-                                onChangeText={setParkingValue}
-                                style={{ width: '100%', backgroundColor: '#F9FAFB', borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12, fontSize: 16, color: '#111827' }}
-                                placeholderTextColor="#9CA3AF"
-                                maxLength={8}
-                            />
-                        </View>
-                    )}
-                    {STEPS[currentStep] === 'Toll receipt' && (
-                        <View>
-                            <Text className="text-[#111827] text-sm font-bold mb-2">Toll Expense</Text>
-                            <TextInput
-                                placeholder="Enter toll amount"
-                                keyboardType="numeric"
-                                value={tollValue}
-                                onChangeText={setTollValue}
-                                style={{ width: '100%', backgroundColor: '#F9FAFB', borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12, fontSize: 16, color: '#111827' }}
-                                placeholderTextColor="#9CA3AF"
-                                maxLength={8}
-                            />
-                        </View>
-                    )}
-                </View>
-
+   
             </ScrollView>
 
             {/* Bottom Navigation Buttons */}

@@ -179,7 +179,58 @@ export const bookingsApi = baseApi.injectEndpoints({
         method: 'POST',
         body: { pickup_location },
       }),
-      invalidatesTags: ['ChauffeurBooking'],
+      // Use optimistic update instead of invalidation to prevent skeleton loader
+      async onQueryStarted({ companyId, bookingId, pickup_location }, { dispatch, queryFulfilled }) {
+        // Optimistically update the cache
+        const patchResult = dispatch(
+          bookingsApi.util.updateQueryData(
+            'getEmployeeActiveChauffeurBooking',
+            { companyId },
+            (draft) => {
+              if (draft) {
+                // Mark as driver requested
+                draft.driver_requested = true;
+                draft.can_request_driver = false;
+                // Update today_log if it exists
+                if (draft.today_log) {
+                  draft.today_log.is_requested = true;
+                  draft.today_log.pickup_location = pickup_location;
+                }
+                // Update the corresponding daily log
+                const dailyLog = draft.chauffeur_trip_daily_logs?.find(
+                  (log) => log.id === draft.today_log?.id
+                );
+                if (dailyLog) {
+                  dailyLog.is_requested = true;
+                  dailyLog.pickup_location = pickup_location;
+                }
+              }
+            }
+          )
+        );
+
+        try {
+          await queryFulfilled;
+        } catch {
+          // Revert optimistic update on error
+          patchResult.undo();
+        }
+      },
+    }),
+
+    getChauffeurRoutePolyline: builder.query<
+      { booking_id: number; encoded_polyline: string | null; points: { lat: number; lng: number }[] | null },
+      { companyId: number; bookingId: number }
+    >({
+      query: ({ companyId, bookingId }) =>
+        `/employee/companies/${companyId}/chauffeur-bookings/${bookingId}/route-polyline`,
+      transformResponse: (response: {
+        data: {
+          booking_id: number;
+          encoded_polyline: string | null;
+          points: { lat: number; lng: number }[] | null;
+        };
+      }) => response.data,
     }),
   }),
 });
@@ -188,5 +239,6 @@ export const {
   useGetChauffeurBookingsQuery,
   useGetEmployeeActiveChauffeurBookingQuery,
   useRequestNextDayPickupMutation,
+  useGetChauffeurRoutePolylineQuery,
 } = bookingsApi;
 

@@ -26,6 +26,8 @@ export default function Layout() {
           <Drawer.Screen name="qr-scanner" options={disableSwipe} />
           <Drawer.Screen name="ride-details" options={disableSwipe} />
           <Drawer.Screen name="ride-active" options={disableSwipe} />
+          <Drawer.Screen name="waiting" options={disableSwipe} />
+          
         </Drawer>
       </View>
     </GestureHandlerRootView>

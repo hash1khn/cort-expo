@@ -1,5 +1,5 @@
-import React, { useMemo, useEffect } from 'react';
-import { Pressable, Text, View, ScrollView } from 'react-native';
+import React, { useMemo, useEffect, useState, useCallback } from 'react';
+import { Pressable, RefreshControl, Text, View, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather, Ionicons, FontAwesome5, MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -32,8 +32,18 @@ const ROUTE_DETAILS_LABELS = {
 export function ShuttleDriver() {
   const navigation = useNavigation();
   const { language } = useLanguage();
-  const { data: todayTrips = [], isLoading: isTodayTripLoading } = useGetTodayTripQuery();
+  const { data: todayTrips = [], isLoading: isTodayTripLoading, refetch } = useGetTodayTripQuery();
   const [triggerLoadEmployees] = useLazyGetTripEmployeesQuery();
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const handleRefresh = useCallback(async () => {
+    setIsRefreshing(true);
+    try {
+      await refetch();
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, [refetch]);
 
   useEffect(() => {
     if (!isTodayTripLoading) {
@@ -214,7 +224,18 @@ export function ShuttleDriver() {
     return (
       <SafeAreaView className="flex-1 bg-[#FFFFFF]" edges={['top']}>
         <AppHeader />
-        <ScrollView className="flex-1 px-5" showsVerticalScrollIndicator={false}>
+        <ScrollView
+          className="flex-1 px-5"
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={isRefreshing}
+              onRefresh={handleRefresh}
+              tintColor="#FF5A00"
+              colors={['#FF5A00']}
+            />
+          }
+        >
 
           {/* Title skeleton */}
           <View className="mb-6 mt-4">
@@ -284,7 +305,18 @@ export function ShuttleDriver() {
   return (
     <SafeAreaView className="flex-1 bg-[#FFFFFF]" edges={['top']}>
       <AppHeader />
-      <ScrollView className="flex-1 px-5" showsVerticalScrollIndicator={false}>
+      <ScrollView
+        className="flex-1 px-5"
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={handleRefresh}
+            tintColor="#FF5A00"
+            colors={['#FF5A00']}
+          />
+        }
+      >
 
         {/* Title Section */}
         <View className="mb-6">

@@ -1,6 +1,5 @@
 import React from 'react';
 import {
-  Pressable,
   StyleSheet,
   Text as RNText,
   View,
@@ -13,42 +12,41 @@ import Animated, {
   useAnimatedScrollHandler,
   interpolate,
   Extrapolation,
+  interpolateColor,
 } from 'react-native-reanimated';
-import type { SharedValue } from 'react-native-reanimated'; // ✅ correct type import
+import type { SharedValue } from 'react-native-reanimated';
 import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { colors, typography, fontFamily } from '../../../core/theme';
+import { colors, fontFamily } from '../../../core/theme';
 import { CortButton } from '@/components';
-
-const Text = (props: React.ComponentProps<typeof RNText>) => {
-  return <RNText {...props} style={[{ fontFamily }, props.style]} />;
-};
+import { LegalBottomSheet, LegalDocumentType } from '../components/LegalBottomSheet';
+import { BottomSheetModal } from '@gorhom/bottom-sheet';
 
 const { width, height } = Dimensions.get('window');
 
-type Props = {
-  onGetStarted?: () => void;
-  onApplyAsChauffeur?: () => void;
+// Custom Text Component to ensure Font Consistency
+const Text = (props: React.ComponentProps<typeof RNText>) => {
+  return <RNText {...props} style={[{ fontFamily }, props.style]} />;
 };
 
 const CAROUSEL_DATA = [
   {
     id: '1',
     image: require('../../../../assets/user_onboard.svg'),
-    title: 'Your Commute, Simplified',
+    title: 'Your Commute,\nSimplified', // Added new line for better balance
     subtitle: 'Safe • On-Time • Tracked',
   },
   {
     id: '2',
     image: require('../../../../assets/car_pool.svg'),
     title: 'Safe & Secure',
-    subtitle: 'Chauffeurs you can trust.',
+    subtitle: 'Professional chauffeurs you can trust.',
   },
   {
     id: '3',
     image: require('../../../../assets/bus_stop.svg'),
-    title: 'Destinations on time',
-    subtitle: 'Shuttles for every route.',
+    title: 'Destinations,On Time',
+    subtitle: 'Reliable shuttles for every route.',
   },
 ];
 
@@ -58,7 +56,7 @@ const CAROUSEL_DATA = [
 type CarouselItemProps = {
   item: (typeof CAROUSEL_DATA)[0];
   index: number;
-  scrollX: SharedValue<number>; // ✅ use SharedValue<number> directly
+  scrollX: SharedValue<number>;
 };
 
 function CarouselItem({ item, index, scrollX }: CarouselItemProps) {
@@ -66,25 +64,24 @@ function CarouselItem({ item, index, scrollX }: CarouselItemProps) {
     const scale = interpolate(
       scrollX.value,
       [(index - 1) * width, index * width, (index + 1) * width],
-      [0.8, 1, 0.8],
+      [0.9, 1, 0.9],
       Extrapolation.CLAMP
     );
     const opacity = interpolate(
       scrollX.value,
       [(index - 1) * width, index * width, (index + 1) * width],
-      [0.4, 1, 0.4],
+      [0, 1, 0],
       Extrapolation.CLAMP
     );
-    return { transform: [{ scale }], opacity };
+
+    return {
+      transform: [{ scale }],
+      opacity,
+    };
   });
 
   return (
     <View style={styles.slide}>
-      {/*
-        expo-image doesn't need createAnimatedComponent — we apply the
-        animated style to a wrapping Animated.View instead, which is simpler
-        and avoids any compatibility issues.
-      */}
       <Animated.View style={[styles.illustrationWrapper, animatedStyle]}>
         <Image
           source={item.image}
@@ -101,31 +98,29 @@ function CarouselItem({ item, index, scrollX }: CarouselItemProps) {
 }
 
 // ---------------------------------------------------------------------------
-// Dot Indicator
+// Expanding Dot Indicator
 // ---------------------------------------------------------------------------
-type DotIndicatorProps = {
-  index: number;
-  scrollX: SharedValue<number>; // ✅
-};
-
-function DotIndicator({ index, scrollX }: DotIndicatorProps) {
+function DotIndicator({ index, scrollX }: { index: number; scrollX: SharedValue<number> }) {
   const animatedStyle = useAnimatedStyle(() => {
+    const inputRange = [(index - 1) * width, index * width, (index + 1) * width];
+    
+    // Expand from a dot (8px) to a pill (24px)
     const dotWidth = interpolate(
       scrollX.value,
-      [(index - 1) * width, index * width, (index + 1) * width],
-      [8, 20, 8],
+      inputRange,
+      [8, 24, 8],
       Extrapolation.CLAMP
     );
-    const opacity = interpolate(
+
+    const backgroundColor = interpolateColor(
       scrollX.value,
-      [(index - 1) * width, index * width, (index + 1) * width],
-      [0.2, 1, 0.2],
-      Extrapolation.CLAMP
+      inputRange,
+      ['#E0E0E0', colors.orange, '#E0E0E0']
     );
+
     return {
       width: dotWidth,
-      opacity,
-      backgroundColor: colors.orange,
+      backgroundColor,
     };
   });
 
@@ -135,17 +130,26 @@ function DotIndicator({ index, scrollX }: DotIndicatorProps) {
 // ---------------------------------------------------------------------------
 // Main Screen
 // ---------------------------------------------------------------------------
-export function GetStartedScreen({ onGetStarted, onApplyAsChauffeur }: Props) {
+export function GetStartedScreen({ onGetStarted }: { onGetStarted?: () => void }) {
   const scrollX = useSharedValue(0);
+  const bottomSheetRef = React.useRef<BottomSheetModal>(null);
+  const [docType, setDocType] = React.useState<LegalDocumentType>('terms');
 
-  const scrollHandler = useAnimatedScrollHandler((event) => {
-    scrollX.value = event.contentOffset.x;
+  const openLegalModal = (type: LegalDocumentType) => {
+    setDocType(type);
+    bottomSheetRef.current?.present();
+  };
+
+  const scrollHandler = useAnimatedScrollHandler({
+    onScroll: (event) => {
+      scrollX.value = event.contentOffset.x;
+    },
   });
 
   return (
     <View style={styles.root}>
       <SafeAreaView style={styles.safeArea}>
-        {/* Header: Logo */}
+        {/* Header */}
         <View style={styles.header}>
           <Image
             source={require('../../../../assets/cort-without-at-your.png')}
@@ -154,41 +158,48 @@ export function GetStartedScreen({ onGetStarted, onApplyAsChauffeur }: Props) {
           />
         </View>
 
-        {/* Middle: Carousel */}
-        <View style={styles.carouselContainer}>
-          <Animated.FlatList
-            data={CAROUSEL_DATA}
-            renderItem={({ item, index }) => (
-              <CarouselItem item={item} index={index} scrollX={scrollX} />
-            )}
-            horizontal
-            pagingEnabled
-            showsHorizontalScrollIndicator={false}
-            onScroll={scrollHandler}
-            scrollEventThrottle={16}
-            keyExtractor={(item) => item.id}
-          />
-        </View>
+        {/* Carousel */}
+        <Animated.FlatList
+          data={CAROUSEL_DATA}
+          renderItem={({ item, index }) => (
+            <CarouselItem item={item} index={index} scrollX={scrollX} />
+          )}
+          horizontal
+          pagingEnabled
+          showsHorizontalScrollIndicator={false}
+          onScroll={scrollHandler}
+          scrollEventThrottle={16}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={styles.flatListContent}
+        />
 
-        {/* Pagination Dots */}
+        {/* Pagination */}
         <View style={styles.indicatorContainer}>
           {CAROUSEL_DATA.map((_, i) => (
             <DotIndicator key={i} index={i} scrollX={scrollX} />
           ))}
         </View>
 
-        {/* Footer: Buttons */}
+        {/* Footer */}
         <View style={styles.footer}>
           <CortButton
             title="Get Started"
             onPress={onGetStarted}
             variant="primary"
           />
-          <Pressable onPress={onApplyAsChauffeur} style={styles.linkContainer}>
-            <Text style={styles.linkText}>Apply as a chauffeur</Text>
-          </Pressable>
+          <Text style={styles.footerLegalText}>
+            By clicking Get Started, you agree to our{' '}
+            <Text style={styles.legalLink} onPress={() => openLegalModal('terms')}>
+              Terms of Use
+            </Text>
+            {' '}and{' '}
+            <Text style={styles.legalLink} onPress={() => openLegalModal('privacy')}>
+              Privacy Policy
+            </Text>
+          </Text>
         </View>
       </SafeAreaView>
+      <LegalBottomSheet ref={bottomSheetRef} type={docType} />
     </View>
   );
 }
@@ -202,29 +213,28 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   header: {
-    height: 80,
+    height: 60,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 20,
+    marginTop: 10,
   },
   logoImage: {
-    width: 150,
-    height: 50,
+    width: 120,
+    height: 40,
   },
-  carouselContainer: {
-    flex: 1,
-    justifyContent: 'center',
+  flatListContent: {
+    alignItems: 'center',
   },
   slide: {
     width: width,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 20,
+    paddingHorizontal: 32,
   },
   illustrationWrapper: {
-    width: width * 0.8,
-    height: height * 0.35,
-    marginBottom: 40,
+    width: width  * 0.8,
+    height: height * 0.32,
+    marginBottom: 32, // Tighter spacing to connect image/text
   },
   illustration: {
     width: '100%',
@@ -233,28 +243,32 @@ const styles = StyleSheet.create({
   textContainer: {
     alignItems: 'center',
     width: '100%',
+    minHeight: 120, // Prevents layout jump if text wraps
   },
   heading: {
-    fontSize: 26,
-    fontWeight: '600',
-    width: '100%',
-    color: '#141414',
+    fontSize: 30,
+    fontWeight: '700',
+    color: '#1A1A1A',
     textAlign: 'center',
-    marginBottom: 12,
-    letterSpacing: -0.5,
+    marginBottom: 10,
+    letterSpacing: -1,
+    lineHeight: 36,
   },
   body: {
-    fontSize: 16,
+    fontSize: 17,
     color: colors.text,
     textAlign: 'center',
     lineHeight: 24,
-    opacity: 0.7,
+    fontWeight: '500',
+    opacity: 0.6,
+    letterSpacing: 0.2,
   },
   indicatorContainer: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    marginVertical: 32,
+    height: 40,
+    marginBottom: 20,
   },
   indicator: {
     height: 8,
@@ -263,17 +277,20 @@ const styles = StyleSheet.create({
   },
   footer: {
     paddingHorizontal: 24,
-    paddingBottom: Platform.OS === 'ios' ? 20 : 40,
+    paddingBottom: Platform.OS === 'ios' ? 20 : 30,
   },
-  linkContainer: {
-    marginTop: 16,
-    paddingVertical: 12,
-    alignItems: 'center',
+  footerLegalText: {
+    fontSize: 13,
+    marginHorizontal:2,
+    color: colors.text,
+    textAlign: 'center',
+    marginTop: 20,
+    lineHeight: 20,
+    opacity: 0.5,
   },
-  linkText: {
-    fontSize: 15,
-    fontWeight: '500',
-    color: colors.navy,
+  legalLink: {
+    color: colors.orange,
+    fontWeight: '700',
     textDecorationLine: 'underline',
   },
 });
