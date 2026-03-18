@@ -9,13 +9,14 @@ import {
   View,
   StatusBar,
   Image,
+  TouchableOpacity,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 
 // Assuming these are your core components
-import { CortButton, CortCard } from '../../../components';
+import { CortButton } from '../../../components';
 import { colors, radii, typography } from '../../../core/theme';
 import { useRouter } from 'expo-router';
 import { useAppDispatch } from '../../../store/hooks';
@@ -31,8 +32,9 @@ export function LoginScreen() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
 
-  // Focused state for inputs to add polish
+  // UI States
   const [focusedField, setFocusedField] = useState<'email' | 'password' | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
 
   const dispatch = useAppDispatch();
   const router = useRouter();
@@ -75,38 +77,34 @@ export function LoginScreen() {
 
   return (
     <SafeAreaView style={styles.root} edges={['left', 'right', 'bottom']}>
-      <StatusBar barStyle="light-content" backgroundColor={colors.navy} />
+      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
 
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.select({ ios: 'padding', android: undefined })}
       >
-        {/* Header Section - Deep Navy */}
-        <View style={[styles.header, { paddingTop: insets.top }]}>
-          <View style={styles.logoRow}>
+        <View style={[styles.container, { paddingTop: insets.top + 20 }]}>
+          
+          {/* Centered Logo */}
+          <View style={styles.logoContainer}>
             <Image
-              source={require('../../../../assets/Asset-1@2x (1).png')}
+              source={require('../../../../assets/cort-with-at-your.png')}
               style={styles.logoImage}
               resizeMode="contain"
             />
-            {/* <View>
-              <Text style={styles.logoText}>CORT</Text>
-              <Text style={styles.logoSubText}>At Your Service</Text>
-            </View> */}
           </View>
-        </View>
 
-        {/* Floating Card */}
-        <View style={styles.contentContainer}>
-          <CortCard style={styles.card}>
-            <View style={styles.cardHeader}>
-              <Text style={styles.title}>Welcome Back</Text>
-              <Text style={styles.subtitle}>Sign in to access your dashboard</Text>
-            </View>
+          {/* Heading */}
+          <Text style={styles.title}>Login to your account</Text>
 
-            {/* Email Input */}
-            <View style={styles.field}>
-              <Text style={styles.label}>Email Address</Text>
+          {/* Email Input */}
+          <View style={styles.field}>
+            <Text style={styles.label}>Email address</Text>
+            <View style={[
+              styles.inputContainer,
+              focusedField === 'email' && styles.inputFocused,
+              error && styles.inputError
+            ]}>
               <TextInput
                 value={email}
                 onChangeText={(t) => { setEmail(t); setError(null); }}
@@ -115,68 +113,73 @@ export function LoginScreen() {
                 autoCapitalize="none"
                 autoCorrect={false}
                 keyboardType="email-address"
-                placeholder="name@company.com"
+                placeholder="employee@cort.com"
                 placeholderTextColor={colors.muted}
-                style={[
-                  styles.input,
-                  focusedField === 'email' && styles.inputFocused,
-                  error && styles.inputError
-                ]}
-                cursorColor={colors.orange}
+                style={styles.input}
+                cursorColor="#FF5A00"
               />
+              {email.length > 0 && (
+                <TouchableOpacity onPress={() => setEmail('')} style={styles.iconButton}>
+                  <Ionicons name="close-circle" size={20} color={colors.muted} />
+                </TouchableOpacity>
+              )}
             </View>
+          </View>
 
-            {/* Password Input */}
-            <View style={styles.field}>
-              <View style={styles.labelRow}>
-                <Text style={styles.label}>Password</Text>
-                {/* Forgot Password Link */}
-                <Pressable onPress={() => navigation.navigate('ForgotPassword')}>
-                  <Text style={styles.forgotPass}>Forgot Password?</Text>
-                </Pressable>
-              </View>
+          {/* Password Input */}
+          <View style={styles.field}>
+            <Text style={styles.label}>Password</Text>
+            <View style={[
+              styles.inputContainer,
+              focusedField === 'password' && styles.inputFocused,
+              error && styles.inputError
+            ]}>
               <TextInput
                 value={password}
                 onChangeText={(t) => { setPassword(t); setError(null); }}
                 onFocus={() => setFocusedField('password')}
                 onBlur={() => setFocusedField(null)}
                 autoCapitalize="none"
-                secureTextEntry
+                secureTextEntry={!showPassword}
                 placeholder="••••••••"
                 placeholderTextColor={colors.muted}
-                style={[
-                  styles.input,
-                  focusedField === 'password' && styles.inputFocused,
-                  error && styles.inputError
-                ]}
-                cursorColor={colors.orange}
+                style={styles.input}
+                cursorColor="#FF5A00"
               />
+              <TouchableOpacity 
+                onPress={() => setShowPassword(!showPassword)} 
+                style={styles.iconButton}
+              >
+                <Ionicons name={showPassword ? "eye-off-outline" : "eye-outline"} size={20} color={colors.muted} />
+              </TouchableOpacity>
             </View>
+            
+            {/* Forgot Password Link - Right Aligned below input */}
+            <Pressable onPress={() => navigation.navigate('ForgotPassword')}>
+              <Text style={styles.forgotPass}>Forgot password?</Text>
+            </Pressable>
+          </View>
 
-            {error && (
-              <View style={styles.errorContainer}>
-                <Text style={styles.errorText}>{error}</Text>
-              </View>
-            )}
-
-            {/* Primary Action - Cort Orange */}
-            <View style={styles.actionRow}>
-              <CortButton
-                title="Sign In"
-                variant="primary"
-
-                disabled={!canLogin || isSubmitting}
-                loading={isSubmitting}
-                onPress={handleLogin}
-              />
+          {error && (
+            <View style={styles.errorContainer}>
+              <Text style={styles.errorText}>{error}</Text>
             </View>
-          </CortCard>
+          )}
 
+          {/* Primary Action Button */}
+          <View style={styles.actionRow}>
+            <CortButton
+              title="Log in"
+              variant="primary"
+              disabled={isSubmitting}
+              loading={isSubmitting}
+              onPress={handleLogin}
+              // Assuming CortButton accepts style overrides, otherwise you can rely on the default primary styles
+            />
+          </View>
 
-          {/* Public Signup Link for Chauffeurs */}
+          {/* Biometric Option */}
           <View style={styles.footer}>
-
-            {/* Biometric Option */}
             <Pressable
               onPress={handleBiometricLogin}
               disabled={isBiometricLoading || isSubmitting}
@@ -184,151 +187,101 @@ export function LoginScreen() {
                 styles.biometricBtn,
                 pressed && styles.biometricBtnPressed
               ]}
-
             >
               <Ionicons
                 name="finger-print-outline"
                 size={32}
-                color={colors.navy}
-                className="text-center"
+                color="#1A1A1A"
+                className='text-center'
               />
-              <Text style={styles.biometricText} className="text-center">
+              <Text style={styles.biometricText}>
                 {isBiometricLoading ? 'Verifying...' : 'Unlock with Face ID'}
               </Text>
             </Pressable>
-
-            {/* <View style={styles.divider} /> */}
-
-            {/* <Text style={styles.footerText}>Want to drive with us?</Text>
-            <Pressable
-              onPress={() => navigation.navigate('ChauffeurSignup')}
-              style={({ pressed }) => [styles.linkBtn, pressed && styles.linkBtnPressed]}
-            >
-              <Text style={styles.linkText}>Apply as Chauffeur</Text>
-            </Pressable> */}
           </View>
+
         </View>
       </KeyboardAvoidingView>
-    </SafeAreaView >
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: colors.bgGrey,
+    backgroundColor: '#FFFF', // Clean white background
   },
-  header: {
-    height: '32%', // Slightly taller to balance the card
-    backgroundColor: colors.navy,
-    borderBottomLeftRadius: 32,
-    borderBottomRightRadius: 32,
+  container: {
+    flex: 1,
     paddingHorizontal: 24,
-    // paddingTop: Platform.OS === 'android' ? 40 : 0, // Handled by insets now
-    justifyContent: 'center',
-    alignItems: 'center',
   },
-  logoRow: {
-    flexDirection: 'row',
+  logoContainer: {
     alignItems: 'center',
-    marginBottom: 40, // Push logo up so it clears the card
+  
   },
   logoImage: {
-    width: 200,
+    
+    width: 200, // Adjusted size to be an elegant top-center accent
     height: 200,
-    marginRight: 8,
-  },
-  logoText: {
-    fontFamily: typography.family.regular,
-    fontWeight: '400',
-    fontSize: 28,
-    letterSpacing: 2,
-    color: colors.white,
-    lineHeight: 32,
-  },
-  logoSubText: {
-    fontFamily: typography.family.regular,
-    fontWeight: '400',
-    fontSize: 12,
-    letterSpacing: 1,
-    color: 'rgba(255,255,255,0.7)',
-    textTransform: 'uppercase',
-  },
-  contentContainer: {
-    flex: 1,
-    marginTop: -60, // Pull card up into the header
-    paddingHorizontal: 20,
-  },
-  card: {
-    backgroundColor: colors.white,
-    borderRadius: 20,
-    padding: 24,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 8,
-    borderWidth: 0, // Clean card, rely on shadow
-  },
-  cardHeader: {
-    marginBottom: 24,
   },
   title: {
     fontFamily: typography.family.regular,
-    fontWeight: '700',
-    fontSize: 24,
-    color: colors.navy,
-    marginBottom: 6,
-  },
-  subtitle: {
-    fontFamily: typography.family.regular,
-    fontWeight: '400',
-    fontSize: 14,
-    color: colors.muted,
+    fontWeight: '800',
+    fontSize: 20,
+    color: '#1A1A1A',
+    marginBottom: 32, // Generous spacing before inputs
+    letterSpacing: -0.5,
   },
   field: {
     marginBottom: 20,
   },
-  labelRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 8,
-  },
   label: {
     fontFamily: typography.family.regular,
-    fontWeight: '500',
-    fontSize: 13,
-    color: colors.text,
+    fontWeight: '600',
+    fontSize: 14,
+    color: '#1A1A1A',
+    marginBottom: 8,
   },
-  forgotPass: {
-    fontFamily: typography.family.regular,
-    fontWeight: '500',
-    fontSize: 12,
-    color: colors.orange, // Interactive element
-  },
-  input: {
-    height: 52,
-    borderRadius: radii.md,
-    paddingHorizontal: 16,
-    backgroundColor: '#FAFAFA',
+  inputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    height: 56,
+    borderRadius: 14,
+    backgroundColor: '#FFFFFF',
     borderWidth: 1.5,
-    borderColor: colors.border,
-    fontFamily: typography.family.regular,
-    fontWeight: '400',
-    fontSize: 15,
-    color: colors.text,
+    borderColor: '#eaeaea', // The requested gray color
+    paddingHorizontal: 16,
   },
   inputFocused: {
-    borderColor: colors.navy, // Corporate Anchor focus
-    backgroundColor: colors.white,
+    borderColor: '#FF5A00', // Brand primary color on focus
   },
   inputError: {
     borderColor: colors.red,
   },
+  input: {
+    flex: 1,
+    height: '100%',
+    fontFamily: typography.family.regular,
+    fontWeight: '500',
+    fontSize: 16,
+    color: '#1A1A1A',
+  },
+  iconButton: {
+    padding: 4,
+    marginLeft: 8,
+  },
+  forgotPass: {
+    alignSelf: 'flex-end',
+    marginTop: 12,
+    fontFamily: typography.family.regular,
+    fontWeight: '600',
+    fontSize: 13,
+    color: '#6B7280', // Subdued gray text
+  },
   errorContainer: {
     backgroundColor: 'rgba(211, 47, 47, 0.05)',
-    padding: 10,
-    borderRadius: 8,
+    padding: 12,
+    borderRadius: 12,
     marginBottom: 16,
     borderLeftWidth: 3,
     borderLeftColor: colors.red,
@@ -340,60 +293,26 @@ const styles = StyleSheet.create({
     color: colors.red,
   },
   actionRow: {
-    marginTop: 8,
-  },
-  loginBtn: {
-    height: 50,
-    borderRadius: radii.md,
-    borderWidth: 0,
+    marginTop: 16,
   },
   footer: {
-    marginTop: 24,
+    marginTop: 40,
     alignItems: 'center',
     justifyContent: 'center',
   },
   biometricBtn: {
-    display: 'flex',
-    flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 24,
-    padding: 8,
+    padding: 12,
   },
   biometricBtnPressed: {
-    opacity: 0.6,
+    opacity: 0.5,
   },
   biometricText: {
     fontFamily: typography.family.regular,
-    fontWeight: '500',
+    fontWeight: '600',
     fontSize: 14,
-    color: colors.navy,
+    color: '#1A1A1A',
     marginTop: 8,
-  },
-  divider: {
-    width: '40%',
-    height: 1,
-    backgroundColor: 'rgba(0,0,0,0.1)',
-    marginBottom: 24,
-  },
-  footerText: {
-    fontFamily: typography.family.regular,
-    fontWeight: '400',
-    fontSize: 14,
-    color: colors.muted,
-    marginBottom: 4,
-  },
-  linkBtn: {
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-  },
-  linkBtnPressed: {
-    opacity: 0.7,
-  },
-  linkText: {
-    fontFamily: typography.family.regular,
-    fontWeight: '700',
-    fontSize: 15,
-    color: colors.navy// Use Navy for secondary link to distinguish from CTA
   },
 });
