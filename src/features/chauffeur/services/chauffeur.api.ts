@@ -92,6 +92,7 @@ export type EndDailyTripDto = {
   expense_parking?: number;
   expense_toll_image_url?: string;
   expense_parking_image_url?: string;
+  force_complete?: boolean;
 };
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────

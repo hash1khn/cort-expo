@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Linking, Pressable, StyleSheet, Text as RNText, View, ActivityIndicator, Image, Dimensions } from 'react-native';
+import { Linking, Platform, Pressable, StyleSheet, Text as RNText, View, ActivityIndicator, Image, Dimensions } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
-import MapView, { Marker, Polyline } from 'react-native-maps';
+import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
 import { Ionicons, MaterialCommunityIcons, Octicons } from '@expo/vector-icons';
 import BottomSheet, { BottomSheetView } from '@gorhom/bottom-sheet';
 import Animated, { useSharedValue, useAnimatedStyle, interpolate, useDerivedValue } from 'react-native-reanimated';
@@ -529,6 +529,7 @@ export default function RideActive() {
           latitudeDelta: 0.02,
           longitudeDelta: 0.02,
         }}
+        provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : undefined}
         toolbarEnabled={false}
         showsMyLocationButton={false}
         showsUserLocation

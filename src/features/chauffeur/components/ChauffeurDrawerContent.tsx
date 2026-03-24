@@ -68,7 +68,7 @@ export function ChauffeurDrawerContent(props: DrawerContentComponentProps) {
                 </View>
 
                 <View className="mt-10">
-                    <Text className="text-gray-400 text-sm mb-2 font-medium">PREFERENCES</Text>
+                    <Text className="text-gray-400 text-sm mb-2 font-medium">Language</Text>
                     <View className="bg-white/10 rounded-2xl overflow-hidden">
                         <Pressable
                             onPress={() => setLanguage('en')}

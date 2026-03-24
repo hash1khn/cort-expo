@@ -1,64 +1,53 @@
-import React, { useCallback, useMemo, forwardRef } from 'react';
+import React, { useCallback, useMemo, forwardRef, useState } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
-import { Image } from 'expo-image';
 import {
   BottomSheetModal,
   BottomSheetView,
   BottomSheetBackdrop,
 } from '@gorhom/bottom-sheet';
 import { Ionicons } from '@expo/vector-icons';
-import { fontFamily } from '../../../core/theme';
+import { CortButton } from '@/components';
+
+type RoleKey = 'employee' | 'driver' | 'chauffeur';
 
 type Props = {
-  onSelectRole: () => void;
+  onSelectRole: (role: RoleKey) => void;
 };
 
 const ROLES = [
   {
-    key: 'employee',
-    label: 'Login as Employee',
-    sub: 'Book rides & track commute',
-    bg: '#F4593B',
-    textColor: '#FFFFFF',
-    subColor: 'rgba(255,255,255,0.75)',
-    image: require('../../../../assets/undraw_at-the-airport_z3b9-2.svg'),
+    key: 'employee' as RoleKey,
+    label: 'Employee',
+    sub: 'Book rides for your daily commute',
+    icon: 'person-outline',
   },
   {
-    key: 'driver',
-    label: 'Login as Driver',
-    sub: 'Manage trips & navigate routes',
-    bg: '#F1F443',
-    textColor: '#1A1A1A',
-    subColor: 'rgba(26,26,26,0.6)',
-    image: require('../../../../assets/undraw_city-driver_kgk7.svg'),
+    key: 'driver' as RoleKey,
+    label: 'Driver',
+    sub: 'Manage and complete assigned trips',
+    icon: 'car-outline',
   },
   {
-    key: 'chauffeur',
+    key: 'chauffeur' as RoleKey,
     label: 'Apply as Chauffeur',
-    sub: 'Join our professional fleet',
-    bg: '#0c225e',
-    textColor: '#FFFFFF',
-    subColor: 'rgba(255,255,255,0.65)',
-    image: require('../../../../assets/undraw_resume_jrgi.svg'),
+    sub: 'Join our fleet of professional drivers',
+    icon: 'document-attach-outline',
   },
-] as const;
+];
 
 export const RoleSelectBottomSheet = forwardRef<BottomSheetModal, Props>(
   ({ onSelectRole }, ref) => {
-    const snapPoints = useMemo(() => ['50%'], []);
+    const [selectedRole, setSelectedRole] = useState<RoleKey>('employee');
+    
+    // Slightly reduced snap point for a more compact feel
+    const snapPoints = useMemo(() => ['51%'], []);
 
-    const handleSelect = useCallback(() => {
+    const handleContinue = useCallback(() => {
+      onSelectRole(selectedRole);
       if (ref && typeof ref !== 'function' && ref.current) {
         ref.current.dismiss();
       }
-      onSelectRole();
-    }, [onSelectRole, ref]);
-
-    const handleClose = useCallback(() => {
-      if (ref && typeof ref !== 'function' && ref.current) {
-        ref.current.dismiss();
-      }
-    }, [ref]);
+    }, [onSelectRole, selectedRole, ref]);
 
     const renderBackdrop = useCallback(
       (props: any) => (
@@ -66,7 +55,7 @@ export const RoleSelectBottomSheet = forwardRef<BottomSheetModal, Props>(
           {...props}
           disappearsOnIndex={-1}
           appearsOnIndex={0}
-          opacity={0.45}
+          opacity={0.4}
         />
       ),
       []
@@ -79,54 +68,63 @@ export const RoleSelectBottomSheet = forwardRef<BottomSheetModal, Props>(
         snapPoints={snapPoints}
         backdropComponent={renderBackdrop}
         enablePanDownToClose
-        enableDynamicSizing={false}
         handleIndicatorStyle={styles.handle}
         backgroundStyle={styles.sheetBg}
+        enableDynamicSizing={false}
       >
         <BottomSheetView style={styles.container}>
           {/* Header */}
           <View style={styles.header}>
-            <View>
-              <Text style={styles.title}>Select Role</Text>
-              {/* <Text style={styles.subtitle}>Pick your role to get started</Text> */}
-            </View>
-            {/* <Pressable style={styles.closeBtn} onPress={handleClose} hitSlop={10}>
-              <Ionicons name="close" size={16} color="#FFFFFF" />
-            </Pressable> */}
+            <Text style={styles.title}>Select your role</Text>
+            <Text style={styles.subtitle}>
+              Choose your path to customize your experience.
+            </Text>
           </View>
 
           {/* Role Cards */}
           <View style={styles.cardsContainer}>
-            {ROLES.map((role) => (
-              <Pressable
-                key={role.key}
-                style={[styles.card, { backgroundColor: role.bg }]}
-                onPress={handleSelect}
-                android_ripple={{ color: 'rgba(0,0,0,0.1)' }}
-              >
-                {/* SVG illustration — right-side decorative element */}
-                <Image
-                  source={role.image}
-                  style={styles.illustration}
-                  contentFit="contain"
-                />
-
-                {/* Text on the left */}
-                <View style={styles.cardText}>
-                  <View className='flex-row items-center gap-1'>
-                      <Text style={[styles.cardLabel, { color: role.textColor }]}>
-                        {role.label}
-                      </Text>
-                        {/* <Ionicons name="chevron-forward" size={16} color={role.textColor} className='mb-1'/> */}
+            {ROLES.map((role) => {
+              const isSelected = selectedRole === role.key;
+              return (
+                <Pressable
+                  key={role.key}
+                  onPress={() => setSelectedRole(role.key)}
+                  style={[
+                    styles.card,
+                    isSelected && styles.cardSelected
+                  ]}
+                >
+                  {/* Left Icon - Slightly smaller container */}
+                  <View style={[styles.iconContainer, isSelected && styles.iconContainerSelected]}>
+                    <Ionicons 
+                      name={role.icon as any} 
+                      size={20} 
+                      color={isSelected ? "#FF5A00" : "#475569"} 
+                    />
                   </View>
-                  {/* <Text style={[styles.cardSub, { color: role.subColor }]}>
-                    {role.sub}
-                  </Text> */}
-                </View>
 
-              
-              </Pressable>
-            ))}
+                  {/* Text Content */}
+                  <View style={styles.textContainer}>
+                    <Text style={styles.cardLabel}>{role.label}</Text>
+                    <Text style={styles.cardSub}>{role.sub}</Text>
+                  </View>
+
+                  {/* Radio Indicator - Tighter sizing */}
+                  <View style={[styles.radio, isSelected && styles.radioSelected]}>
+                    {isSelected && <View style={styles.radioInner} />}
+                  </View>
+                </Pressable>
+              );
+            })}
+          </View>
+
+          {/* Action Button */}
+          <View style={styles.footer}>
+            <CortButton
+              title="Continue"
+              variant="primary"
+              onPress={handleContinue}
+            />
           </View>
         </BottomSheetView>
       </BottomSheetModal>
@@ -135,100 +133,100 @@ export const RoleSelectBottomSheet = forwardRef<BottomSheetModal, Props>(
 );
 
 const styles = StyleSheet.create({
-  handle: {
-    backgroundColor: '#D1D5DB',
-    width: 36,
-    height: 4,
-    borderRadius: 2,
-  },
   sheetBg: {
     backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
+    borderTopLeftRadius: 24, // Slightly less aggressive rounding for a "pro" look
+    borderTopRightRadius: 24,
+  },
+  handle: {
+    backgroundColor: '#E2E8F0',
+    width: 36,
+    height: 4,
   },
   container: {
     flex: 1,
-    paddingHorizontal: 18,
+    paddingHorizontal: 20,
     paddingTop: 8,
-    paddingBottom: 28,
+    paddingBottom: 30,
   },
   header: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'flex-start',
-    marginBottom: 18,
+    marginBottom: 20,
   },
   title: {
-    fontSize: 22,
+    fontSize: 22, // Reduced from 26
     fontWeight: '700',
-    color: '#1A1A1A',
-    fontFamily,
-    letterSpacing: -0.5,
-    marginBottom: 2,
+    color: '#0F172A',
+    marginBottom: 4,
+    letterSpacing: -0.3,
   },
   subtitle: {
-    fontSize: 13,
-    color: '#9CA3AF',
-    fontFamily,
-  },
-  closeBtn: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: '#BEBEBE',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 2,
+    fontSize: 14,
+    color: '#64748B',
+    lineHeight: 20,
   },
   cardsContainer: {
-    flex: 1,
-    gap: 10,
+    gap: 10, // Tighter gap
   },
   card: {
-    flex: 1,
-    minHeight: 100,
-    borderRadius: 15,
-    overflow: 'hidden',
     flexDirection: 'row',
     alignItems: 'center',
-   
-    paddingLeft: 20,
-    paddingRight: 14,
-    paddingVertical: 20,
+    paddingVertical: 12, // Reduced padding
+    paddingHorizontal: 16,
+    borderRadius: 16,
+    borderWidth: 1, // Thinner border
+    borderColor: '#eaeaea',
+    backgroundColor: '#FFFFFF',
   },
-  illustration: {
-    position: 'absolute',
-    right: -14,
-    bottom: -8,
-    width: 165,
-    height: '160%',
-    opacity: 0.92,
+  cardSelected: {
+    borderColor: '#FF5A00',
+    backgroundColor: '#FFF9F6',
   },
-  cardText: {
-    flex: 1,
-    paddingRight: 140,
-  },
-  cardLabel: {
-    fontSize: 20,
-    fontWeight: '700',
-    fontFamily,
-    marginBottom: 5,
-    letterSpacing: -0.2,
-  },
-  cardSub: {
-    fontSize: 13,
-    fontFamily,
-    lineHeight: 18,
-        fontWeight: '500',
-  },
-  arrowPill: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+  iconContainer: {
+    width: 40, // Reduced from 48
+    height: 40,
+    borderRadius: 10,
+    backgroundColor: '#F8FAFC',
     alignItems: 'center',
     justifyContent: 'center',
-    position: 'absolute',
-    right: 14,
-    top: 14,
+    marginRight: 14,
+  },
+  iconContainerSelected: {
+    backgroundColor: '#FFEDE5',
+  },
+  textContainer: {
+    flex: 1,
+  },
+  cardLabel: {
+    fontSize: 15, // Reduced from 17
+    fontWeight: '600',
+    color: '#1E293B',
+  },
+  cardSub: {
+    fontSize: 12, // Reduced from 13
+    color: '#64748B',
+    marginTop: 1,
+  },
+  radio: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: '#CBD5E1',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 8,
+  },
+  radioSelected: {
+    borderColor: '#FF5A00',
+  },
+  radioInner: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#FF5A00',
+  },
+  footer: {
+    marginTop: 'auto', // Pushes button to bottom
+    paddingTop: 25,
   },
 });

@@ -1,11 +1,14 @@
 import React, { useMemo, useState } from 'react';
 import {
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
+  TouchableWithoutFeedback,
   View,
   StatusBar,
   Image,
@@ -81,126 +84,133 @@ export function LoginScreen() {
 
       <KeyboardAvoidingView
         style={{ flex: 1 }}
-        behavior={Platform.select({ ios: 'padding', android: undefined })}
+        behavior={Platform.select({ ios: 'padding', android: 'height' })}
       >
-        <View style={[styles.container, { paddingTop: insets.top + 20 }]}>
-          
-          {/* Centered Logo */}
-          <View style={styles.logoContainer}>
-            <Image
-              source={require('../../../../assets/cort-with-at-your.png')}
-              style={styles.logoImage}
-              resizeMode="contain"
-            />
-          </View>
-
-          {/* Heading */}
-          <Text style={styles.title}>Login to your account</Text>
-
-          {/* Email Input */}
-          <View style={styles.field}>
-            <Text style={styles.label}>Email address</Text>
-            <View style={[
-              styles.inputContainer,
-              focusedField === 'email' && styles.inputFocused,
-              error && styles.inputError
-            ]}>
-              <TextInput
-                value={email}
-                onChangeText={(t) => { setEmail(t); setError(null); }}
-                onFocus={() => setFocusedField('email')}
-                onBlur={() => setFocusedField(null)}
-                autoCapitalize="none"
-                autoCorrect={false}
-                keyboardType="email-address"
-                placeholder="employee@cort.com"
-                placeholderTextColor={colors.muted}
-                style={styles.input}
-                cursorColor="#FF5A00"
+        <ScrollView
+            style={styles.container}
+            contentContainerStyle={[styles.scrollContent, { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 24 }]}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="on-drag"
+            showsVerticalScrollIndicator={false}
+          >
+            {/* Centered Logo */}
+            <View style={styles.logoContainer}>
+              <Image
+                source={require('../../../../assets/cort-with-at-your.png')}
+                style={styles.logoImage}
+                resizeMode="contain"
               />
-              {email.length > 0 && (
-                <TouchableOpacity onPress={() => setEmail('')} style={styles.iconButton}>
-                  <Ionicons name="close-circle" size={20} color={colors.muted} />
+            </View>
+
+            {/* Heading */}
+            <Text style={styles.title}>Login to your account</Text>
+
+            {/* Email Input */}
+            <View style={styles.field}>
+              <Text style={styles.label}>Email address</Text>
+              <View style={[
+                styles.inputContainer,
+                focusedField === 'email' && styles.inputFocused,
+                error && styles.inputError
+              ]}>
+                <TextInput
+                  value={email}
+                  onChangeText={(t) => { setEmail(t); setError(null); }}
+                  onFocus={() => setFocusedField('email')}
+                  onBlur={() => setFocusedField(null)}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  keyboardType="email-address"
+                  placeholder="employee@cort.com"
+                  placeholderTextColor={colors.muted}
+                  style={styles.input}
+                  cursorColor="#FF5A00"
+                  returnKeyType="next"
+                />
+                {email.length > 0 && (
+                  <TouchableOpacity onPress={() => setEmail('')} style={styles.iconButton}>
+                    <Ionicons name="close-circle" size={20} color={colors.muted} />
+                  </TouchableOpacity>
+                )}
+              </View>
+            </View>
+
+            {/* Password Input */}
+            <View style={styles.field}>
+              <Text style={styles.label}>Password</Text>
+              <View style={[
+                styles.inputContainer,
+                focusedField === 'password' && styles.inputFocused,
+                error && styles.inputError
+              ]}>
+                <TextInput
+                  value={password}
+                  onChangeText={(t) => { setPassword(t); setError(null); }}
+                  onFocus={() => setFocusedField('password')}
+                  onBlur={() => setFocusedField(null)}
+                  autoCapitalize="none"
+                  secureTextEntry={!showPassword}
+                  placeholder="••••••••"
+                  placeholderTextColor={colors.muted}
+                  style={styles.input}
+                  cursorColor="#FF5A00"
+                  returnKeyType="done"
+                  onSubmitEditing={handleLogin}
+                />
+                <TouchableOpacity 
+                  onPress={() => setShowPassword(!showPassword)} 
+                  style={styles.iconButton}
+                >
+                  <Ionicons name={showPassword ? "eye-off-outline" : "eye-outline"} size={20} color={colors.muted} />
                 </TouchableOpacity>
-              )}
+              </View>
+              
+              {/* Forgot Password Link - Right Aligned below input */}
+              <Pressable onPress={() => navigation.navigate('ForgotPassword')}>
+                <Text style={styles.forgotPass}>Forgot password?</Text>
+              </Pressable>
             </View>
-          </View>
 
-          {/* Password Input */}
-          <View style={styles.field}>
-            <Text style={styles.label}>Password</Text>
-            <View style={[
-              styles.inputContainer,
-              focusedField === 'password' && styles.inputFocused,
-              error && styles.inputError
-            ]}>
-              <TextInput
-                value={password}
-                onChangeText={(t) => { setPassword(t); setError(null); }}
-                onFocus={() => setFocusedField('password')}
-                onBlur={() => setFocusedField(null)}
-                autoCapitalize="none"
-                secureTextEntry={!showPassword}
-                placeholder="••••••••"
-                placeholderTextColor={colors.muted}
-                style={styles.input}
-                cursorColor="#FF5A00"
+            {error && (
+              <View style={styles.errorContainer}>
+                <Text style={styles.errorText}>{error}</Text>
+              </View>
+            )}
+
+            {/* Primary Action Button */}
+            <View style={styles.actionRow}>
+              <CortButton
+                title="Log in"
+                variant="primary"
+                disabled={isSubmitting}
+                loading={isSubmitting}
+                onPress={handleLogin}
               />
-              <TouchableOpacity 
-                onPress={() => setShowPassword(!showPassword)} 
-                style={styles.iconButton}
+            </View>
+
+            {/* Biometric Option */}
+            <View style={styles.footer}>
+              <Pressable
+                onPress={handleBiometricLogin}
+                disabled={isBiometricLoading || isSubmitting}
+                style={({ pressed }) => [
+                  styles.biometricBtn,
+                  pressed && styles.biometricBtnPressed
+                ]}
               >
-                <Ionicons name={showPassword ? "eye-off-outline" : "eye-outline"} size={20} color={colors.muted} />
-              </TouchableOpacity>
+                <Ionicons
+                  name="finger-print-outline"
+                  size={32}
+                  color="#1A1A1A"
+                  className='text-center'
+                />
+                <Text style={styles.biometricText}>
+                  {isBiometricLoading ? 'Verifying...' : 'Unlock with Face ID'}
+                </Text>
+              </Pressable>
             </View>
-            
-            {/* Forgot Password Link - Right Aligned below input */}
-            <Pressable onPress={() => navigation.navigate('ForgotPassword')}>
-              <Text style={styles.forgotPass}>Forgot password?</Text>
-            </Pressable>
-          </View>
 
-          {error && (
-            <View style={styles.errorContainer}>
-              <Text style={styles.errorText}>{error}</Text>
-            </View>
-          )}
-
-          {/* Primary Action Button */}
-          <View style={styles.actionRow}>
-            <CortButton
-              title="Log in"
-              variant="primary"
-              disabled={isSubmitting}
-              loading={isSubmitting}
-              onPress={handleLogin}
-              // Assuming CortButton accepts style overrides, otherwise you can rely on the default primary styles
-            />
-          </View>
-
-          {/* Biometric Option */}
-          <View style={styles.footer}>
-            <Pressable
-              onPress={handleBiometricLogin}
-              disabled={isBiometricLoading || isSubmitting}
-              style={({ pressed }) => [
-                styles.biometricBtn,
-                pressed && styles.biometricBtnPressed
-              ]}
-            >
-              <Ionicons
-                name="finger-print-outline"
-                size={32}
-                color="#1A1A1A"
-                className='text-center'
-              />
-              <Text style={styles.biometricText}>
-                {isBiometricLoading ? 'Verifying...' : 'Unlock with Face ID'}
-              </Text>
-            </Pressable>
-          </View>
-
-        </View>
+          </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -209,11 +219,14 @@ export function LoginScreen() {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: '#FFFF', // Clean white background
+    backgroundColor: '#FFFFFF', // Clean white background
   },
   container: {
     flex: 1,
     paddingHorizontal: 24,
+  },
+  scrollContent: {
+    flexGrow: 1,
   },
   logoContainer: {
     alignItems: 'center',
@@ -226,7 +239,7 @@ const styles = StyleSheet.create({
   },
   title: {
     fontFamily: typography.family.regular,
-    fontWeight: '800',
+    fontWeight: '700',
     fontSize: 20,
     color: '#1A1A1A',
     marginBottom: 32, // Generous spacing before inputs

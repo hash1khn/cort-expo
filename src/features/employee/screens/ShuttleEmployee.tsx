@@ -62,6 +62,8 @@ import {
 import { useRideStartListener } from '../../../hooks/useRideStartListener';
 import FlipCard from '../components/FlipCard';
 import { AppHeader } from '../../shared/components/AppHeader';
+import BottomSheet from '@gorhom/bottom-sheet';
+import RideReviewSheet from '../components/RideReviewSheet';
 
 const PROFILE_SHEET_SNAP = ['65%'];
 const DROPOFF_SHEET_SNAP = ['45%'];
@@ -209,7 +211,29 @@ export default function NewHome() {
 
   // Watch the API data and navigate when an active ride is detected
   useEffect(() => {
-    // Skip if we've already navigated this session
+    // ── Review check runs FIRST — before navigation guard ─────────────────────────────
+    // Must be here and not after the hasNavigatedToActiveRideRef guard:
+    // when the employee returns from ride-active after trip ends, the ref is still true
+    // (it resets only on unmount), so anything below the guard is permanently skipped.
+    if (!isShuttleTripsLoading && !isActiveBookingLoading && hasChauffeur && activeChauffeurBooking) {
+      const isCompleted = activeChauffeurBooking.status === 'COMPLETED';
+      // For multiday DROPPED_OFF between days, can_request_driver or driver_requested will be true.
+      // Only prompt review on the final drop-off (both are false).
+      // Also handle COMPLETED — when the driver closes out the trip before the employee reviews.
+      const isFinalDropOff =
+        (activeChauffeurBooking.status === 'DROPPED_OFF' &&
+          !activeChauffeurBooking.can_request_driver &&
+          !activeChauffeurBooking.driver_requested) ||
+        isCompleted;
+      // Use != null (loose) to treat both null and undefined as "no review"
+      const hasReview = activeChauffeurBooking.ride_reviews != null;
+
+      if (isFinalDropOff && !hasReview) {
+        setPendingReviewBookingId(activeChauffeurBooking.id);
+      }
+    }
+
+    // Skip navigation if we've already navigated this session
     if (hasNavigatedToActiveRideRef.current) return;
     
     // Wait for data to finish loading before checking
@@ -333,6 +357,10 @@ export default function NewHome() {
 
   // Store active chauffeur booking in a ref for zero-latency navigation inside socket listeners
   const chauffeurBookingRef = useRef(activeChauffeurBooking);
+
+  const handleReviewSuccess = useCallback(() => {
+    setPendingReviewBookingId(null);
+  }, []);
   useEffect(() => {
     chauffeurBookingRef.current = activeChauffeurBooking;
   }, [activeChauffeurBooking]);
@@ -407,6 +435,18 @@ export default function NewHome() {
 
   const [isCalling, setIsCalling] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [pendingReviewBookingId, setPendingReviewBookingId] = useState<number | null>(null);
+
+  const reviewSheetRef = useRef<BottomSheet>(null);
+  const reviewDriverName =
+    activeChauffeurBooking?.users_chauffeur_bookings_driver_idTousers?.full_name ??
+    shuttleTrips[0]?.users?.full_name ??
+    'Your Captain';
+  const reviewVehicleRaw = activeChauffeurBooking?.vehicles ?? (shuttleTrips[0]?.routes?.vehicles ?? null);
+  const reviewVehicleDisplay = reviewVehicleRaw
+    ? `${(reviewVehicleRaw as any).make ?? ''} ${(reviewVehicleRaw as any).model ?? ''}`.trim() || '—'
+    : '—';
+  const reviewVehiclePlate = (reviewVehicleRaw as any)?.plate_number ?? '—';
 
   const handleRefresh = useCallback(async () => {
     // Avoid duplicate refreshes if already refreshing
@@ -525,10 +565,12 @@ export default function NewHome() {
             isLoading={isShuttleTripsLoading}
           />
         </View> */}
-        <FlipCard 
-          booking={activeChauffeurBooking} 
-          isLoading={isActiveBookingLoading || isActiveBookingFetching}
+        <FlipCard
+          booking={activeChauffeurBooking?.status !== 'COMPLETED' ? (activeChauffeurBooking ?? null) : null}
+          shuttleTrip={hasShuttle ? (shuttleTrips.find((t) => t.status !== 'COMPLETED') ?? shuttleTrips[0] ?? null) : null}
+          isLoading={isActiveBookingLoading || isActiveBookingFetching || isShuttleTripsLoading}
           isChauffeurEnabled={user?.enabled_services?.chauffeur}
+          isShuttleEnabled={hasShuttle}
         />
 
         {/* Chauffeur / Outstation card - opens dropoff sheet when dev outstation is enabled */}
@@ -695,6 +737,16 @@ export default function NewHome() {
         </View>
       </ScrollView>
 
+      <RideReviewSheet
+        sheetRef={reviewSheetRef}
+        visible={pendingReviewBookingId !== null}
+        bookingId={pendingReviewBookingId ?? 0}
+        companyId={companyId}
+        driverName={reviewDriverName}
+        vehicleDisplay={reviewVehicleDisplay}
+        vehiclePlate={reviewVehiclePlate}
+        onSuccess={handleReviewSuccess}
+      />
     </View>
   );
 }
@@ -745,3 +797,4 @@ const styles = StyleSheet.create({
     borderRadius: 16,
   },
 });
+

@@ -4,16 +4,23 @@
     "slug": "Cort",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/cort-app-icon.svg",
+    "icon": "./assets/cort-app-icon.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "splash": {
       "image": "./assets/cort-app-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#f47f00"
+      "backgroundColor": "#F4593B"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.corttechnologies.Cort",
+      "config": {
+        "googleMapsApiKey": "YOUR_GOOGLE_MAPS_API_KEY"
+      },
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -21,24 +28,37 @@
         "backgroundColor": "#f47f00"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png",
       "bundler": "metro"
     },
-    "scheme": "Cort",
+    "scheme": "cort",
     "plugins": [
       "expo-router",
       "expo-font",
       "expo-secure-store",
-      ["expo-camera",
-      {
-        "cameraPermission": "Allow $(PRODUCT_NAME) to access your camera"
-      }]
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow $(PRODUCT_NAME) to access your camera"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "a65c02f9-c871-48e9-ada3-75d921c93682"
+      }
+    },
+    "owner": "cort-technologies"
   }
 }

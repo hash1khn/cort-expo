@@ -123,6 +123,8 @@ export type EmployeeActiveChauffeurBooking = {
   driver_requested: boolean;
   completed_days: number;
   total_days: number;
+  /** null = not yet reviewed; non-null = review already submitted */
+  ride_reviews: { id: number; rating: number; review_text: string | null } | null;
 };
 
 type GetEmployeeActiveChauffeurBookingParams = {
@@ -232,6 +234,32 @@ export const bookingsApi = baseApi.injectEndpoints({
         };
       }) => response.data,
     }),
+
+    submitChauffeurReview: builder.mutation<
+      { id: number; rating: number; review_text: string | null },
+      { companyId: number; bookingId: number; rating: number; review_text?: string }
+    >({
+      query: ({ companyId, bookingId, rating, review_text }) => ({
+        url: `/employee/companies/${companyId}/chauffeur-bookings/${bookingId}/review`,
+        method: 'POST',
+        body: { rating, ...(review_text ? { review_text } : {}) },
+      }),
+      // Optimistic update: mark as reviewed immediately so the sheet doesn't re-appear on re-mount
+      async onQueryStarted({ companyId, rating, review_text }, { dispatch, queryFulfilled }) {
+        const patch = dispatch(
+          bookingsApi.util.updateQueryData('getEmployeeActiveChauffeurBooking', { companyId }, (draft) => {
+            if (draft) {
+              draft.ride_reviews = { id: 0, rating, review_text: review_text ?? null };
+            }
+          }),
+        );
+        try {
+          await queryFulfilled;
+        } catch {
+          patch.undo();
+        }
+      },
+    }),
   }),
 });
 
@@ -239,6 +267,7 @@ export const {
   useGetChauffeurBookingsQuery,
   useGetEmployeeActiveChauffeurBookingQuery,
   useRequestNextDayPickupMutation,
+  useSubmitChauffeurReviewMutation,
   useGetChauffeurRoutePolylineQuery,
 } = bookingsApi;
 

@@ -2,7 +2,7 @@ import React, { useMemo, useRef, useState, useCallback } from 'react';
 import { StyleSheet, Text as RNText, View, Pressable, Modal, ActivityIndicator, Linking, TextInput, Image, ScrollView, Alert, TouchableWithoutFeedback, Keyboard } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import BottomSheet, { BottomSheetView, BottomSheetBackdrop } from '@gorhom/bottom-sheet';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import * as Location from 'expo-location';
@@ -66,6 +66,7 @@ export function ActiveTripScreen() {
         ),
         []
     );
+    const insets=useSafeAreaInsets();
 
     // Outstation Start State
     const [permission, requestPermission] = useCameraPermissions();
@@ -267,6 +268,17 @@ export function ActiveTripScreen() {
         }
     };
 
+    const handleEndFullTrip = () => {
+        router.push({
+            pathname: '/chauffeur/end-ride',
+            params: {
+                tripType: activeBooking?.trip_type,
+                bookingId: activeBooking?.id,
+                forceComplete: 'true',
+            },
+        });
+    };
+
     const handleOpenCamera = async () => {
         if (!permission?.granted) {
             const { granted } = await requestPermission();
@@ -296,11 +308,10 @@ export function ActiveTripScreen() {
 
     const isOutstationStart = tripStep === 'START_TRIP' && activeBooking?.trip_type === 'OUT_STATION';
     const canSubmitOutstationStart = startMeterValue && startMeterPhoto;
-
+    
     return (
-        <View style={styles.root}>
+        <View style={[styles.root,{paddingTop:insets.top,paddingBottom:insets.bottom}]} >
             {/* Header Strip */}
-            <SafeAreaView style={styles.headerContainer} className='' edges={['top']}>
                 <View style={styles.headerContent}>
                     <Pressable style={styles.backButton} onPress={() => router.back()}>
                         <Ionicons name="chevron-back" size={24} color="#000" />
@@ -308,9 +319,7 @@ export function ActiveTripScreen() {
                     <Text style={styles.headerTitle}>Ride In Progress</Text>
                     <View style={{ width: 40 }} />
                 </View>
-            </SafeAreaView>
 
-            <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
                 <View style={styles.illustrationContainer}>
                     <View style={styles.illustrationFrame}>
                         <Animated.View
@@ -381,9 +390,18 @@ export function ActiveTripScreen() {
                             )}
                             <Text style={styles.primaryButtonText}>{buttonLabel()}</Text>
                         </Pressable>
+
+                        {isMultiDayIntermediateEnd && tripStep === 'END_RIDE' && (
+                            <Pressable
+                                style={styles.endFullTripButton}
+                                onPress={handleEndFullTrip}
+                                disabled={isAnyLoading}
+                            >
+                                <Text style={styles.endFullTripText}>End full trip</Text>
+                            </Pressable>
+                        )}
                     </View>
                 </View>
-            </ScrollView>
 
             {/* Confirmation Bottom Sheet */}
             <BottomSheet
@@ -504,7 +522,7 @@ const styles = StyleSheet.create({
     },
     illustrationContainer: {
         alignItems: 'center',
-        paddingVertical: 40,
+        paddingVertical: 20,
         paddingHorizontal: 24,
     },
     illustrationFrame: {
@@ -537,7 +555,7 @@ const styles = StyleSheet.create({
             justifyContent:'space-between'
     },
     actionContainer: {
-        marginTop: 30,
+        marginTop: 25,
     },
     backButton: {
         width: 40,
@@ -631,7 +649,7 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         backgroundColor: '#FF5A00',
         borderRadius: 16,
-        paddingVertical: 18,
+        paddingVertical: 16,
         alignItems: 'center',
         justifyContent: 'center',
     },
@@ -714,5 +732,19 @@ const styles = StyleSheet.create({
         paddingVertical: 12,
         fontSize: 16,
         color: '#111827',
+    },
+    endFullTripButton: {
+        marginTop: 12,
+        alignItems: 'center',
+        paddingVertical: 14,
+        borderWidth: 1,
+        borderColor: '#E5E7EB',
+        borderRadius: 12,
+
+    },
+    endFullTripText: {
+        fontSize: 15,
+        fontWeight: '600',
+        color: '#141414',
     },
 });

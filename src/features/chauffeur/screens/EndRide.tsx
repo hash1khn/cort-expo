@@ -16,7 +16,8 @@ const Text = (props: React.ComponentProps<typeof RNText>) => {
 // STEPS will now be determined inside the component based on tripType
 
 export function EndRideScreen() {
-    const { tripType, bookingId } = useLocalSearchParams<{ tripType: string; bookingId: string }>();
+    const { tripType, bookingId, forceComplete } = useLocalSearchParams<{ tripType: string; bookingId: string; forceComplete?: string }>();
+    const isForceComplete = forceComplete === 'true';
     
     const STEPS = React.useMemo(() => {
         if (tripType === 'IN_CITY') {
@@ -86,6 +87,7 @@ export function EndRideScreen() {
                     meter_reading_end_image_url: meterUrl,
                     expense_parking_image_url: parkingUrl,
                     expense_toll_image_url: tollUrl,
+                    ...(isForceComplete ? { force_complete: true } : {}),
                 }
             }).unwrap();
 
