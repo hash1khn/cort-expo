@@ -306,11 +306,11 @@ export default function RideInProgress() {
 
     if (!isLastStop) {
       try {
-        setAttendanceStopId(currentStop.id);
         await arriveAtStop({
           tripId: activeTrip.id,
           current_stop_id: currentStop.id,
         }).unwrap();
+        setAttendanceStopId(currentStop.id);
         arrivedStopSheetRef.current?.snapToIndex(0);
       } catch {
         Alert.alert(
@@ -327,10 +327,10 @@ export default function RideInProgress() {
         tripId: activeTrip.id,
         total_distance: 0,
       }).unwrap();
+      router.push('/shuttle');
     } catch {
-      // Optionally show error
+      Alert.alert('Error', 'Failed to complete trip. Please try again.');
     }
-    router.push('/shuttle');
   }, [
     rideStarted,
     isLastStop,
@@ -588,7 +588,12 @@ export default function RideInProgress() {
           enablePanDownToClose={false}
           handleIndicatorStyle={{ opacity: 0 }}
           backdropComponent={(props) => (
-            <BottomSheetBackdrop {...props} disappearsOnIndex={-1} appearsOnIndex={0} />
+            <BottomSheetBackdrop
+              {...props}
+              disappearsOnIndex={-1}
+              appearsOnIndex={0}
+              pressBehavior="none"
+            />
           )}
         >
           <View className="px-5 pb-4 pt-2 flex-row justify-between items-center">
@@ -639,6 +644,19 @@ export default function RideInProgress() {
                         </Text>
                       </View>
                     </View>
+
+                    <Pressable
+                      onPress={() => handleCall(emp.number)}
+                      disabled={!emp.number}
+                      className="w-[42px] h-[42px] rounded-full items-center justify-center border mr-3"
+                      style={{
+                        borderColor: emp.number ? '#9CA3AF' : '#D1D5DB',
+                        backgroundColor: emp.number ? '#F9FAFB' : '#F3F4F6',
+                        opacity: emp.number ? 1 : 0.6,
+                      }}
+                    >
+                      <Feather name="phone-call" size={18} color={emp.number ? '#111827' : '#9CA3AF'} />
+                    </Pressable>
 
                     {/* Tick / Cross buttons — only lock on self-scan */}
                     <View className="flex-row gap-3">
@@ -721,6 +739,7 @@ export default function RideInProgress() {
             </View>
             <Pressable
               onPress={async () => {
+                if (isProceeding) return;
                 // Validate all employees at this stop have been marked
                 const unmarked = employeesAtCurrentStop.filter(
                   (e) => !driverMarkedIds.has(e.id) && !selfScannedIds.has(e.id),
@@ -742,7 +761,8 @@ export default function RideInProgress() {
                   try {
                     await proceedFromStop({ tripId: activeTrip.id }).unwrap();
                   } catch {
-                    // Non-fatal: optimistic cache update already flipped to EN_ROUTE.
+                    Alert.alert('Error', 'Failed to proceed to next stop. Please try again.');
+                    return;
                   }
                 }
 
@@ -757,10 +777,14 @@ export default function RideInProgress() {
                   openInMaps(nextDrivingStop);
                 }
               }}
+              disabled={isProceeding}
               className="bg-[#FF5A00] flex-row items-center justify-center py-6 rounded-xl active:opacity-90 disabled:opacity-70"
             >
+              {isProceeding && (
+                <ActivityIndicator size="small" color="#FFFFFF" style={{ marginRight: 8 }} />
+              )}
               <Text className="text-white text-[17px] font-bold mr-1">
-                Proceed to next stop
+                {isProceeding ? 'Proceeding...' : 'Proceed to next stop'}
               </Text>
             </Pressable>
           </BottomSheetScrollView>

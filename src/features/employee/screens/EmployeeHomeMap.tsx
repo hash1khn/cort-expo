@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { View, Pressable, StyleSheet, Text as RNText, Image } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
-import MapView, { Marker, Polyline } from 'react-native-maps';
+import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
 import { Ionicons, MaterialCommunityIcons, Octicons } from '@expo/vector-icons';
 import BottomSheet, { BottomSheetView } from '@gorhom/bottom-sheet';
 import Animated, { useSharedValue, useAnimatedStyle, interpolate } from 'react-native-reanimated';
@@ -319,6 +319,7 @@ export default function EmployeeHomeMap() {
     <View style={styles.root}>
       {/* Map View */}
       <MapView
+      provider={PROVIDER_GOOGLE}
         style={styles.map}
         initialRegion={{
           latitude: origin.latitude,

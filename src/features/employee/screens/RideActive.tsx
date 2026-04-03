@@ -188,6 +188,12 @@ export default function RideActive() {
   const currentStopId = socketStopId ?? activeTrip?.current_stop_id ?? null;
   const currentStopStatus = socketStopStatus ?? activeTrip?.current_stop_status ?? 'EN_ROUTE';
 
+  // Refs so stale socket callbacks can read the latest values without being
+  // re-created (which would cause useRideSocket to re-subscribe).
+  const myPickupStopIdRef = useRef(myPickupStopId);
+  useEffect(() => { myPickupStopIdRef.current = myPickupStopId; }, [myPickupStopId]);
+  const socketStopIdRef = useRef<number | null>(null);
+
   const captainIsHere =
     currentStopId !== null &&
     myPickupStopId !== null &&
@@ -219,6 +225,7 @@ export default function RideActive() {
 
   const handleStopArrived = useCallback(
     (data: { stopId: number; stopName: string; arrivedAt: string }) => {
+      socketStopIdRef.current = data.stopId;
       setSocketStopId(data.stopId);
       setSocketStopStatus('AT_STOP');
     },
@@ -226,7 +233,18 @@ export default function RideActive() {
   );
 
   const handleRideProceeding = useCallback(
-    (data: { nextStopId: number | null; nextStopName: string | null; departedAt: string }) => {
+    (_data: { nextStopId: number | null; nextStopName: string | null; departedAt: string }) => {
+      // The backend emits ride:proceeding immediately after stop:arrived (to
+      // announce the next stop). If the driver just arrived at THIS employee's
+      // pickup stop, do NOT reset to EN_ROUTE — the employee still needs to
+      // board and scan the QR code. The status will naturally become EN_ROUTE
+      // once the driver arrives at a different stop.
+      if (
+        myPickupStopIdRef.current !== null &&
+        socketStopIdRef.current === myPickupStopIdRef.current
+      ) {
+        return;
+      }
       setSocketStopStatus('EN_ROUTE');
     },
     [],
@@ -521,6 +539,7 @@ export default function RideActive() {
   return (
     <View style={styles.root}>
       <MapView
+        provider={PROVIDER_GOOGLE}
         ref={mapRef}
         style={styles.map}
         initialRegion={{
@@ -529,7 +548,7 @@ export default function RideActive() {
           latitudeDelta: 0.02,
           longitudeDelta: 0.02,
         }}
-        provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : undefined}
+   
         toolbarEnabled={false}
         showsMyLocationButton={false}
         showsUserLocation
@@ -622,6 +641,7 @@ export default function RideActive() {
         snapPoints={snapPoints}
         enableDynamicSizing={false}
         enablePanDownToClose={false}
+        
         handleIndicatorStyle={styles.sheetHandle}
         backgroundStyle={styles.sheetBackground}
       >

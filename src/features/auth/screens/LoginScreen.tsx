@@ -230,7 +230,6 @@ const styles = StyleSheet.create({
   },
   logoContainer: {
     alignItems: 'center',
-  
   },
   logoImage: {
     

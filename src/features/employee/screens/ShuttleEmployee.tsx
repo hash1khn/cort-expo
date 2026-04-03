@@ -53,6 +53,7 @@ import { useGetChauffeurBookingsQuery, useGetEmployeeActiveChauffeurBookingQuery
 import { useGetShuttleTripsForEmployeeQuery } from '../services/employeeShuttleApi';
 import { useChauffeurStatusListener } from '../../../hooks/useChauffeurStatusListener';
 import { CompactRideHistoryCard } from '../components/CompactRideHistoryCard';
+import { CompactRideHistoryCardSkeleton } from '../components/CompactRideHistoryCardSkeleton';
 import { RideStatusBar, type UpcomingShuttleInfo } from '../components/RideStatusBar';
 import {
   setIsWaitingForDriverResponse,
@@ -96,7 +97,11 @@ export default function NewHome() {
   const hasChauffeur = user?.enabled_services?.chauffeur ?? false;
   const hasShuttle = user?.enabled_services?.shuttle ?? false;
 
-  const { data: chauffeurBookingsData } = useGetChauffeurBookingsQuery(
+  const { 
+    data: chauffeurBookingsData,
+    isLoading: isChauffeurBookingsLoading,
+    refetch: refetchChauffeurBookings,
+  } = useGetChauffeurBookingsQuery(
     { companyId, employeeId },
     { skip: !companyId || !employeeId },
   );
@@ -154,6 +159,23 @@ export default function NewHome() {
     }
     return { routeName, driverName, nextShuttleTime };
   }, [shuttleTrips]);
+
+  const chauffeurCardBooking = useMemo(() => {
+    if (!hasChauffeur || !activeChauffeurBooking) return null;
+    return activeChauffeurBooking.status !== 'COMPLETED' ? activeChauffeurBooking : null;
+  }, [activeChauffeurBooking, hasChauffeur]);
+
+  const shuttleCardTrip = useMemo(() => {
+    if (!hasShuttle) return null;
+    return shuttleTrips.find((trip) => trip.status !== 'COMPLETED') ?? null;
+  }, [hasShuttle, shuttleTrips]);
+
+  const shouldShowChauffeurCard = hasChauffeur && (!!chauffeurCardBooking || isActiveBookingLoading || isActiveBookingFetching);
+  const shouldShowShuttleCard = hasShuttle && (!!shuttleCardTrip || isShuttleTripsLoading);
+  const completedChauffeurRides = useMemo(
+    () => chauffeurBookingsData?.data?.filter((booking) => booking.status === 'COMPLETED') ?? [],
+    [chauffeurBookingsData],
+  );
 
   useEffect(() => {
     if (
@@ -457,6 +479,7 @@ export default function NewHome() {
       const tasks: Promise<any>[] = [];
       if (companyId && employeeId && hasShuttle) tasks.push(refetchShuttleTrips());
       if (companyId && hasChauffeur) tasks.push(refetchActiveChauffeurBooking());
+      if (companyId && employeeId) tasks.push(refetchChauffeurBookings());
       
       // Batch all refetch operations in parallel
       if (tasks.length > 0) {
@@ -467,7 +490,7 @@ export default function NewHome() {
     } finally {
       setIsRefreshing(false);
     }
-  }, [companyId, employeeId, hasShuttle, hasChauffeur, refetchShuttleTrips, refetchActiveChauffeurBooking, isRefreshing]);
+  }, [companyId, employeeId, hasShuttle, hasChauffeur, refetchShuttleTrips, refetchActiveChauffeurBooking, refetchChauffeurBookings, isRefreshing]);
 
   const lastHandledRefreshTokenRef = useRef<string | null>(null);
   useEffect(() => {
@@ -565,13 +588,26 @@ export default function NewHome() {
             isLoading={isShuttleTripsLoading}
           />
         </View> */}
-        <FlipCard
-          booking={activeChauffeurBooking?.status !== 'COMPLETED' ? (activeChauffeurBooking ?? null) : null}
-          shuttleTrip={hasShuttle ? (shuttleTrips.find((t) => t.status !== 'COMPLETED') ?? shuttleTrips[0] ?? null) : null}
-          isLoading={isActiveBookingLoading || isActiveBookingFetching || isShuttleTripsLoading}
-          isChauffeurEnabled={user?.enabled_services?.chauffeur}
-          isShuttleEnabled={hasShuttle}
-        />
+        <View className="gap-4">
+          {shouldShowChauffeurCard ? (
+            <FlipCard
+              booking={chauffeurCardBooking}
+              shuttleTrip={null}
+              isLoading={isActiveBookingLoading || isActiveBookingFetching}
+              isChauffeurEnabled
+              isShuttleEnabled={false}
+            />
+          ) : null}
+          {shouldShowShuttleCard ? (
+            <FlipCard
+              booking={null}
+              shuttleTrip={shuttleCardTrip}
+              isLoading={isShuttleTripsLoading}
+              isChauffeurEnabled={false}
+              isShuttleEnabled
+            />
+          ) : null}
+        </View>
 
         {/* Chauffeur / Outstation card - opens dropoff sheet when dev outstation is enabled */}
         {/* <View className="px-4 mt-4">
@@ -645,94 +681,118 @@ export default function NewHome() {
           </Pressable>
         </View> */}
 
-        {/* Recent Rides section */}
-        <View className="mt-5">
-          <Pressable onPress={() => { router.push('/employee/rides') }} hitSlop={8}>
-            <View className="flex-row items-center justify-between gap-0 mb-3">
-              <Text className="text-black text-2xl font-bold">Recent Rides</Text>
-              <Text className='text-[#FF5A00] text-sm font-bold'>View all</Text>
-              {/* <Pressable onPress={()=>{router.push('/employee/rides')}} hitSlop={8}>
-                <Text className="text-text-muted text-sm font-medium">View history</Text>
-              </Pressable> */}
+        {/* Recent Rides section - only show if loading or has completed rides */}
+        {isChauffeurBookingsLoading || completedChauffeurRides.length > 0 ? (
+          <View className="mt-5">
+            <Pressable 
+              onPress={() => { router.push('/employee/rides') }} 
+              hitSlop={8}
+              disabled={isChauffeurBookingsLoading}
+            >
+              <View className="flex-row items-center justify-between gap-0 mb-3">
+                <Text className="text-black text-2xl font-bold">Recent Rides</Text>
+                <Text className={`text-sm font-bold ${isChauffeurBookingsLoading ? 'text-gray-400' : 'text-[#FF5A00]'}`}>
+                  View all
+                </Text>
+              </View>
+            </Pressable>
+            <View className="gap-4 flex-1">
+              {/* Show skeleton loaders while loading */}
+              {isChauffeurBookingsLoading ? (
+                <>
+                  <CompactRideHistoryCardSkeleton />
+                  <CompactRideHistoryCardSkeleton />
+                </>
+              ) : (
+                completedChauffeurRides
+                  .slice(0, 2)
+                  .map((booking) => {
+                    const destination = booking.destination_cities?.[0] || '—';
+                    const dateStr = booking.scheduled_for
+                      ? new Date(booking.scheduled_for).toLocaleDateString('en-US', {
+                          month: 'short',
+                          day: 'numeric',
+                        })
+                      : '—';
+                    const rideType = booking.trip_type === 'OUT_STATION' ? 'Outstation' : 'In-city';
+                    const dropoffTime = booking.scheduled_for
+                      ? new Date(booking.scheduled_for).toLocaleTimeString('en-US', {
+                          hour: '2-digit',
+                          minute: '2-digit',
+                          hour12: true,
+                        })
+                      : '—';
+
+                    return (
+                      <CompactRideHistoryCard
+                        key={booking.id}
+                        destination={destination}
+                        date={dateStr}
+                        rideType={rideType}
+                        timeOfDropoff={dropoffTime}
+                        onPress={() =>
+                          router.push({
+                            pathname: '/employee/ride-details',
+                            params: { rideId: String(booking.id) },
+                          })
+                        }
+                      />
+                    );
+                  })
+              )}
+
             </View>
-          </Pressable>
-          <View className="gap-4 flex-1">
+          </View>
+        ) : null}
 
-            <CompactRideHistoryCard
-              destination="Tower"
-              date="Oct 15"
-              rideType="Chauffeur"
-              timeOfDropoff="14:52"
-              onPress={() =>
-                router.push({
-                  pathname: '/employee/ride-details',
-                  params: { rideId: 'PO123RT' },
-                })
-              }
-            />
-            <CompactRideHistoryCard
-              destination="Clifton"
-              date="Oct 24"
-              rideType="Chauffeur"
-              timeOfDropoff="22:10"
-              onPress={() =>
-                router.push({
-                  pathname: '/employee/ride-details',
-                  params: { rideId: 'PO123RT' },
-                })
-              }
-            />
+        {/* Bento grid for promo / placeholders - always visible */}
+        <View className="mt-4">
+          {/* Large card with bus image background, similar to RideStatusBar styling */}
+          <ImageBackground
+            source={require('@/../assets/bus_image.png')}
+            style={styles.bentoLarge}
+            imageStyle={styles.bentoLargeImage}
 
-            {/* Bento grid for promo / placeholders */}
-            <View className="mt-4">
-              {/* Large card with bus image background, similar to RideStatusBar styling */}
-              <ImageBackground
-                source={require('@/../assets/bus_image.png')}
-                style={styles.bentoLarge}
-                imageStyle={styles.bentoLargeImage}
+          >
+            <View className="flex-1 justify-between p-4 bg-black/30">
+              <Pressable onPress={() => router.push('/employee/ride-active')}>
+                <Text className="text-white text-xs font-semibold uppercase tracking-wide">
+                  Instation & Outstation
+                </Text>
+                <Text className="text-white text-2xl font-bold mt-1">
+                  Your chauffeur, your schedule
+                </Text>
+              </Pressable>
+              <View className="flex-row items-center mt-3">
 
-              >
-                <View className="flex-1 justify-between p-4 bg-black/30">
-                  <Pressable onPress={() => router.push('/employee/ride-active')}>
-                    <Text className="text-white text-xs font-semibold uppercase tracking-wide">
-                      Instation & Outstation
-                    </Text>
-                    <Text className="text-white text-2xl font-bold mt-1">
-                      Your chauffeur, your schedule
-                    </Text>
-                  </Pressable>
-                  <View className="flex-row items-center mt-3">
-
-                  </View>
-                </View>
-              </ImageBackground>
-
-              {/* Two small square containers below with images */}
-              <View className="flex-row mt-3 gap-3">
-                <ImageBackground
-                  source={require('@/../assets/happy_blackgirl.jpg')}
-                  style={styles.bentoSmall}
-                  imageStyle={styles.bentoSmallImage}
-                >
-                  <View className="flex-1  items-start justify-end p-3">
-                    <Text className="text-white text-lg font-semibold">
-                      Enjoy the ride while we handle the rest.
-                    </Text>
-                  </View>
-                </ImageBackground>
-                <ImageBackground
-                  source={require('@/../assets/carholding.jpg')}
-                  style={styles.bentoSmall}
-                  imageStyle={styles.bentoSmallImage}
-                >
-                  <View className="flex-1  items-start justify-end p-3">
-                    <Text className="text-white text-lg font-semibold">
-                      Chauffeur at your door, right on time.
-                    </Text>
-                  </View>
-                </ImageBackground>
               </View>
             </View>
+          </ImageBackground>
+
+          {/* Two small square containers below with images */}
+          <View className="flex-row mt-3 gap-3">
+            <ImageBackground
+              source={require('@/../assets/happy_blackgirl.jpg')}
+              style={styles.bentoSmall}
+              imageStyle={styles.bentoSmallImage}
+            >
+              <View className="flex-1  items-start justify-end p-3">
+                <Text className="text-white text-lg font-semibold">
+                  Enjoy the ride while we handle the rest.
+                </Text>
+              </View>
+            </ImageBackground>
+            <ImageBackground
+              source={require('@/../assets/carholding.jpg')}
+              style={styles.bentoSmall}
+              imageStyle={styles.bentoSmallImage}
+            >
+              <View className="flex-1  items-start justify-end p-3">
+                <Text className="text-white text-lg font-semibold">
+                  Chauffeur at your door, right on time.
+                </Text>
+              </View>
+            </ImageBackground>
           </View>
         </View>
       </ScrollView>

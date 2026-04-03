@@ -9,7 +9,7 @@ import {
   Pressable,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import MapView, { Marker } from 'react-native-maps';
+import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 import { Feather, Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { fontFamily } from '@/core/theme';
@@ -68,6 +68,7 @@ const RideDetails = () => {
           <View>
             <View style={{ height: MAP_HEIGHT, overflow: 'hidden' }}>
               <MapView
+                 provider={PROVIDER_GOOGLE}
                 style={StyleSheet.absoluteFill}
                 initialRegion={mapRegion}
                 scrollEnabled={false}
