@@ -30,20 +30,11 @@ yarn-error.*
 .DS_Store
 *.pem
 
-# local env files
-.env*.local
 
 # typescript
 *.tsbuildinfo
-.env
 
 # generated native folders
 /ios
 /android
 /notification_impl.md
-
-/google-services.json
-/build-1775505836141_dev.ipa
-/build-1775626822586.apk
-/build-1775825168396_preview.ipa
-/build-1776196418911.tar.gz

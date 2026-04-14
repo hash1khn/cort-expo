@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { AppState, AppStateStatus } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { socketService } from '../services/socket.service';
+import { ACTIVE_RIDE_KEY } from '../services/location/backgroundLocationTask';
 
 /**
  * Manages the socket connection lifecycle.
@@ -35,8 +37,14 @@ export function useSocketConnection(token: string | null | undefined) {
                     socketService.connect(token);
                 }
             } else if (nextState === 'background') {
-                socketService.disconnect();
-                setIsConnected(false);
+                // Keep the socket alive while a ride is in progress so that
+                // the background location task can continue emitting via it.
+                AsyncStorage.getItem(ACTIVE_RIDE_KEY).then((activeRideId) => {
+                    if (!activeRideId) {
+                        socketService.disconnect();
+                        setIsConnected(false);
+                    }
+                });
             }
         });
 

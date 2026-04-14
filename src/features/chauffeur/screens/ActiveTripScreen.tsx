@@ -21,6 +21,8 @@ import {
 } from '../services';
 import { useToast } from '@/shared/ui/molecules/Toast';
 import { CustomToast } from '@/features/shared/components/CustomToast';
+import { useRiderLocationTracking } from '@/hooks/useRiderLocationTracking';
+import { LocationDisclosureModal } from '@/components/LocationDisclosureModal';
 
 const Text = (props: React.ComponentProps<typeof RNText>) => {
     return <RNText {...props} style={[{ fontFamily }, props.style]} />;
@@ -87,6 +89,14 @@ export function ActiveTripScreen() {
     const activeLog = getActiveLog(activeBooking?.chauffeur_trip_daily_logs ?? []);
     const tripStep = deriveTripStep(activeBooking?.status, activeLog);
     const isAnyLoading = isStartingTrip || isMarkingArrived || isMarkingOnboard || isMarkingDropoff || isEndingTrip;
+
+    const {
+        startTracking,
+        stopTracking,
+        needsDisclosure,
+        onDisclosureAccept,
+        onDisclosureDecline,
+    } = useRiderLocationTracking();
 
     const totalDays = activeBooking?.no_of_days ?? 1;
     const completedDays = activeBooking?.chauffeur_trip_daily_logs?.filter(l => l.status === 'COMPLETED').length ?? 0;
@@ -239,14 +249,16 @@ export function ActiveTripScreen() {
                         driver_lng: currentPos.coords.longitude,
                     } : {})
                 }).unwrap();
-                
-                // Automatically open maps after starting the trip if address exists
-                if (displayPickupAddress) {
-                    const url = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(displayPickupAddress)}`;
-                    Linking.openURL(url).catch(() => {
-                        showError('Could not open Google Maps');
-                    });
-                }
+
+                // Start tracking first; open Maps only after location is live.
+                // onReady fires after permissions are granted and the task is running.
+                const openMaps = displayPickupAddress
+                    ? () => {
+                          const url = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(displayPickupAddress)}`;
+                          Linking.openURL(url).catch(() => showError('Could not open Google Maps'));
+                      }
+                    : undefined;
+                await startTracking(id, openMaps);
             } catch {
                 showError('Ride could not be started. Please try again.');
             }
@@ -261,6 +273,7 @@ export function ActiveTripScreen() {
             try {
                 confirmSheetRef.current?.close();
                 await endTrip({ bookingId: id, body: {} }).unwrap();
+                await stopTracking().catch(console.warn);
                 router.push('/chauffeur');
             } catch {
                 showError('Could not complete today\'s trip. Please try again.');
@@ -311,6 +324,11 @@ export function ActiveTripScreen() {
     
     return (
         <View style={[styles.root,{paddingTop:insets.top,paddingBottom:insets.bottom}]} >
+            <LocationDisclosureModal
+                visible={needsDisclosure}
+                onAccept={onDisclosureAccept}
+                onDecline={onDisclosureDecline}
+            />
             {/* Header Strip */}
                 <View style={styles.headerContent}>
                     <Pressable style={styles.backButton} onPress={() => router.back()}>

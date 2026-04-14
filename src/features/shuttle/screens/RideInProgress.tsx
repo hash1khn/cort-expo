@@ -10,6 +10,7 @@ import {
   View,
   ActivityIndicator,
 } from 'react-native';
+import * as Location from 'expo-location';
 import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { colors } from '@/core/theme';
 import { router } from 'expo-router';
@@ -36,8 +37,9 @@ import {
 import { useActiveTrip, type Stop } from '../hooks/useActiveTrip';
 import { useRideSocket } from '@/hooks/useRideSocket';
 import { useAppSelector } from '@/store/hooks';
-import * as Location from 'expo-location';
 import { store } from '@/store';
+import { useRiderLocationTracking } from '@/hooks/useRiderLocationTracking';
+import { LocationDisclosureModal } from '@/components/LocationDisclosureModal';
 
 type EmployeeStatus = 'present' | 'absent';
 
@@ -114,46 +116,21 @@ export default function RideInProgress() {
     [tripId],
   );
 
-  const { sendLocation } = useRideSocket({
+  useRideSocket({
     tripId: tripId ?? 0,
     userId,
     role: 'driver',
     onAttendanceMarked: handleAttendanceMarked,
   });
 
-  // Stream GPS location while ride is active
-  const locationSubscriptionRef = useRef<Location.LocationSubscription | null>(null);
-  useEffect(() => {
-    if (!rideStarted || !tripId) return;
-
-    let active = true;
-    Location.requestForegroundPermissionsAsync().then(({ status }) => {
-      if (status !== 'granted' || !active) return;
-      Location.watchPositionAsync(
-        { accuracy: Location.Accuracy.High, timeInterval: 4000, distanceInterval: 5 },
-        (loc) => {
-          sendLocation({
-            lat: loc.coords.latitude,
-            lng: loc.coords.longitude,
-            heading: loc.coords.heading ?? 0,
-            speed: loc.coords.speed ?? 0,
-          });
-        },
-      ).then((sub) => {
-        if (active) {
-          locationSubscriptionRef.current = sub;
-        } else {
-          sub.remove();
-        }
-      });
-    });
-
-    return () => {
-      active = false;
-      locationSubscriptionRef.current?.remove();
-      locationSubscriptionRef.current = null;
-    };
-  }, [rideStarted, tripId, sendLocation]);
+  // Background-safe location tracking via expo-task-manager
+  const {
+    startTracking,
+    stopTracking,
+    needsDisclosure,
+    onDisclosureAccept,
+    onDisclosureDecline,
+  } = useRiderLocationTracking();
 
   const { data: realEmployees = [], isLoading: isEmployeesLoading } = useGetTripEmployeesQuery(
     tripId as number,
@@ -292,7 +269,8 @@ export default function RideInProgress() {
           }
 
           await startTrip({ route_id: routeId, direction, lat: driverLat, lng: driverLng }).unwrap();
-          openInMaps(currentStop);
+          // Start tracking first; open Maps only after location is live.
+          await startTracking(tripId ?? 0, () => openInMaps(currentStop));
         } catch {
           // Optionally show error
         }
@@ -327,6 +305,7 @@ export default function RideInProgress() {
         tripId: activeTrip.id,
         total_distance: 0,
       }).unwrap();
+      await stopTracking().catch(console.warn);
       router.push('/shuttle');
     } catch {
       Alert.alert('Error', 'Failed to complete trip. Please try again.');
@@ -339,6 +318,8 @@ export default function RideInProgress() {
     nextStopAfterCurrent,
     openInMaps,
     startTrip,
+    startTracking,
+    tripId,
     arriveAtStop,
     completeTrip,
     stops.length,
@@ -346,6 +327,11 @@ export default function RideInProgress() {
 
   return (
     <SafeAreaView style={styles.root}>
+      <LocationDisclosureModal
+        visible={needsDisclosure}
+        onAccept={onDisclosureAccept}
+        onDecline={onDisclosureDecline}
+      />
       <Pressable onPress={() => router.back()}>
         <View className="flex-row items-center gap-2 ml-[-4px] px-6 mb-3">
           <Feather name="chevron-left" size={24} color="black" />

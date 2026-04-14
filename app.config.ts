@@ -15,11 +15,12 @@ const SCHEME = "cort";
 
 export default ({ config }: ConfigContext): ExpoConfig => {
   console.log(" Building app for environment:", process.env.APP_ENV);
+  const APP_ENV =
+    (process.env.APP_ENV as "development" | "preview" | "production") ||
+    "development";
+  const IS_DEV = APP_ENV === "development";
   const { name, bundleIdentifier, icon, adaptiveIcon, packageName, scheme } =
-    getDynamicAppConfig(
-      (process.env.APP_ENV as "development" | "preview" | "production") ||
-        "development"
-    );
+    getDynamicAppConfig(APP_ENV);
   return {
     ...config,
     name: name,
@@ -41,6 +42,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
      
       infoPlist: {
         ITSAppUsesNonExemptEncryption: false,
+        UIBackgroundModes: ["fetch", "remote-notification", "location"],
       },
     },
     android: {
@@ -51,9 +53,15 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       package: packageName,
       edgeToEdgeEnabled: true,
       predictiveBackGestureEnabled: false,
+      "googleServicesFile": "./google-services.json",
       permissions: [
         "android.permission.CAMERA",
         "android.permission.RECORD_AUDIO",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_BACKGROUND_LOCATION",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_LOCATION",
       ],
     },
     updates: {
@@ -78,6 +86,12 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       "expo-font",
       "expo-secure-store",
       [
+        "expo-dev-client",
+        {
+          addGeneratedScheme: IS_DEV,
+        },
+      ],
+      [
         "expo-camera",
         {
           cameraPermission: "Allow $(PRODUCT_NAME) to access your camera",
@@ -97,6 +111,15 @@ export default ({ config }: ConfigContext): ExpoConfig => {
         {
           "iosGoogleMapsApiKey": process.env.EXPO_PUBLIC_GOOGLE_API_KEY,
           "androidGoogleMapsApiKey": process.env.EXPO_PUBLIC_GOOGLE_API_KEY
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "$(PRODUCT_NAME) uses your location during active rides so dispatch can track progress in real time, even when the app is in the background.",
+          "isAndroidBackgroundLocationEnabled": true,
+          "isAndroidForegroundServiceEnabled": true,
+          "isIosBackgroundLocationEnabled": true
         }
       ]
     ],

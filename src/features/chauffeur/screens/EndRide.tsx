@@ -8,6 +8,7 @@ import { fontFamily } from '@/core/theme';
 import { useToast } from '@/shared/ui/molecules/Toast';
 import { CustomToast } from '@/features/shared/components/CustomToast';
 import { useEndDriverBookingMutation } from '../services/chauffeur.api';
+import { stopLocationTracking } from '@/services/location/riderLocationService';
 
 const Text = (props: React.ComponentProps<typeof RNText>) => {
     return <RNText {...props} style={[{ fontFamily }, props.style]} />;
@@ -100,12 +101,14 @@ export function EndRideScreen() {
             );
             
             // Go back to home
+            await stopLocationTracking().catch(console.warn);
             router.push('/chauffeur');
         } catch (err: any) {
             // If the trip was already ENDED in a previous attempt (idempotent retry),
             // treat it as success and navigate home instead of showing an error.
             const errMessage: string = err?.data?.message ?? '';
             if (err?.status === 400 && errMessage.includes('ENDED')) {
+                await stopLocationTracking().catch(console.warn);
                 router.push('/chauffeur');
                 return;
             }

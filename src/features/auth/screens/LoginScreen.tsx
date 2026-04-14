@@ -27,6 +27,7 @@ import { logIn } from '../store';
 import { useLoginMutation } from '../services/authApi';
 import { mockApi } from '../../../services/mockApi';
 import { getHomePathForRole } from '../utils/getHomePathForRole';
+import { env } from '../../../core/config/env';
 
 export function LoginScreen() {
   const insets = useSafeAreaInsets();
@@ -188,6 +189,9 @@ export function LoginScreen() {
               />
             </View>
 
+            {/* Debug: API URL */}
+            <Text style={styles.debugText}>API: {env.API_URL}</Text>
+
             {/* Biometric Option */}
             <View style={styles.footer}>
               <Pressable
@@ -306,6 +310,13 @@ const styles = StyleSheet.create({
   },
   actionRow: {
     marginTop: 16,
+  },
+  debugText: {
+    marginTop: 8,
+    fontSize: 11,
+    color: '#9CA3AF',
+    textAlign: 'center',
+    fontFamily: typography.family.regular,
   },
   footer: {
     marginTop: 40,

@@ -1,6 +1,12 @@
 import { Stack, usePathname, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect, useState } from 'react';
+import * as Notifications from 'expo-notifications';
+import * as TaskManager from 'expo-task-manager';
+// ⚠️ Must be imported at module scope so the task is registered before any
+// component mounts (and before the OS can deliver a background location event).
+import '../src/services/location/backgroundLocationTask';
+import { NotificationProvider } from '../src/context/NotificationContext';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { useFonts } from 'expo-font';
@@ -32,6 +38,32 @@ import { router } from 'expo-router';
 
 SplashScreen.preventAutoHideAsync().catch(() => {
   // no-op (can throw if called twice in dev)
+});
+
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowBanner: true,
+    shouldShowList: true,
+    shouldPlaySound: true,
+    shouldSetBadge: true,
+  }),
+});
+
+const BACKGROUND_NOTIFICATION_TASK = 'BACKGROUND-NOTIFICATION-TASK';
+
+TaskManager.defineTask(
+  BACKGROUND_NOTIFICATION_TASK,
+  ({ data, error, executionInfo }: TaskManager.TaskManagerTaskBody) => {
+    console.log(
+      '[BackgroundNotification]',
+      JSON.stringify({ data, error, executionInfo }, null, 2),
+    );
+    return Promise.resolve();
+  },
+);
+
+Notifications.registerTaskAsync(BACKGROUND_NOTIFICATION_TASK).catch((err) => {
+  console.warn('[BackgroundNotification] Could not register task (expected in Expo Go):', err.message);
 });
 
 function RootLayoutContent() {
@@ -152,7 +184,9 @@ export default function RootLayout() {
   return (
     <Provider store={store}>
       <PersistGate loading={null} persistor={persistor}>
-        <RootLayoutContent />
+        <NotificationProvider>
+          <RootLayoutContent />
+        </NotificationProvider>
       </PersistGate>
     </Provider>
   );

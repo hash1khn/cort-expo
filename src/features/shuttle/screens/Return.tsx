@@ -19,6 +19,8 @@ import { useToast } from '@/shared/ui/molecules/Toast';
 import { CustomToast } from '@/features/shared/components/CustomToast';
 import { useLanguage } from '@/features/shared/context/LanguageContext';
 import * as Location from 'expo-location';
+import { useRiderLocationTracking } from '@/hooks/useRiderLocationTracking';
+import { LocationDisclosureModal } from '@/components/LocationDisclosureModal';
 
 const AppText = ({ style, ...props }: any) => (
   <Text style={[{ fontFamily }, style]} {...props} />
@@ -76,6 +78,14 @@ export default function Return() {
   const [startTrip, { isLoading: isStartingTrip }] = useStartTripMutation();
 
   const isActionLoading = isSubmitting || isStartingTrip || isCompletingTrip;
+
+  const {
+    startTracking,
+    stopTracking,
+    needsDisclosure,
+    onDisclosureAccept,
+    onDisclosureDecline,
+  } = useRiderLocationTracking();
 
   // Track present/absent per employee for the return trip; default is absent.
   const [employees, setEmployees] = useState<ReturnEmployee[]>([]);
@@ -234,8 +244,13 @@ export default function Return() {
         }
 
         setReturnTripStarted(true);
+        if (tripId) {
+          // Start tracking first; open Maps only after location is live.
+          await startTracking(tripId, () => openStopsInMaps(stops));
+        } else {
+          openStopsInMaps(stops);
+        }
         setSliderKey((k) => k + 1);
-        openStopsInMaps(stops);
       } catch {
         // On error, remount slider so user can retry; stay on screen
         toast.show(
@@ -253,6 +268,7 @@ export default function Return() {
         tripId,
         total_distance: 0,
       }).unwrap();
+      await stopTracking().catch(console.warn);
       setSliderKey((k) => k + 1);
     } catch {
       // On error, remount slider so user can retry; stay on screen
@@ -266,6 +282,8 @@ export default function Return() {
     returnTripStarted,
     submitReturnAttendance,
     startTrip,
+    startTracking,
+    stopTracking,
     completeTrip,
     openStopsInMaps,
     stops,
@@ -353,6 +371,11 @@ export default function Return() {
 
   return (
     <SafeAreaView className="flex-1 bg-[#FFFFFF]" edges={['top']}>
+      <LocationDisclosureModal
+        visible={needsDisclosure}
+        onAccept={onDisclosureAccept}
+        onDecline={onDisclosureDecline}
+      />
       {!returnTripStarted && (
         <Pressable onPress={() => router.back()}>
           <View className="flex-row items-center gap-2 ml-[-4px] px-6 mb-3">
