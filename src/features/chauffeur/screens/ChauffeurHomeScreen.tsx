@@ -13,26 +13,77 @@ import {
   isFirstDayNotStarted,
   isBetweenDays,
 } from '../services/chauffeur.api';
+import { useLanguage } from '@/features/shared/context/LanguageContext';
 
 const Text = (props: React.ComponentProps<typeof RNText>) => (
   <RNText {...props} style={[{ fontFamily }, props.style]} />
 );
 
+// ─── Translations ─────────────────────────────────────────────────────────────
+
+const LABELS = {
+  en: {
+    myBooking: 'My Booking',
+    loadingBooking: 'Loading your booking…',
+    couldNotLoad: 'Could not load booking',
+    retry: 'Retry',
+    passenger: 'Passenger',
+    outstation: 'Outstation',
+    inCity: 'In-City',
+    waitingForRequest: 'Waiting for passenger to request next pickup',
+    startTrip: 'Start Trip',
+    continueTrip: 'Continue Trip',
+    noActiveBooking: 'No active booking',
+    noActiveBookingSubtitle: "You'll see your assigned trip here when ready.",
+    daysDone: (completed: number, total: number) => `Day ${completed} of ${total} done`,
+    dayOf: (current: number, total: number) => `Day ${current} of ${total}`,
+    totalDays: (total: number) => `${total} days`,
+    status: {
+      PENDING: 'Pending',
+      ASSIGNED: 'Assigned',
+      OTW: 'On The Way',
+      ARRIVED: 'Arrived',
+      IN_PROGRESS: 'In Progress',
+      DROPPED_OFF: 'Dropped Off',
+      ENDED: 'Ended',
+      COMPLETED: 'Completed',
+      CANCELLED: 'Cancelled',
+    } as Record<string, string>,
+  },
+  ur: {
+    myBooking: 'میری بکنگ',
+    loadingBooking: 'بکنگ لوڈ ہو رہی ہے…',
+    couldNotLoad: 'بکنگ لوڈ نہ ہو سکی',
+    retry: 'دوبارہ کوشش کریں',
+    passenger: 'مسافر',
+    outstation: 'آؤٹ اسٹیشن',
+    inCity: 'شہر کے اندر',
+    waitingForRequest: 'مسافر کی اگلے سفر کی درخواست کا انتظار ہے',
+    startTrip: 'سفر شروع کریں',
+    continueTrip: 'سفر جاری رکھیں',
+    noActiveBooking: 'کوئی فعال بکنگ نہیں',
+    noActiveBookingSubtitle: 'آپ کی تفویض کردہ بکنگ یہاں نظر آئے گی۔',
+    daysDone: (completed: number, total: number) => `${total} میں سے ${completed} دن مکمل`,
+    dayOf: (current: number, total: number) => `${total} میں سے ${current} دن`,
+    totalDays: (total: number) => `${total} دن`,
+    status: {
+      PENDING: 'زیر التواء',
+      ASSIGNED: 'تفویض',
+      OTW: 'راستے میں',
+      ARRIVED: 'پہنچ گئے',
+      IN_PROGRESS: 'سفر جاری',
+      DROPPED_OFF: 'اتار دیا',
+      ENDED: 'ختم',
+      COMPLETED: 'مکمل',
+      CANCELLED: 'منسوخ',
+    } as Record<string, string>,
+  },
+} as const;
+
 // ─── Status helpers ───────────────────────────────────────────────────────────
 
-function statusLabel(status: ActiveBooking['status']): string {
-  const map: Record<string, string> = {
-    PENDING: 'Pending',
-    ASSIGNED: 'Assigned',
-    OTW: 'On The Way',
-    ARRIVED: 'Arrived',
-    IN_PROGRESS: 'In Progress',
-    DROPPED_OFF: 'Dropped Off',
-    ENDED: 'Ended',
-    COMPLETED: 'Completed',
-    CANCELLED: 'Cancelled',
-  };
-  return map[status] ?? status;
+function statusLabel(status: ActiveBooking['status'], language: 'en' | 'ur'): string {
+  return LABELS[language].status[status] ?? status;
 }
 
 function statusColor(status: ActiveBooking['status']): string {
@@ -61,6 +112,8 @@ function ActiveBookingCard({
   onStartTrip: () => void;
   onViewDetails: () => void;
 }) {
+  const { language } = useLanguage();
+  const t = LABELS[language];
   const passenger = booking.users_chauffeur_bookings_passenger_idTousers;
   const vehicle = booking.vehicles;
   const todayLog = getActiveLog(booking.chauffeur_trip_daily_logs);
@@ -103,7 +156,7 @@ function ActiveBookingCard({
               className="text-black font-bold text-[17px]"
               numberOfLines={1}
             >
-              {passenger?.full_name ?? 'Passenger'}
+              {passenger?.full_name ?? t.passenger}
             </Text>
             {passenger?.phone && (
               <Text className="text-[#6B7280] text-[13px] font-medium">
@@ -122,7 +175,7 @@ function ActiveBookingCard({
             className="text-xs font-bold"
             style={{ color: statusColor(booking.status) }}
           >
-            {statusLabel(booking.status)}
+            {statusLabel(booking.status, language)}
           </Text>
         </View>
       </View>
@@ -158,7 +211,7 @@ function ActiveBookingCard({
               color="#6B7280"
             />
             <Text className="text-[#6B7280] text-[13px] font-medium">
-              {booking.trip_type === 'OUT_STATION' ? 'Outstation' : 'In-City'}
+              {booking.trip_type === 'OUT_STATION' ? t.outstation : t.inCity}
             </Text>
           </View>
 
@@ -167,10 +220,10 @@ function ActiveBookingCard({
               <Ionicons name="calendar-outline" size={14} color="#6B7280" />
               <Text className="text-[#6B7280] text-[13px] font-medium">
                 {betweenDays
-                  ? `Day ${completedDays} of ${totalDays} done`
+                  ? t.daysDone(completedDays, totalDays)
                   : todayLog
-                    ? `Day ${currentDay} of ${totalDays}`
-                    : `${totalDays} days`}
+                    ? t.dayOf(currentDay, totalDays)
+                    : t.totalDays(totalDays)}
               </Text>
             </View>
           )}
@@ -191,7 +244,7 @@ function ActiveBookingCard({
         <View className="mx-4 mb-4 rounded-xl bg-[#FFF7ED] px-4 py-3 flex-row items-center gap-2">
           <Ionicons name="time-outline" size={16} color="#F97316" />
           <Text className="text-[#F97316] text-[13px] font-semibold flex-1">
-            Waiting for passenger to request next pickup
+            {t.waitingForRequest}
           </Text>
         </View>
       )}
@@ -206,7 +259,7 @@ function ActiveBookingCard({
           className="mx-4 mb-5 flex-row items-center justify-center gap-2 py-4 rounded-xl bg-[#FF5A00] active:opacity-90"
         >
           <Ionicons name="play-sharp" size={18} color="#FFFFFF" />
-          <Text className="text-white text-[16px] font-bold">Start Trip</Text>
+          <Text className="text-white text-[16px] font-bold">{t.startTrip}</Text>
         </Pressable>
       )}
 
@@ -220,7 +273,7 @@ function ActiveBookingCard({
             }}
             className="flex-row items-center justify-center gap-2 py-3 rounded-xl bg-black active:opacity-80"
           >
-            <Text className="text-white text-[15px] font-bold">Continue Trip</Text>
+            <Text className="text-white text-[15px] font-bold">{t.continueTrip}</Text>
             <Ionicons name="arrow-forward" size={16} color="#FFFFFF" />
           </Pressable>
         </View>
@@ -232,14 +285,16 @@ function ActiveBookingCard({
 // ─── Empty State ──────────────────────────────────────────────────────────────
 
 function EmptyState() {
+  const { language } = useLanguage();
+  const t = LABELS[language];
   return (
     <View className="rounded-3xl bg-[#EDEDEB] py-10 px-4 items-center">
       <Ionicons name="calendar-outline" size={48} color="#6B7280" />
       <Text className="text-[#6B7280] text-lg font-medium mt-3 text-center">
-        No active booking
+        {t.noActiveBooking}
       </Text>
       <Text className="text-[#6B7280]/60 text-sm mt-1 text-center">
-        You'll see your assigned trip here when ready.
+        {t.noActiveBookingSubtitle}
       </Text>
     </View>
   );
@@ -248,6 +303,8 @@ function EmptyState() {
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 
 export function ChauffeurHomeScreen() {
+  const { language } = useLanguage();
+  const t = LABELS[language];
   const { data: activeBooking, isLoading, isError, refetch } = useGetDriverActiveBookingQuery();
   const [isRequestModalVisible, setIsRequestModalVisible] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -318,14 +375,14 @@ export function ChauffeurHomeScreen() {
         }
       >
         <View className="mb-6">
-          <Text className="text-[34px] font-bold text-black">My Booking</Text>
+          <Text className="text-[34px] font-bold text-black">{t.myBooking}</Text>
           <Text className="text-[#6B7280] text-base font-medium">{today}</Text>
         </View>
 
         {isLoading && (
           <View className="items-center py-12">
             <ActivityIndicator size="large" color="#FF5A00" />
-            <Text className="text-[#6B7280] mt-3 font-medium">Loading your booking…</Text>
+            <Text className="text-[#6B7280] mt-3 font-medium">{t.loadingBooking}</Text>
           </View>
         )}
 
@@ -333,13 +390,13 @@ export function ChauffeurHomeScreen() {
           <View className="rounded-3xl bg-[#FFF1F0] px-5 py-6 items-center">
             <Ionicons name="alert-circle-outline" size={36} color="#EF4444" />
             <Text className="text-[#EF4444] font-semibold mt-2 text-center">
-              Could not load booking
+              {t.couldNotLoad}
             </Text>
             <Pressable
               onPress={refetch}
               className="mt-4 px-6 py-2.5 rounded-xl bg-[#EF4444] active:opacity-80"
             >
-              <Text className="text-white font-bold">Retry</Text>
+              <Text className="text-white font-bold">{t.retry}</Text>
             </Pressable>
           </View>
         )}

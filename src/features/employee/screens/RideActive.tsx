@@ -185,6 +185,8 @@ export default function RideActive() {
   const [driverCoord, setDriverCoord] = useState<LatLng | null>(null);
   const [socketStopId, setSocketStopId] = useState<number | null>(null);
   const [socketStopStatus, setSocketStopStatus] = useState<'AT_STOP' | 'EN_ROUTE' | null>(null);
+  // True when the driver manually marked this employee as present from the attendance sheet
+  const [isDriverMarkedPresent, setIsDriverMarkedPresent] = useState(false);
   const currentStopId = socketStopId ?? activeTrip?.current_stop_id ?? null;
   const currentStopStatus = socketStopStatus ?? activeTrip?.current_stop_status ?? 'EN_ROUTE';
 
@@ -193,6 +195,8 @@ export default function RideActive() {
   const myPickupStopIdRef = useRef(myPickupStopId);
   useEffect(() => { myPickupStopIdRef.current = myPickupStopId; }, [myPickupStopId]);
   const socketStopIdRef = useRef<number | null>(null);
+  // Tracks boarded state for use inside memoized socket callbacks
+  const isBoardedRef = useRef(false);
 
   const captainIsHere =
     currentStopId !== null &&
@@ -234,11 +238,16 @@ export default function RideActive() {
 
   const handleRideProceeding = useCallback(
     (_data: { nextStopId: number | null; nextStopName: string | null; departedAt: string }) => {
+      // If the employee is already boarded (self-scanned QR or driver marked present),
+      // allow the sheet to collapse immediately when the driver proceeds.
+      if (isBoardedRef.current) {
+        setSocketStopStatus('EN_ROUTE');
+        return;
+      }
       // The backend emits ride:proceeding immediately after stop:arrived (to
       // announce the next stop). If the driver just arrived at THIS employee's
-      // pickup stop, do NOT reset to EN_ROUTE — the employee still needs to
-      // board and scan the QR code. The status will naturally become EN_ROUTE
-      // once the driver arrives at a different stop.
+      // pickup stop and the employee hasn't boarded yet, do NOT reset to
+      // EN_ROUTE — the employee still needs to board and scan the QR code.
       if (
         myPickupStopIdRef.current !== null &&
         socketStopIdRef.current === myPickupStopIdRef.current
@@ -248,6 +257,18 @@ export default function RideActive() {
       setSocketStopStatus('EN_ROUTE');
     },
     [],
+  );
+
+  // Bug A fix: listen for driver-initiated attendance marks so the QR button
+  // hides immediately on the employee's screen when the driver ticks present.
+  const handleAttendanceMarked = useCallback(
+    (data: { employeeId: string; markedBy: 'self' | 'driver' }) => {
+      if (data.employeeId === userId && data.markedBy === 'driver') {
+        isBoardedRef.current = true;
+        setIsDriverMarkedPresent(true);
+      }
+    },
+    [userId],
   );
 
   const handleRideEnded = useCallback(() => {
@@ -269,6 +290,7 @@ export default function RideActive() {
     onLocationUpdate: isChauffeurMode ? undefined : handleLocationUpdate,
     onStopArrived: isChauffeurMode ? undefined : handleStopArrived,
     onRideProceeding: isChauffeurMode ? undefined : handleRideProceeding,
+    onAttendanceMarked: isChauffeurMode ? undefined : handleAttendanceMarked,
     onRideEnded: isChauffeurMode ? undefined : handleRideEnded,
   });
 
@@ -446,6 +468,13 @@ export default function RideActive() {
     );
   }, [driverCoord]);
 
+  // Keep isBoardedRef in sync with isBoardingSuccess for use inside memoized callbacks.
+  useEffect(() => {
+    if (isBoardingSuccess || isDriverMarkedPresent) {
+      isBoardedRef.current = true;
+    }
+  }, [isBoardingSuccess, isDriverMarkedPresent]);
+
   // ── Bottom Sheet snap logic ───────────────────────────────────────────────
   useEffect(() => {
     if (isDataLoading) return;
@@ -521,11 +550,14 @@ export default function RideActive() {
     }
   })();
 
+  // Employee is considered boarded if they self-scanned or the driver marked them present
+  const isBoarded = isBoardingSuccess || isDriverMarkedPresent;
+
   const statusText = isChauffeurMode
     ? chauffeurStatusText
     : directionParam === 'EVENING'
       ? 'Ride in progress'
-      : isBoardingSuccess
+      : isBoarded
         ? "Sit tight, you're on the way"
         : captainIsHere
           ? 'Captain is here, please board the shuttle'
@@ -534,7 +566,7 @@ export default function RideActive() {
             : 'Arriving in 15 min';
 
   const statusColor = captainIsHere ? '#000' : '#000';
-  const qrButtonLabel = isBoardingLoading ? 'Scanning...' : 'Scan QR';
+  const qrButtonLabel = isBoardingLoading ? 'Boarding...' : 'Board';
 
   return (
     <View style={styles.root}>
@@ -711,7 +743,7 @@ export default function RideActive() {
               <Text style={styles.iconActionText}>Share ride</Text>
             </Pressable>
 
-            {!isChauffeurMode && !isBoardingSuccess && captainIsHere && directionParam !== 'EVENING' && (
+            {!isChauffeurMode && !isBoarded && captainIsHere && directionParam !== 'EVENING' && (
               <Pressable
                 style={styles.iconActionBtn}
                 onPress={handleScanQR}

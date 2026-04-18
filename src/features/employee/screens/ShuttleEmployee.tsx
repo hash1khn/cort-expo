@@ -170,8 +170,8 @@ export default function NewHome() {
     return shuttleTrips.find((trip) => trip.status !== 'COMPLETED') ?? null;
   }, [hasShuttle, shuttleTrips]);
 
-  const shouldShowChauffeurCard = hasChauffeur && (!!chauffeurCardBooking || isActiveBookingLoading || isActiveBookingFetching);
-  const shouldShowShuttleCard = hasShuttle && (!!shuttleCardTrip || isShuttleTripsLoading);
+  const shouldShowChauffeurCard = hasChauffeur;
+  const shouldShowShuttleCard = hasShuttle;
   const completedChauffeurRides = useMemo(
     () => chauffeurBookingsData?.data?.filter((booking) => booking.status === 'COMPLETED') ?? [],
     [chauffeurBookingsData],
@@ -696,7 +696,7 @@ export default function NewHome() {
                 </Text>
               </View>
             </Pressable>
-            <View className="gap-4 flex-1">
+            <View className="gap-4">
               {/* Show skeleton loaders while loading */}
               {isChauffeurBookingsLoading ? (
                 <>
@@ -707,7 +707,9 @@ export default function NewHome() {
                 completedChauffeurRides
                   .slice(0, 2)
                   .map((booking) => {
-                    const destination = booking.destination_cities?.[0] || '—';
+                    const destination = booking.destination_cities?.[0]
+                      || booking.pickup_address?.split(',')[0]
+                      || '—';
                     const dateStr = booking.scheduled_for
                       ? new Date(booking.scheduled_for).toLocaleDateString('en-US', {
                           month: 'short',

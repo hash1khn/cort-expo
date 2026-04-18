@@ -49,6 +49,19 @@ export type ShuttleTripForEmployee = {
 export type GetShuttleTripsForEmployeeParams = {
   companyId: number;
   employeeId: string;
+  /** Optional page number (1-based). When omitted the server returns all trips. */
+  page?: number;
+  /** Optional page size. When omitted the server returns all trips. */
+  limit?: number;
+};
+
+export type ShuttleTripsForEmployeePagination = {
+  page: number;
+  pages: number;
+  limit: number;
+  total: number;
+  hasNext: boolean;
+  hasPrev: boolean;
 };
 
 export type PolylinePoint = { lat: number; lng: number };
@@ -70,10 +83,19 @@ export const employeeShuttleApi = baseApi.injectEndpoints({
       ShuttleTripForEmployee[],
       GetShuttleTripsForEmployeeParams
     >({
-      query: ({ companyId, employeeId }) => ({
+      query: ({ companyId, employeeId, page, limit }) => ({
         url: '/shuttle-trips/for-employee',
-        params: { company_id: companyId, employee_id: employeeId },
+        params: {
+          company_id: companyId,
+          employee_id: employeeId,
+          ...(page != null ? { page } : {}),
+          ...(limit != null ? { limit } : {}),
+        },
       }),
+      // Backend now always returns { data: [...], pagination: {...} }
+      // Unwrap so consumers still receive ShuttleTripForEmployee[] directly.
+      transformResponse: (response: { data: ShuttleTripForEmployee[]; pagination: ShuttleTripsForEmployeePagination }) =>
+        response.data,
       providesTags: ['ShuttleTrip'],
     }),
 

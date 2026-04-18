@@ -12,6 +12,7 @@ type RoleKey = 'employee' | 'driver' | 'chauffeur';
 
 type Props = {
   onSelectRole: (role: RoleKey) => void;
+  onChauffeurApply?: () => void;
 };
 
 const ROLES = [
@@ -36,18 +37,22 @@ const ROLES = [
 ];
 
 export const RoleSelectBottomSheet = forwardRef<BottomSheetModal, Props>(
-  ({ onSelectRole }, ref) => {
+  ({ onSelectRole, onChauffeurApply }, ref) => {
     const [selectedRole, setSelectedRole] = useState<RoleKey>('employee');
     
     // Slightly reduced snap point for a more compact feel
     const snapPoints = useMemo(() => ['51%'], []);
 
     const handleContinue = useCallback(() => {
-      onSelectRole(selectedRole);
       if (ref && typeof ref !== 'function' && ref.current) {
         ref.current.dismiss();
       }
-    }, [onSelectRole, selectedRole, ref]);
+      if (selectedRole === 'chauffeur') {
+        setTimeout(() => onChauffeurApply?.(), 350);
+      } else {
+        setTimeout(() => onSelectRole(selectedRole), 350);
+      }
+    }, [onSelectRole, onChauffeurApply, selectedRole, ref]);
 
     const renderBackdrop = useCallback(
       (props: any) => (

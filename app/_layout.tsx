@@ -32,6 +32,7 @@ import { logOut } from '../src/features/auth/store/auth.slice';
 import { setOnUnauthorized } from '../src/services/api';
 import { useSplashPrefetch } from '../src/features/employee/hooks/useSplashPrefetch';
 import { useSocketConnection } from '../src/hooks/useSocketConnection';
+import { useNetworkToast } from '../src/hooks/useNetworkToast';
 import { useAppLaunchRideCheck } from '../src/hooks/useAppLaunchRideCheck';
 import { tokenStorage } from '../src/features/auth/utils/tokenStorage';
 import { router } from 'expo-router';
@@ -129,6 +130,7 @@ function RootLayoutContent() {
 
   // Manage socket connection lifecycle (foreground/background)
   useSocketConnection(authToken);
+  useNetworkToast();
 
   useAppLaunchRideCheck(user?.id, (rideData) => {
     if (rideData.role === 'driver') {

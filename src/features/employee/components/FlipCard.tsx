@@ -2,8 +2,10 @@ import React, { useState, useRef, useCallback } from "react";
 import { LinearGradient } from "expo-linear-gradient";
 import {
     StyleSheet, View, Text, Modal, Pressable,
-    TextInput, ActivityIndicator, ScrollView,
+    TextInput, ActivityIndicator, ScrollView, Platform,
 } from "react-native";
+import MapView, { Marker, PROVIDER_GOOGLE, Region } from 'react-native-maps';
+import { GooglePlacesAutocomplete } from 'react-native-google-places-autocomplete';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
@@ -86,10 +88,14 @@ const FrontContent = ({ booking, shuttleTrip, isLoading, isChauffeurEnabled, isS
     // Shuttle-specific
     const shuttleStatus = shuttleTrip?.status?.toUpperCase();
     const isShuttleActive = shuttleStatus === 'STARTED' || shuttleStatus === 'IN_PROGRESS';
-    const shuttlePickupTime = formatEta(shuttleTrip?.my_pickup_stop?.morning_eta ?? null);
+    const shuttleDirection = shuttleTrip?.direction;
+    const shuttlePickupEta = shuttleDirection === 'EVENING'
+        ? (shuttleTrip?.my_pickup_stop?.evening_eta ?? null)
+        : (shuttleTrip?.my_pickup_stop?.morning_eta ?? null);
+    const shuttlePickupTime = formatEta(shuttlePickupEta);
     const routeName = shuttleTrip?.routes?.name ?? 'Daily Shuttle';
 
-    const isShuttleMode = !!shuttleTrip && !booking;
+    const isShuttleMode = !!isShuttleEnabled && !booking;
     // During loading, trip data isn't available yet — derive illustration from enabled-service flags.
     const loadingIsShuttleMode = !isChauffeurEnabled && !!isShuttleEnabled;
     const illustration = (isLoading ? loadingIsShuttleMode : isShuttleMode)
@@ -128,7 +134,7 @@ const FrontContent = ({ booking, shuttleTrip, isLoading, isChauffeurEnabled, isS
                     ? 'No schedule\ntoday'
                     : '—';
 
-    const isEmptyState = !hasTrip && isChauffeurMode;
+    const isEmptyState = !hasTrip;
 
     const timeDisplay = booking
         ? (isChauffeurActive ? 'In Progress' : (booking.scheduled_for ? new Date(booking.scheduled_for).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'))
@@ -276,7 +282,9 @@ const BackContent = ({ booking, shuttleTrip, onClose, onRequestCaptain }: BackCo
                                     ? (isDroppedOff ? 'In Progress' : (booking!.scheduled_for ? new Date(booking!.scheduled_for).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'))
                                     : (shuttleTrip?.status?.toUpperCase() === 'STARTED' || shuttleTrip?.status?.toUpperCase() === 'IN_PROGRESS'
                                         ? 'In Progress'
-                                        : formatEta(shuttleTrip?.my_pickup_stop?.morning_eta ?? null))}
+                                        : formatEta(shuttleTrip?.direction === 'EVENING'
+                                            ? (shuttleTrip?.my_pickup_stop?.evening_eta ?? null)
+                                            : (shuttleTrip?.my_pickup_stop?.morning_eta ?? null)))}
                             </Text>
                             <Text style={styles.infoCellSub}>Today</Text>
                         </View>
@@ -325,7 +333,7 @@ const BackContent = ({ booking, shuttleTrip, onClose, onRequestCaptain }: BackCo
 
 // ── Pickup Location Sheet ───────────────────────────────────────────────────
 
-type SheetMode = 'compact' | 'search';
+type SheetMode = 'compact' | 'searchmap';
 
 interface PickupSheetProps {
     visible: boolean;
@@ -336,7 +344,47 @@ interface PickupSheetProps {
     onDone: () => void;
 }
 
-const SHEET_COMPACT_HEIGHT = 320;
+// Height for the compact 2-option view (without bottom insets — added dynamically)
+const SHEET_COMPACT_HEIGHT = 330;
+
+const GOOGLE_PLACES_API_KEY = Platform.OS === 'ios'
+    ? (process.env.EXPO_PUBLIC_IOS_GOOGLE_API_KEY ?? '')
+    : (process.env.EXPO_PUBLIC_ANDROID_GOOGLE_API_KEY ?? '');
+
+/**
+ * Reverse-geocode coordinates to a human-readable address string.
+ * Tries Google Geocoding REST API first (best accuracy). If that fails or the
+ * key doesn't have Geocoding API enabled, falls back to expo-location with
+ * de-duplicated formatting so cities don't appear twice.
+ */
+async function reverseGeocodeAddress(lat: number, lon: number): Promise<string> {
+    // 1. Google Geocoding REST API
+    try {
+        const url = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lon}&key=${GOOGLE_PLACES_API_KEY}&language=en`;
+        const res = await fetch(url);
+        const json = await res.json();
+        if (json.status === 'OK' && json.results?.length > 0) {
+            return json.results[0].formatted_address as string;
+        }
+    } catch { /* fall through */ }
+
+    // 2. expo-location fallback with smart deduplication
+    try {
+        const results = await Location.reverseGeocodeAsync({ latitude: lat, longitude: lon });
+        if (results.length > 0) {
+            const a = results[0];
+            // expo-location ≥15 may expose formattedAddress directly
+            if ((a as any).formattedAddress) return (a as any).formattedAddress as string;
+            // Build manually — filter nulls then deduplicate consecutive identical tokens
+            const parts = [a.name, a.street, a.district, a.city, a.country]
+                .filter((p): p is string => !!p && p.trim().length > 0);
+            const deduped = parts.filter((p, i) => p !== parts[i - 1]);
+            if (deduped.length > 0) return deduped.join(', ');
+        }
+    } catch { /* fall through */ }
+
+    return 'Current Location';
+}
 
 const PickupSheet = ({ visible, screenHeight, booking, onClose, onDone }: PickupSheetProps) => {
     const insets = useSafeAreaInsets();
@@ -345,12 +393,16 @@ const PickupSheet = ({ visible, screenHeight, booking, onClose, onDone }: Pickup
     const [requestNextDayPickup, { isLoading: isRequesting }] = useRequestNextDayPickupMutation();
 
     const [mode, setMode] = useState<SheetMode>('compact');
-    const [query, setQuery] = useState('');
-    const [suggestions, setSuggestions] = useState<string[]>([]);
-    const [isSuggestionsLoading, setIsSuggestionsLoading] = useState(false);
     const [resolvedCurrentAddress, setResolvedCurrentAddress] = useState<string | null>(null);
     const [isResolvingLocation, setIsResolvingLocation] = useState(false);
-    const inputRef = useRef<TextInput>(null);
+
+    // Shared map state (used in searchmap mode)
+    const DEFAULT_REGION: Region = { latitude: 24.8607, longitude: 67.0011, latitudeDelta: 0.01, longitudeDelta: 0.01 };
+    const [mapRegion, setMapRegion] = useState<Region>(DEFAULT_REGION);
+    const [mapAddress, setMapAddress] = useState<string | null>(null);
+    const [isGeocodingMap, setIsGeocodingMap] = useState(false);
+    const geocodeDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const mapRef = useRef<MapView>(null);
 
     const translateY = useSharedValue(screenHeight);
     const [mounted, setMounted] = useState(false);
@@ -360,37 +412,23 @@ const PickupSheet = ({ visible, screenHeight, booking, onClose, onDone }: Pickup
         if (visible) {
             setMounted(true);
             setMode('compact');
-            setQuery('');
-            setSuggestions([]);
             setResolvedCurrentAddress(null);
-            // Small delay so the component has rendered before the spring starts
+            setMapAddress(null);
+            setMapRegion(DEFAULT_REGION);
             requestAnimationFrame(() => {
                 translateY.value = withSpring(0, { damping: 22, stiffness: 160, mass: 0.9 });
             });
-            // Pre-fetch current location immediately when sheet opens
             resolveCurrentLocation();
         } else {
-            // Animate out first, then unmount
             translateY.value = withSpring(
                 screenHeight,
                 { damping: 22, stiffness: 160, mass: 0.9, overshootClamping: true },
-                (finished) => {
-                    if (finished) runOnJS(setMounted)(false);
-                }
+                (finished) => { if (finished) runOnJS(setMounted)(false); }
             );
-            // Failsafe unmount
             setTimeout(() => setMounted(false), 450);
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [visible]);
-
-    // Focus input and keep sheet fully open when entering search mode
-    React.useEffect(() => {
-        if (!visible) return;
-        if (mode === 'search') {
-            setTimeout(() => inputRef.current?.focus(), 80);
-        }
-    }, [mode, visible]);
 
     const resolveCurrentLocation = async () => {
         setIsResolvingLocation(true);
@@ -401,57 +439,35 @@ const PickupSheet = ({ visible, screenHeight, booking, onClose, onDone }: Pickup
                 return;
             }
             const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-            const geocoded = await Location.reverseGeocodeAsync({
-                latitude: loc.coords.latitude,
-                longitude: loc.coords.longitude,
-            });
-            if (geocoded.length > 0) {
-                const addr = geocoded[0];
-                const full = [addr.name, addr.street, addr.district, addr.city].filter(Boolean).join(', ');
-                setResolvedCurrentAddress(full || 'Current Location');
-            } else {
-                setResolvedCurrentAddress('Current Location');
-            }
+            const { latitude, longitude } = loc.coords;
+            const region: Region = { latitude, longitude, latitudeDelta: 0.01, longitudeDelta: 0.01 };
+            setMapRegion(region);
+            // Use Google Geocoding for proper street-level address
+            const address = await reverseGeocodeAddress(latitude, longitude);
+            setResolvedCurrentAddress(address);
+            setMapAddress(address);
         } catch {
-            setResolvedCurrentAddress(booking.pickup_address ?? 'Current Location');
+            const fallback = booking.pickup_address ?? 'Current Location';
+            setResolvedCurrentAddress(fallback);
+            setMapAddress(fallback);
         } finally {
             setIsResolvingLocation(false);
         }
     };
 
-    const searchSuggestions = useCallback(async (text: string) => {
-        if (text.trim().length < 3) {
-            setSuggestions([]);
-            return;
-        }
-        setIsSuggestionsLoading(true);
-        try {
-            const results = await Location.geocodeAsync(text);
-            // geocodeAsync only returns coords; reverse-geocode up to 5 to build readable labels
-            const labels: string[] = [];
-            for (const r of results.slice(0, 5)) {
-                const rev = await Location.reverseGeocodeAsync({ latitude: r.latitude, longitude: r.longitude });
-                if (rev.length > 0) {
-                    const a = rev[0];
-                    const label = [a.name, a.street, a.district, a.city].filter(Boolean).join(', ');
-                    if (label && !labels.includes(label)) labels.push(label);
-                }
+    // Debounced Google reverse-geocode when user pans the map
+    const geocodeMapCenter = useCallback((lat: number, lon: number) => {
+        if (geocodeDebounceRef.current) clearTimeout(geocodeDebounceRef.current);
+        geocodeDebounceRef.current = setTimeout(async () => {
+            setIsGeocodingMap(true);
+            try {
+                const address = await reverseGeocodeAddress(lat, lon);
+                setMapAddress(address);
+            } finally {
+                setIsGeocodingMap(false);
             }
-            setSuggestions(labels);
-        } catch {
-            setSuggestions([]);
-        } finally {
-            setIsSuggestionsLoading(false);
-        }
+        }, 400);
     }, []);
-
-    // Debounce query changes
-    const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-    const handleQueryChange = (text: string) => {
-        setQuery(text);
-        if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
-        searchDebounceRef.current = setTimeout(() => searchSuggestions(text), 400);
-    };
 
     const submitPickup = async (address: string) => {
         try {
@@ -464,7 +480,7 @@ const PickupSheet = ({ visible, screenHeight, booking, onClose, onDone }: Pickup
             const driver = booking.users_chauffeur_bookings_driver_idTousers;
             const vehicle = booking.vehicles;
 
-            onDone(); // close sheet + modal together
+            onDone();
             setTimeout(() => {
                 router.push({
                     pathname: '/employee/waiting',
@@ -495,154 +511,235 @@ const PickupSheet = ({ visible, screenHeight, booking, onClose, onDone }: Pickup
 
     if (!mounted) return null;
 
-    const isSearch = mode === 'search';
-    // In search mode the sheet covers the full screen and respects top safe area
-    const sheetTop = isSearch ? insets.top : undefined;
-    const sheetHeight = isSearch ? screenHeight - insets.top : SHEET_COMPACT_HEIGHT;
+    const isFullScreen = mode === 'searchmap';
+    const sheetTop = isFullScreen ? insets.top : undefined;
+    // Compact height accounts for Android bottom nav bar via insets.bottom
+    const sheetHeight = isFullScreen
+        ? screenHeight - insets.top
+        : SHEET_COMPACT_HEIGHT + insets.bottom;
 
     return (
         <>
-            {/* Dim overlay — only interactive when sheet is in compact mode so search input isn't blocked */}
             <Pressable style={StyleSheet.absoluteFill} onPress={visible ? onClose : undefined} />
 
             <Animated.View style={[styles.pickupSheet, { height: sheetHeight, top: sheetTop }, sheetStyle]}>
-                    {/* Handle — hidden in full-screen search mode */}
-                    {!isSearch && <View style={styles.sheetHandle} />}
+                {!isFullScreen && <View style={styles.sheetHandle} />}
 
-                    {!isSearch ? (
-                        <View style={styles.sheetBody}>
-                            <Text style={styles.sheetTitle}>Where should we pick you up?</Text>
-                            <Text style={styles.sheetSubtitle}>Choose your pickup location for today's ride</Text>
+                {mode === 'compact' && (
+                    <View style={[styles.sheetBody, { paddingBottom: 28 + insets.bottom }]}>
+                        <Text style={styles.sheetTitle}>Where should we pick you up?</Text>
+                        <Text style={styles.sheetSubtitle}>Choose your pickup location for today's ride</Text>
 
-                            {/* Option A – Current Location */}
-                            <Pressable
-                                onPress={() => {
-                                    if (!isResolvingLocation && resolvedCurrentAddress && resolvedCurrentAddress !== 'Location permission denied') {
-                                        submitPickup(resolvedCurrentAddress);
-                                    }
-                                }}
-                                disabled={isResolvingLocation || isRequesting}
-                                style={({ pressed }) => pressed && { opacity: 0.75 }}
-                            >
-                                <View style={styles.locationOption}>
-                                    <View style={styles.locationOptionIcon}>
-                                        <Ionicons name="navigate" size={18} color="#fff" />
-                                    </View>
-                                    <View style={styles.locationOptionTextBlock}>
-                                        <Text style={styles.locationOptionTitle}>Use current location</Text>
-                                        {isResolvingLocation ? (
-                                            <View style={styles.locationOptionDetecting}>
-                                                <ActivityIndicator size="small" color="#999" />
-                                                <Text style={styles.locationOptionSub}>Detecting location…</Text>
-                                            </View>
-                                        ) : (
-                                            <Text style={styles.locationOptionSub} numberOfLines={1}>
-                                                {resolvedCurrentAddress ?? '—'}
-                                            </Text>
-                                        )}
-                                    </View>
-                                    {isRequesting
-                                        ? <ActivityIndicator size="small" color="#000" />
-                                        : <Ionicons name="chevron-forward" size={18} color="#aaa" />}
+                        {/* Option A – Current Location */}
+                        <Pressable
+                            onPress={() => {
+                                if (!isResolvingLocation && resolvedCurrentAddress && resolvedCurrentAddress !== 'Location permission denied') {
+                                    submitPickup(resolvedCurrentAddress);
+                                }
+                            }}
+                            disabled={isResolvingLocation || isRequesting}
+                            style={({ pressed }) => pressed && { opacity: 0.75 }}
+                        >
+                            <View style={styles.locationOption}>
+                                <View style={styles.locationOptionIcon}>
+                                    <Ionicons name="navigate" size={18} color="#fff" />
                                 </View>
-                            </Pressable>
-
-                            {/* Option B – Enter manually */}
-                            <Pressable
-                                onPress={() => setMode('search')}
-                                style={({ pressed }) => pressed && { opacity: 0.75 }}
-                            >
-                                <View style={styles.locationOption}>
-                                    <View style={[styles.locationOptionIcon, { backgroundColor: '#1a1a1a' }]}>
-                                        <Ionicons name="search" size={18} color="#fff" />
-                                    </View>
-                                    <View style={styles.locationOptionTextBlock}>
-                                        <Text style={styles.locationOptionTitle}>Enter pickup address</Text>
-                                        <Text style={styles.locationOptionSub}>Type any address or landmark</Text>
-                                    </View>
-                                    <Ionicons name="chevron-forward" size={18} color="#aaa" />
-                                </View>
-                            </Pressable>
-                        </View>
-                    ) : (
-                        // ── Search / full-screen mode ──────────────────────────
-                        <View style={{ flex: 1 }}>
-                            {/* Search bar row — extra top padding for safe area */}
-                            <View style={[styles.searchBarRow, { paddingTop: 16 }]}>
-                                <Pressable onPress={() => { setMode('compact'); setQuery(''); setSuggestions([]); }} hitSlop={12}>
-                                    <Ionicons name="arrow-back" size={22} color="#000" />
-                                </Pressable>
-                                <View style={styles.searchInputWrapper}>
-                                    <Ionicons name="location-outline" size={16} color="#999" style={{ marginRight: 6 }} />
-                                    <TextInput
-                                        ref={inputRef}
-                                        style={styles.searchInput}
-                                        placeholder="Search for an address…"
-                                        placeholderTextColor="#aaa"
-                                        value={query}
-                                        onChangeText={handleQueryChange}
-                                        autoCorrect={false}
-                                        returnKeyType="search"
-                                    />
-                                    {query.length > 0 && (
-                                        <Pressable onPress={() => { setQuery(''); setSuggestions([]); }} hitSlop={10}>
-                                            <Ionicons name="close-circle" size={18} color="#bbb" />
-                                        </Pressable>
+                                <View style={styles.locationOptionTextBlock}>
+                                    <Text style={styles.locationOptionTitle}>Use current location</Text>
+                                    {isResolvingLocation ? (
+                                        <View style={styles.locationOptionDetecting}>
+                                            <ActivityIndicator size="small" color="#999" />
+                                            <Text style={styles.locationOptionSub}>Detecting location…</Text>
+                                        </View>
+                                    ) : (
+                                        <Text style={styles.locationOptionSub} numberOfLines={1}>
+                                            {resolvedCurrentAddress ?? '—'}
+                                        </Text>
                                     )}
                                 </View>
+                                {isRequesting
+                                    ? <ActivityIndicator size="small" color="#000" />
+                                    : <Ionicons name="chevron-forward" size={18} color="#aaa" />}
+                            </View>
+                        </Pressable>
+
+                        {/* Option B – Search + map picker */}
+                        <Pressable
+                            onPress={() => setMode('searchmap')}
+                            style={({ pressed }) => pressed && { opacity: 0.75 }}
+                        >
+                            <View style={styles.locationOption}>
+                                <View style={[styles.locationOptionIcon, { backgroundColor: '#1a1a1a' }]}>
+                                    <Ionicons name="search" size={18} color="#fff" />
+                                </View>
+                                <View style={styles.locationOptionTextBlock}>
+                                    <Text style={styles.locationOptionTitle}>Enter pickup address</Text>
+                                    <Text style={styles.locationOptionSub}>Search or pin on map</Text>
+                                </View>
+                                <Ionicons name="chevron-forward" size={18} color="#aaa" />
+                            </View>
+                        </Pressable>
+                    </View>
+                )}
+
+                {mode === 'searchmap' && (
+                    // ── Merged: Google Places autocomplete overlaid on live map ──
+                    <View style={{ flex: 1 }}>
+
+                        {/* Header row */}
+                        <View style={styles.searchMapHeader}>
+                            <Pressable onPress={() => setMode('compact')} hitSlop={12}>
+                                <Ionicons name="arrow-back" size={22} color="#000" />
+                            </Pressable>
+                            <Text style={styles.searchMapHeaderTitle}>Pick your location</Text>
+                        </View>
+
+                        {/* Map + search overlay container */}
+                        <View style={{ flex: 1 }}>
+                            {/* Map fills the whole area */}
+                            <MapView
+                                ref={mapRef}
+                                provider={PROVIDER_GOOGLE}
+                                style={StyleSheet.absoluteFill}
+                                region={mapRegion}
+                                onRegionChangeComplete={(region) => {
+                                    setMapRegion(region);
+                                    geocodeMapCenter(region.latitude, region.longitude);
+                                }}
+                                showsUserLocation
+                                showsMyLocationButton={false}
+                            />
+
+                            {/* Fixed center pin — tip sits at exact centre */}
+                            <View style={styles.mapPinContainer} pointerEvents="none">
+                                <Ionicons name="location" size={44} color="#F4593B" />
                             </View>
 
-                            <View style={styles.searchDivider} />
-
-                            {isSuggestionsLoading ? (
-                                <View style={styles.suggestionsLoader}>
-                                    <ActivityIndicator size="small" color="#999" />
-                                    <Text style={styles.locationOptionSub}>Searching…</Text>
-                                </View>
-                            ) : (
-                                <ScrollView keyboardShouldPersistTaps="handled" style={{ flex: 1 }}>
-                                    {suggestions.length === 0 && query.length >= 3 && (
-                                        <View style={styles.noResults}>
-                                            <Text style={styles.noResultsText}>No results found</Text>
+                            {/* Search bar overlay — floats at top of map */}
+                            <View style={styles.searchOverlay}>
+                                <GooglePlacesAutocomplete
+                                    placeholder="Search address or landmark…"
+                                    fetchDetails={true}
+                                    debounce={400}
+                                    minLength={2}
+                                    enablePoweredByContainer={false}
+                                    textInputProps={{ autoFocus: true }}
+                                    onPress={(data, detail) => {
+                                        const lat = detail?.geometry?.location?.lat;
+                                        const lng = detail?.geometry?.location?.lng;
+                                        const address = detail?.formatted_address ?? data.description;
+                                        setMapAddress(address);
+                                        if (lat != null && lng != null) {
+                                            const newRegion: Region = {
+                                                latitude: lat,
+                                                longitude: lng,
+                                                latitudeDelta: 0.005,
+                                                longitudeDelta: 0.005,
+                                            };
+                                            setMapRegion(newRegion);
+                                            mapRef.current?.animateToRegion(newRegion, 500);
+                                        }
+                                    }}
+                                    query={{ key: GOOGLE_PLACES_API_KEY, language: 'en' }}
+                                    styles={{
+                                        container: {
+                                            flex: 0,
+                                        },
+                                        textInputContainer: {
+                                            paddingHorizontal: 0,
+                                            paddingTop: 0,
+                                            paddingBottom: 0,
+                                            backgroundColor: 'transparent',
+                                        },
+                                        textInput: {
+                                            height: 46,
+                                            backgroundColor: '#fff',
+                                            borderRadius: 12,
+                                            paddingHorizontal: 14,
+                                            fontSize: 15,
+                                            color: '#000',
+                                            shadowColor: '#000',
+                                            shadowOffset: { width: 0, height: 2 },
+                                            shadowOpacity: 0.12,
+                                            shadowRadius: 6,
+                                            elevation: 4,
+                                            margin: 0,
+                                        },
+                                        listView: {
+                                            backgroundColor: '#fff',
+                                            borderRadius: 12,
+                                            marginTop: 6,
+                                            maxHeight: 220,
+                                            shadowColor: '#000',
+                                            shadowOffset: { width: 0, height: 4 },
+                                            shadowOpacity: 0.1,
+                                            shadowRadius: 10,
+                                            elevation: 6,
+                                            overflow: 'hidden',
+                                        },
+                                        row: {
+                                            paddingHorizontal: 14,
+                                            paddingVertical: 12,
+                                            borderBottomWidth: 1,
+                                            borderBottomColor: '#f4f4f4',
+                                            backgroundColor: '#fff',
+                                        },
+                                        description: {
+                                            fontSize: 14,
+                                            color: '#000',
+                                            fontWeight: '500',
+                                        },
+                                        separator: { height: 0 },
+                                        poweredContainer: { display: 'none' },
+                                    }}
+                                    renderRow={(data) => (
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                                            <View style={styles.suggestionIcon}>
+                                                <Ionicons name="location-outline" size={15} color="#555" />
+                                            </View>
+                                            <Text style={[styles.suggestionText, { flex: 1 }]} numberOfLines={2}>
+                                                {data.description}
+                                            </Text>
                                         </View>
                                     )}
-                                    {suggestions.map((s, i) => (
-                                        <Pressable
-                                            key={i}
-                                            style={({ pressed }) => [styles.suggestionRow, pressed && { backgroundColor: '#f5f5f5' }]}
-                                            onPress={() => submitPickup(s)}
-                                            disabled={isRequesting}
-                                        >
-                                            <View style={styles.suggestionIcon}>
-                                                <Ionicons name="location-outline" size={16} color="#555" />
-                                            </View>
-                                            <Text style={styles.suggestionText} numberOfLines={2}>{s}</Text>
-                                            {isRequesting ? (
-                                                <ActivityIndicator size="small" color="#aaa" />
-                                            ) : null}
-                                        </Pressable>
-                                    ))}
-
-                                    {/* Confirm typed address directly if no suggestions picked */}
-                                    {query.trim().length > 0 && (
-                                        <Pressable
-                                            style={({ pressed }) => [styles.confirmTypedRow, pressed && { opacity: 0.8 }]}
-                                            onPress={() => submitPickup(query.trim())}
-                                            disabled={isRequesting}
-                                        >
-                                            <View style={[styles.suggestionIcon, { backgroundColor: '#000' }]}>
-                                                <Ionicons name="checkmark" size={16} color="#F1F443" />
-                                            </View>
-                                            <Text style={styles.confirmTypedText} numberOfLines={1}>
-                                                Use "{query.trim()}"
-                                            </Text>
-                                            {isRequesting && <ActivityIndicator size="small" color="#aaa" />}
-                                        </Pressable>
-                                    )}
-                                </ScrollView>
-                            )}
+                                    // renderRightButton={() => (
+                                    //     <View style={{ justifyContent: 'center', paddingLeft: 12, paddingRight: 4 }}>
+                                    //         <Ionicons name="search" size={18} color="#999" />
+                                    //     </View>
+                                    // )}
+                                    keyboardShouldPersistTaps="handled"
+                                />
+                            </View>
                         </View>
-                    )}
+
+                        {/* Confirm bar — shows reverse-geocoded address + confirm button */}
+                        <View style={[styles.mapConfirmBar, { paddingBottom: 16 + insets.bottom }]}>
+                            <View style={{ flex: 1, marginRight: 12 }}>
+                                {isGeocodingMap ? (
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                        <ActivityIndicator size="small" color="#999" />
+                                        <Text style={styles.locationOptionSub}>Resolving address…</Text>
+                                    </View>
+                                ) : (
+                                    <Text style={styles.mapAddressText} numberOfLines={2}>
+                                        {mapAddress ?? 'Pan the map to select a location'}
+                                    </Text>
+                                )}
+                            </View>
+                            <Pressable
+                                onPress={() => mapAddress ? submitPickup(mapAddress) : undefined}
+                                disabled={!mapAddress || isGeocodingMap || isRequesting}
+                                style={({ pressed }) => pressed && { opacity: 0.8 }}
+                            >
+                                <View style={[styles.mapConfirmButton, (!mapAddress || isGeocodingMap) && { opacity: 0.4 }]}>
+                                    {isRequesting
+                                        ? <ActivityIndicator size="small" color="#F1F443" />
+                                        : <Text style={styles.mapConfirmButtonText}>Confirm</Text>}
+                                </View>
+                            </Pressable>
+                        </View>
+                    </View>
+                )}
             </Animated.View>
         </>
     );
@@ -1326,6 +1423,77 @@ const styles = StyleSheet.create({
     noResultsText: {
         fontSize: 14,
         color: 'rgba(0,0,0,0.35)',
+        fontFamily,
+    },
+
+    // ── Map picker ─────────────────────────────────────────
+    mapPinContainer: {
+        position: 'absolute',
+        top: '50%',
+        left: '50%',
+        marginLeft: -22,   // half of 44px icon
+        marginTop: -44,    // tip of pin icon sits at exact centre
+        zIndex: 5,
+    },
+    // Search bar floating over the map
+    searchOverlay: {
+        position: 'absolute',
+        top: 12,
+        left: 12,
+        right: 12,
+        zIndex: 10,
+        elevation: 10,
+    },
+    // Header for searchmap mode
+    searchMapHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 16,
+        paddingTop: 16,
+        paddingBottom: 10,
+        gap: 10,
+        borderTopLeftRadius: 20,
+        borderTopRightRadius: 20,
+        backgroundColor: '#fff',
+        borderBottomWidth: 1,
+        borderBottomColor: '#f0f0f0',
+    },
+    searchMapHeaderTitle: {
+        fontSize: 16,
+        fontWeight: '800',
+        color: '#000',
+        letterSpacing: -0.2,
+        fontFamily,
+    },
+    mapConfirmBar: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 16,
+        paddingVertical: 14,
+        borderTopWidth: 1,
+        borderTopColor: '#f0f0f0',
+        backgroundColor: '#fff',
+    },
+    mapAddressText: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: '#000',
+        fontFamily,
+        lineHeight: 20,
+    },
+    mapConfirmButton: {
+        backgroundColor: '#000',
+        paddingHorizontal: 20,
+        paddingVertical: 12,
+        borderRadius: 12,
+        minWidth: 90,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    mapConfirmButtonText: {
+        color: '#F1F443',
+        fontWeight: '800',
+        fontSize: 14,
         fontFamily,
     },
 });

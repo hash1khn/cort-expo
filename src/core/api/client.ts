@@ -35,6 +35,36 @@ export async function apiFetch(path: string, init: ApiRequestInit = {}): Promise
   const res = await fetch(url, { ...rest, headers });
 
   if (res.status === 401) {
+    const refreshToken = await tokenStorage.getRefreshToken();
+
+    if (refreshToken) {
+      try {
+        const refreshRes = await fetch(`${baseUrl()}/auth/refresh-token`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refreshToken }),
+        });
+
+        if (refreshRes.ok) {
+          const json = (await refreshRes.json()) as {
+            data: { session: { access_token: string; refresh_token: string } };
+          };
+          const session = json.data.session;
+          await tokenStorage.setTokens(session.access_token, session.refresh_token);
+
+          // Retry original request with new access token
+          const retryHeaders = new Headers(rest.headers);
+          retryHeaders.set('Authorization', `Bearer ${session.access_token}`);
+          if (!retryHeaders.has('Content-Type') && (rest.method === 'POST' || rest.method === 'PUT' || rest.method === 'PATCH')) {
+            retryHeaders.set('Content-Type', 'application/json');
+          }
+          return fetch(url, { ...rest, headers: retryHeaders });
+        }
+      } catch {
+        // refresh request failed — fall through to logout
+      }
+    }
+
     await tokenStorage.clearTokens();
     onUnauthorized?.();
   }

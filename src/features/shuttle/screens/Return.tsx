@@ -37,10 +37,10 @@ type ReturnEmployee = {
   absentReason?: AbsentReason;
 };
 
-const ABSENT_REASONS: { value: AbsentReason; label: string }[] = [
-  { value: 'SELF_COMMUTE', label: 'Self commute' },
-  { value: 'LATE', label: 'Late' },
-  { value: 'SICK', label: 'Sick' },
+const ABSENT_REASONS: { value: AbsentReason; label: { en: string; ur: string } }[] = [
+  { value: 'SELF_COMMUTE', label: { en: 'Self commute', ur: 'خود آنا جانا' } },
+  { value: 'LATE', label: { en: 'Late', ur: 'دیر' } },
+  { value: 'SICK', label: { en: 'Sick', ur: 'بیمار' } },
 ];
 
 function getInitials(name: string) {
@@ -52,8 +52,8 @@ function getInitials(name: string) {
     .toUpperCase();
 }
 
-function getAbsentReasonLabel(reason: AbsentReason): string {
-  return ABSENT_REASONS.find((r) => r.value === reason)?.label ?? reason;
+function getAbsentReasonLabel(reason: AbsentReason, language: 'en' | 'ur'): string {
+  return ABSENT_REASONS.find((r) => r.value === reason)?.label[language] ?? reason;
 }
 
 export default function Return() {
@@ -435,7 +435,7 @@ export default function Return() {
                   <View className="flex-row items-center mt-1">
                     <AppText className="text-[#8E8E93] text-[15px] mr-2" numberOfLines={1}>
                       {emp.status === 'absent' && emp.absentReason
-                        ? getAbsentReasonLabel(emp.absentReason)
+                        ? getAbsentReasonLabel(emp.absentReason, language)
                         : (emp.number || 'No number')}
                     </AppText>
                   </View>
@@ -500,8 +500,8 @@ export default function Return() {
           )}
           <AppText className="text-white text-[17px] font-bold mr-1">
             {isActionLoading
-              ? (returnTripStarted ? 'Completing...' : (isUrdu ? 'شروع ہو رہی' : 'Beginning...'))
-              : (returnTripStarted ? 'Complete Trip' : (isUrdu ? 'شروع کریں' : 'Begin ride'))}
+              ? (returnTripStarted ? (isUrdu ? 'مکمل ہو رہا ہے...' : 'Completing...') : (isUrdu ? 'شروع ہو رہی' : 'Beginning...'))
+              : (returnTripStarted ? (isUrdu ? 'سفر مکمل کریں' : 'Complete Trip') : (isUrdu ? 'شروع کریں' : 'Begin ride'))}
           </AppText>
           {/* <Ionicons name="chevron-forward" size={22} color="#FFF" /> */}
         </Pressable>
@@ -521,8 +521,11 @@ export default function Return() {
       >
         <BottomSheetView style={styles.absentSheetContent}>
           <View className="px-5 pb-8 ">
-            <AppText className="text-lg font-bold mb-4 text-black">
-              Why is this person absent?
+            <AppText
+              className="text-lg font-bold mb-4 text-black"
+              style={isUrdu ? { paddingVertical: 6 } : undefined}
+            >
+              {isUrdu ? 'یہ شخص غیر حاضر کیوں ہے؟' : 'Why is this person absent?'}
             </AppText>
 
 
@@ -537,8 +540,11 @@ export default function Return() {
                   borderColor: 'rgba(209,213,219,1)',
                 }}
               >
-                <AppText className="text-base font-semibold text-black">
-                  {reason.label}
+                <AppText
+                  className="text-base font-semibold text-black"
+                  style={isUrdu ? { paddingVertical: 6 } : undefined}
+                >
+                  {reason.label[language]}
                 </AppText>
               </Pressable>
             ))}

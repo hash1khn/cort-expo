@@ -9,16 +9,84 @@ import { useToast } from '@/shared/ui/molecules/Toast';
 import { CustomToast } from '@/features/shared/components/CustomToast';
 import { useEndDriverBookingMutation } from '../services/chauffeur.api';
 import { stopLocationTracking } from '@/services/location/riderLocationService';
+import { useLanguage } from '@/features/shared/context/LanguageContext';
 
 const Text = (props: React.ComponentProps<typeof RNText>) => {
     return <RNText {...props} style={[{ fontFamily }, props.style]} />;
 };
+
+// ─── Translations ─────────────────────────────────────────────────────────────
+
+const LABELS = {
+  en: {
+    title: 'End Ride',
+    uploadInstruction: (step: string) => `Please upload `,
+    uploadInstructionBold: (step: string) => step.toLowerCase(),
+    uploadInstructionSuffix: ' photo to end ride.',
+    steps: {
+      Meter: 'Meter',
+      Parking: 'Parking',
+      'Toll receipt': 'Toll receipt',
+    } as Record<string, string>,
+    meterReading: 'Meter Reading',
+    enterMeterReading: 'Enter meter reading',
+    parkingExpense: 'Parking Expense',
+    enterParkingAmount: 'Enter parking amount',
+    tollExpense: 'Toll Expense',
+    enterTollAmount: 'Enter toll amount',
+    tapToUpload: (step: string) => `Tap to upload ${step.toLowerCase()} photo`,
+    retake: 'Retake',
+    add: 'Add',
+    previous: 'Previous',
+    next: 'Next',
+    endRide: 'End Ride',
+    capturing: 'Capturing…',
+    tapToCapture: 'Tap to capture',
+    cameraRequired: 'Camera required',
+    cameraPermissionMsg: 'Please allow camera access to take photos.',
+    successMsg: 'Ride ended successfully',
+    errorMeterMandatory: 'Meter Image is mandatory',
+    errorEndRide: 'Failed to end ride. Please try again.',
+  },
+  ur: {
+    title: 'بکنگ ختم کریں',
+    uploadInstruction: (step: string) => `بکنگ ختم کرنے کے لیے `,
+    uploadInstructionBold: (step: string) => LABELS.ur.steps[step] ?? step,
+    uploadInstructionSuffix: ' کی فوٹو اپلوڈ کریں۔',
+    steps: {
+      Meter: 'میٹر',
+      Parking: 'پارکنگ',
+      'Toll receipt': 'ٹول رسید',
+    } as Record<string, string>,
+    meterReading: 'میٹر ریڈنگ',
+    enterMeterReading: 'میٹر ریڈنگ درج کریں',
+    parkingExpense: 'پارکنگ خرچ',
+    enterParkingAmount: 'پارکنگ رقم درج کریں',
+    tollExpense: 'ٹول خرچ',
+    enterTollAmount: 'ٹول رقم درج کریں',
+    tapToUpload: (step: string) => `${LABELS.ur.steps[step] ?? step} فوٹو اپلوڈ کرنے کے لیے دبائیں`,
+    retake: 'دوبارہ لیں',
+    add: 'شامل کریں',
+    previous: 'پچھلا',
+    next: 'اگلا',
+    endRide: 'بکنگ ختم کریں',
+    capturing: 'فوٹو لی جا رہی ہے…',
+    tapToCapture: 'فوٹو لینے کے لیے دبائیں',
+    cameraRequired: 'کیمرہ درکار ہے',
+    cameraPermissionMsg: 'فوٹو کے لیے کیمرے کی اجازت دیں۔',
+    successMsg: 'بکنگ کامیابی سے ختم ہوئی',
+    errorMeterMandatory: 'میٹر فوٹو لازمی ہے',
+    errorEndRide: 'بکنگ ختم نہ ہو سکی۔ دوبارہ کوشش کریں۔',
+  },
+} as const;
 
 // STEPS will now be determined inside the component based on tripType
 
 export function EndRideScreen() {
     const { tripType, bookingId, forceComplete } = useLocalSearchParams<{ tripType: string; bookingId: string; forceComplete?: string }>();
     const isForceComplete = forceComplete === 'true';
+    const { language } = useLanguage();
+    const t = LABELS[language];
     
     const STEPS = React.useMemo(() => {
         if (tripType === 'IN_CITY') {
@@ -26,6 +94,9 @@ export function EndRideScreen() {
         }
         return ['Meter', 'Parking', 'Toll receipt'];
     }, [tripType]);
+
+    // Translated step labels for display
+    const stepLabels = React.useMemo(() => STEPS.map((s) => t.steps[s] ?? s), [STEPS, t]);
 
     const [currentStep, setCurrentStep] = useState(0);
     const insets = useSafeAreaInsets();
@@ -51,7 +122,7 @@ export function EndRideScreen() {
             toast.show(
                 <CustomToast
                     type="error"
-                    message={'Meter Image is mandatory'}
+                    message={t.errorMeterMandatory}
                 />,
                 { duration: 3500, position: 'top', backgroundColor: '#ff4545' },
             );
@@ -95,7 +166,7 @@ export function EndRideScreen() {
             toast.show(
                 <CustomToast
                     type="success"
-                    message="Ride ended successfully"
+                    message={t.successMsg}
                 />,
                 { duration: 3000, position: 'top' }
             );
@@ -116,7 +187,7 @@ export function EndRideScreen() {
             toast.show(
                 <CustomToast
                     type="error"
-                    message="Failed to end ride. Please try again."
+                    message={t.errorEndRide}
                 />,
                 { duration: 3500, position: 'top' }
             );
@@ -133,7 +204,7 @@ export function EndRideScreen() {
         if (!permission?.granted) {
             const { granted } = await requestPermission();
             if (!granted) {
-                Alert.alert('Camera required', 'Please allow camera access to take photos.');
+                Alert.alert(t.cameraRequired, t.cameraPermissionMsg);
                 return;
             }
         }
@@ -181,13 +252,13 @@ export function EndRideScreen() {
             >
                 <View className="mb-4">
                     <Text className="text-[34px] font-bold text-black">
-                        End Ride
+                        {t.title}
                     </Text>
                 </View>
 
                 {/* Dynamic instructions based on current step */}
                 <Text className="text-[#6B7280] text-base font-medium mb-8">
-                    Please upload <Text className="text-black font-bold">{STEPS[currentStep].toLowerCase()}</Text> photo to end ride.
+                    {t.uploadInstruction(STEPS[currentStep])}<Text className="text-black font-bold">{t.uploadInstructionBold(STEPS[currentStep])}</Text>{t.uploadInstructionSuffix}
                 </Text>
 
                 {/* Step Indicator Container */}
@@ -258,7 +329,7 @@ export function EndRideScreen() {
                                         isFuture && { color: '#9CA3AF', fontWeight: '500' },
                                     ]}
                                 >
-                                    {step}
+                                    {stepLabels[index]}
                                 </Text>
                             </View>
                         );
@@ -267,9 +338,9 @@ export function EndRideScreen() {
                                  <View className="mt-2 mb-4">
                     {STEPS[currentStep] === 'Meter' && (
                         <View>
-                            <Text className="text-[#111827] text-base font-bold mb-3">Meter Reading</Text>
+                            <Text className="text-[#111827] text-base font-bold mb-3">{t.meterReading}</Text>
                             <TextInput
-                                placeholder="Enter meter reading"
+                                placeholder={t.enterMeterReading}
                                 keyboardType="numeric"
                                 value={meterValue}
                                 onChangeText={setMeterValue}
@@ -281,9 +352,9 @@ export function EndRideScreen() {
                     )}
                     {STEPS[currentStep] === 'Parking' && (
                         <View>
-                            <Text className="text-[#111827] text-sm font-bold mb-2">Parking Expense</Text>
+                            <Text className="text-[#111827] text-sm font-bold mb-2">{t.parkingExpense}</Text>
                             <TextInput
-                                placeholder="Enter parking amount"
+                                placeholder={t.enterParkingAmount}
                                 keyboardType="numeric"
                                 value={parkingValue}
                                 onChangeText={setParkingValue}
@@ -295,9 +366,9 @@ export function EndRideScreen() {
                     )}
                     {STEPS[currentStep] === 'Toll receipt' && (
                         <View>
-                            <Text className="text-[#111827] text-sm font-bold mb-2">Toll Expense</Text>
+                            <Text className="text-[#111827] text-sm font-bold mb-2">{t.tollExpense}</Text>
                             <TextInput
-                                placeholder="Enter toll amount"
+                                placeholder={t.enterTollAmount}
                                 keyboardType="numeric"
                                 value={tollValue}
                                 onChangeText={setTollValue}
@@ -316,7 +387,7 @@ export function EndRideScreen() {
                         className="w-full h-64 rounded-2xl bg-[#F9FAFB] border border-[#FF5A00] border-dashed items-center justify-center active:opacity-70"
                     >
                         <Ionicons name="camera-outline" size={48} color="#9CA3AF" />
-                        <Text className="text-[#9CA3AF] text-sm mt-2 font-medium">Tap to upload {STEPS[currentStep].toLowerCase()} photo</Text>
+                        <Text className="text-[#9CA3AF] text-sm mt-2 font-medium">{t.tapToUpload(STEPS[currentStep])}</Text>
                     </Pressable>
                 ) : STEPS[currentStep] === 'Meter' ? (
                     <View>
@@ -330,7 +401,7 @@ export function EndRideScreen() {
                             }}
                             className="w-full py-4 rounded-xl items-center justify-center border border-[#D1D5DB] active:opacity-70 bg-white"
                         >
-                            <Text className="text-black font-bold text-base">Retake</Text>
+                            <Text className="text-black font-bold text-base">{t.retake}</Text>
                         </Pressable>
                     </View>
                 ) : (
@@ -359,7 +430,7 @@ export function EndRideScreen() {
                             className="w-[30%] aspect-square rounded-2xl bg-[#F9FAFB] border border-[#FF5A00] border-dashed items-center justify-center active:opacity-70"
                         >
                             <Ionicons name="camera-outline" size={28} color="#FF5A00" />
-                            <Text className="text-[#FF5A00] text-xs mt-1 font-bold">Add</Text>
+                            <Text className="text-[#FF5A00] text-xs mt-1 font-bold">{t.add}</Text>
                         </Pressable>
                     </View>
                 )}
@@ -379,7 +450,7 @@ export function EndRideScreen() {
                         style={{ paddingVertical: 14 }}
                     >
                         <Text className="text-black text-[17px] font-bold">
-                            Previous
+                            {t.previous}
                         </Text>
                     </Pressable>
                 )}
@@ -397,7 +468,7 @@ export function EndRideScreen() {
                         />
                     )}
                     <Text className="text-white text-[17px] font-bold">
-                        {currentStep === STEPS.length - 1 ? 'End Ride' : 'Next'}
+                        {currentStep === STEPS.length - 1 ? t.endRide : t.next}
                     </Text>
                 </Pressable>
             </View>
@@ -422,7 +493,7 @@ export function EndRideScreen() {
                                 )}
                             </Pressable>
                             <Text style={styles.captureLabel}>
-                                {isCapturing ? 'Capturing…' : 'Tap to capture'}
+                                {isCapturing ? t.capturing : t.tapToCapture}
                             </Text>
                         </View>
                     </View>

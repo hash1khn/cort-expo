@@ -1,10 +1,14 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { View, Text as RNText, Pressable, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { CompactRideHistoryCard } from '../components/CompactRideHistoryCard';
+import { CompactRideHistoryCardSkeleton } from '../components/CompactRideHistoryCardSkeleton';
 import { colors, fontFamily } from '@/core/theme';
+import { useAppSelector } from '../../../store/hooks';
+import { useGetChauffeurBookingsQuery } from '../services/bookingsApi';
+import { useGetShuttleTripsForEmployeeQuery } from '../services/employeeShuttleApi';
 
 const Text = (props: React.ComponentProps<typeof RNText>) => {
   return <RNText {...props} style={[{ fontFamily }, props.style]} />;
@@ -12,59 +16,108 @@ const Text = (props: React.ComponentProps<typeof RNText>) => {
 
 type FilterType = 'all' | 'shuttle' | 'chauffeur';
 
-const MOCK_RIDES = [
-  {
-    rideId: 'PO123RT',
-    driverName: 'Sajjad',
-    pickup: 'Clifton',
-    destination: 'Tower',
-    status: 'completed',
-    date: 'Yesterday',
-    time: '08:30 AM',
-    type: 'shuttle' as const,
-  },
-  {
-    rideId: 'RO213KS',
-    driverName: 'Ali',
-    pickup: 'Tower',
-    destination: 'DHA',
-    status: 'completed',
-    date: 'Tuesday, Jan 27',
-    time: '16:45',
-    type: 'shuttle' as const,
-  },
-  {
-    rideId: 'CH456AB',
-    driverName: 'Nadir',
-    pickup: 'DHA',
-    destination: 'Clifton',
-    status: 'cancelled',
-    date: 'Monday, Jan 26',
-    time: '17:00',
-    type: 'chauffeur' as const,
-  },
-  {
-    rideId: 'SH789CD',
-    driverName: 'Bilal',
-    pickup: 'Clifton',
-    destination: 'Tower',
-    status: 'missed',
-    date: 'Sunday, Jan 25',
-    time: '09:15 AM',
-    type: 'shuttle' as const,
-  },
-];
+type RideCard = {
+  id: string;
+  destination: string;
+  date: string;
+  time: string;
+  rideType: 'shuttle' | 'chauffeur';
+  bookingId?: number;
+  tripId?: number;
+  sortKey: number; // unix ms for sorting
+};
 
 export default function EmployeeRides() {
   const router = useRouter();
   const [activeFilter, setActiveFilter] = useState<FilterType>('all');
 
-  const filteredRides = MOCK_RIDES.filter((ride) => {
-    if (activeFilter === 'all') return true;
-    if (activeFilter === 'shuttle') return ride.type === 'shuttle';
-    if (activeFilter === 'chauffeur') return ride.type === 'chauffeur';
-    return true;
-  });
+  const user = useAppSelector((state) => state.auth.user);
+  const companyId = (user?.company_id ?? 0) as number;
+  const employeeId = (user?.id ?? '') as string;
+  const hasChauffeur = user?.enabled_services?.chauffeur ?? false;
+  const hasShuttle = user?.enabled_services?.shuttle ?? false;
+
+  const { data: chauffeurBookingsData, isLoading: isChauffeurLoading } =
+    useGetChauffeurBookingsQuery(
+      { companyId, employeeId },
+      { skip: !companyId || !employeeId || !hasChauffeur },
+    );
+
+  const { data: shuttleTrips = [], isLoading: isShuttleLoading } =
+    useGetShuttleTripsForEmployeeQuery(
+      { companyId, employeeId },
+      { skip: !companyId || !employeeId || !hasShuttle },
+    );
+
+  const isLoading =
+    (hasChauffeur && isChauffeurLoading) || (hasShuttle && isShuttleLoading);
+
+  const chauffeurCards = useMemo((): RideCard[] => {
+    const completed = (chauffeurBookingsData?.data ?? []).filter(
+      (b) => b.status === 'COMPLETED',
+    );
+    return completed.map((booking) => {
+      const rawDate = booking.scheduled_for ? new Date(booking.scheduled_for) : null;
+      return {
+        id: `chauffeur-${booking.id}`,
+        destination:
+          booking.destination_cities?.[0] ||
+          booking.pickup_address?.split(',')[0] ||
+          '—',
+        date: rawDate
+          ? rawDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+          : '—',
+        time: rawDate
+          ? rawDate.toLocaleTimeString('en-US', {
+              hour: '2-digit',
+              minute: '2-digit',
+              hour12: true,
+            })
+          : '—',
+        rideType: 'chauffeur',
+        bookingId: booking.id,
+        sortKey: rawDate?.getTime() ?? 0,
+      };
+    });
+  }, [chauffeurBookingsData]);
+
+  const shuttleCards = useMemo((): RideCard[] => {
+    const completed = shuttleTrips.filter((t) => t.status === 'COMPLETED');
+    return completed.map((trip) => {
+      const rawDate = trip.trip_date ? new Date(trip.trip_date) : null;
+      // completed_at / started_at may be null for older trips — fall back to trip_date
+      const rawTime = trip.completed_at
+        ? new Date(trip.completed_at)
+        : trip.started_at
+          ? new Date(trip.started_at)
+          : rawDate;
+      return {
+        id: `shuttle-${trip.id}`,
+        destination: trip.routes?.name ?? 'Shuttle Route',
+        date: rawDate
+          ? rawDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+          : '—',
+        time: rawTime
+          ? rawTime.toLocaleTimeString('en-US', {
+              hour: '2-digit',
+              minute: '2-digit',
+              hour12: true,
+            })
+          : '—',
+        rideType: 'shuttle',
+        tripId: trip.id,
+        sortKey: rawDate?.getTime() ?? 0,
+      };
+    });
+  }, [shuttleTrips]);
+
+  const filteredCards = useMemo((): RideCard[] => {
+    let cards: RideCard[];
+    if (activeFilter === 'chauffeur') cards = chauffeurCards;
+    else if (activeFilter === 'shuttle') cards = shuttleCards;
+    else cards = [...chauffeurCards, ...shuttleCards];
+    return [...cards].sort((a, b) => b.sortKey - a.sortKey);
+  }, [activeFilter, chauffeurCards, shuttleCards]);
 
   return (
     <SafeAreaView className="flex-1 bg-white" edges={['top']}>
@@ -83,45 +136,24 @@ export default function EmployeeRides() {
       {/* Filter - segmented control */}
       <View className="px-6 pb-6 mt-5">
         <View className="flex-row bg-gray-100 p-1 rounded-xl">
-          <Pressable
-            onPress={() => setActiveFilter('all')}
-            hitSlop={20}
-            className={`flex-1 py-2 rounded-lg items-center justify-center ${activeFilter === 'all' ? 'bg-white' : ''
+          {(['all', 'shuttle', 'chauffeur'] as FilterType[]).map((filter) => (
+            <Pressable
+              key={filter}
+              onPress={() => setActiveFilter(filter)}
+              hitSlop={20}
+              className={`flex-1 py-2 rounded-lg items-center justify-center ${
+                activeFilter === filter ? 'bg-white' : ''
               }`}
-          >
-            <Text
-              className={`text-base font-semibold ${activeFilter === 'all' ? 'text-black' : 'text-gray-500'
-                }`}
             >
-              All
-            </Text>
-          </Pressable>
-          <Pressable
-            onPress={() => setActiveFilter('shuttle')}
-            hitSlop={20}
-            className={`flex-1 py-2 rounded-lg items-center justify-center ${activeFilter === 'shuttle' ? 'bg-white' : ''
-              }`}
-          >
-            <Text
-              className={`text-base font-semibold ${activeFilter === 'shuttle' ? 'text-black' : 'text-gray-500'
+              <Text
+                className={`text-base font-semibold ${
+                  activeFilter === filter ? 'text-black' : 'text-gray-500'
                 }`}
-            >
-              Shuttle
-            </Text>
-          </Pressable>
-          <Pressable
-            onPress={() => setActiveFilter('chauffeur')}
-            hitSlop={20}
-            className={`flex-1 py-2 rounded-lg items-center justify-center ${activeFilter === 'chauffeur' ? 'bg-white' : ''
-              }`}
-          >
-            <Text
-              className={`text-base font-semibold ${activeFilter === 'chauffeur' ? 'text-black' : 'text-gray-500'
-                }`}
-            >
-              Chauffeur
-            </Text>
-          </Pressable>
+              >
+                {filter.charAt(0).toUpperCase() + filter.slice(1)}
+              </Text>
+            </Pressable>
+          ))}
         </View>
       </View>
 
@@ -132,21 +164,42 @@ export default function EmployeeRides() {
         showsVerticalScrollIndicator={false}
       >
         <View className="gap-4">
-          {filteredRides.map((ride) => (
-            <CompactRideHistoryCard
-              key={ride.rideId}
-              destination={ride.destination}
-              date={ride.date}
-              timeOfDropoff={ride.time}
-              rideType={ride.type === 'shuttle' ? 'Shuttle' : 'Chauffeur'}
-              onPress={() =>
-                router.push({
-                  pathname: '/employee/ride-details',
-                  params: { rideId: ride.rideId },
-                })
-              }
-            />
-          ))}
+          {isLoading ? (
+            <>
+              <CompactRideHistoryCardSkeleton />
+              <CompactRideHistoryCardSkeleton />
+              <CompactRideHistoryCardSkeleton />
+            </>
+          ) : filteredCards.length === 0 ? (
+            <View className="items-center justify-center mt-20 gap-3">
+              <Ionicons name="time-outline" size={48} color="#d1d5db" />
+              <Text className="text-gray-400 text-base text-center">
+                No ride history yet.
+              </Text>
+            </View>
+          ) : (
+            filteredCards.map((card) => (
+              <CompactRideHistoryCard
+                key={card.id}
+                destination={card.destination}
+                date={card.date}
+                timeOfDropoff={card.time}
+                rideType={card.rideType === 'shuttle' ? 'Shuttle' : 'Chauffeur'}
+                onPress={() =>
+                  router.push({
+                    pathname: '/employee/ride-details',
+                    params: {
+                      from: 'history',
+                      rideDate: card.date,
+                      ...(card.bookingId != null
+                        ? { rideId: String(card.bookingId), rideType: 'chauffeur' }
+                        : { rideId: String(card.tripId), rideType: 'shuttle' }),
+                    },
+                  })
+                }
+              />
+            ))
+          )}
         </View>
       </ScrollView>
     </SafeAreaView>

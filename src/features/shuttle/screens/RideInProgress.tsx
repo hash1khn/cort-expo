@@ -41,6 +41,57 @@ import { store } from '@/store';
 import { useRiderLocationTracking } from '@/hooks/useRiderLocationTracking';
 import { LocationDisclosureModal } from '@/components/LocationDisclosureModal';
 
+const LABELS = {
+  en: {
+    tripInProgress: 'Trip In Progress',
+    readyToGo: 'Ready to go',
+    hiace: 'Hiace',
+    stops: 'Stops',
+    employees: 'Employees',
+    routeOverview: 'Route Overview',
+    processing: 'Processing...',
+    completeTrip: 'Complete Trip',
+    markAsArrived: 'Mark as Arrived',
+    beginRide: 'Begin ride',
+    markAllAttendance: 'Mark all attendance before proceeding',
+    failedProceed: 'Failed to proceed to next stop. Please try again.',
+    failedComplete: 'Failed to complete trip. Please try again.',
+    couldNotMarkAbsent: "Couldn't mark as absent.",
+    couldNotMarkPresent: "Couldn't mark as present.",
+    markAttendanceSubtitle: 'Mark employees as present or absent',
+    currentStop: 'Current Stop',
+    proceeding: 'Proceeding...',
+    proceedNextStop: 'Proceed to next stop',
+    present: 'Present',
+    absent: 'Absent',
+    noNumber: 'No number',
+  },
+  ur: {
+    tripInProgress: 'سفر جاری ہے',
+    readyToGo: 'شروع کرنے کے لیے تیار',
+    hiace: 'ہائس',
+    stops: 'اسٹاپ',
+    employees: 'افراد',
+    routeOverview: 'راستے کا جائزہ',
+    processing: 'جاری ہے...',
+    completeTrip: 'سفر مکمل کریں',
+    markAsArrived: 'اسٹاپ پر پہنچ گئے',
+    beginRide: 'شروع کریں',
+    markAllAttendance: 'شروع کرنے سے پہلے تمام حاضری درج کریں',
+    failedProceed: 'اگلے اسٹاپ پر نہیں جا سکے۔ دوبارہ کوشش کریں۔',
+    failedComplete: 'سفر مکمل نہ ہو سکا۔ دوبارہ کوشش کریں۔',
+    couldNotMarkAbsent: 'غیر حاضر درج نہ ہو سکا۔',
+    couldNotMarkPresent: 'حاضر درج نہ ہو سکا۔',
+    markAttendanceSubtitle: 'افراد کی حاضری یا غیر حاضری مقرر کریں',
+    currentStop: 'موجودہ اسٹاپ',
+    proceeding: 'جا رہے ہیں...',
+    proceedNextStop: 'اگلے اسٹاپ پر جائیں',
+    present: 'حاضر',
+    absent: 'غیر حاضر',
+    noNumber: 'نمبر نہیں',
+  },
+} as const;
+
 type EmployeeStatus = 'present' | 'absent';
 
 type StopEmployee = { id: string; name: string; number: string; status: EmployeeStatus };
@@ -60,6 +111,7 @@ function getInitials(name: string) {
 export default function RideInProgress() {
   const { language } = useLanguage();
   const isUrdu = language === 'ur';
+  const t = LABELS[language];
   const toast = useToast();
 
   const {
@@ -308,7 +360,7 @@ export default function RideInProgress() {
       await stopTracking().catch(console.warn);
       router.push('/shuttle');
     } catch {
-      Alert.alert('Error', 'Failed to complete trip. Please try again.');
+      Alert.alert('Error', t.failedComplete);
     }
   }, [
     rideStarted,
@@ -347,7 +399,7 @@ export default function RideInProgress() {
         {/* Header */}
         <View style={styles.header}>
           <Text style={styles.titleText}>
-            {rideStarted ? 'Trip In Progress' : 'Ready to go'}
+            {rideStarted ? t.tripInProgress : t.readyToGo}
           </Text>
           <Text style={styles.subtitleText}>Black Hiace • ABR 986</Text>
         </View>
@@ -359,7 +411,7 @@ export default function RideInProgress() {
             <View className="w-8 h-8 rounded-lg bg-black/10 items-center justify-center mb-0.5">
               <MaterialCommunityIcons name="bus" size={16} color="#000" />
             </View>
-            <Text className="text-[10px] font-semibold text-black/50 uppercase tracking-[0.8px]">Hiace</Text>
+            <Text className="text-[10px] font-semibold text-black/50 uppercase tracking-[0.8px]">{t.hiace}</Text>
             <Text className="text-[13px] font-extrabold text-[#000] tracking-[-0.2px]">ABR 986</Text>
           </View>
 
@@ -370,7 +422,7 @@ export default function RideInProgress() {
             <View className="w-8 h-8 rounded-lg bg-black/10 items-center justify-center mb-0.5">
               <Ionicons name="location-outline" size={16} color="#000" />
             </View>
-            <Text className="text-[10px] font-semibold text-black/50 uppercase tracking-[0.8px]">Stops</Text>
+            <Text className="text-[10px] font-semibold text-black/50 uppercase tracking-[0.8px]">{t.stops}</Text>
             <Text className="text-[13px] font-extrabold text-[#000] tracking-[-0.2px]">{stops.length}</Text>
           </View>
 
@@ -381,7 +433,7 @@ export default function RideInProgress() {
             <View className="w-8 h-8 rounded-lg bg-black/10 items-center justify-center mb-0.5">
               <Ionicons name="people-outline" size={16} color="#000" />
             </View>
-            <Text className="text-[10px] font-semibold text-black/50 uppercase tracking-[0.8px]">Employees</Text>
+            <Text className="text-[10px] font-semibold text-black/50 uppercase tracking-[0.8px]">{t.employees}</Text>
             <Text className="text-[13px] font-extrabold text-[#000] tracking-[-0.2px]">{tripEmployeesRaw.length}</Text>
           </View>
         </View>
@@ -389,7 +441,7 @@ export default function RideInProgress() {
         {/* Route Overview */}
         <View className="mb-6 mt-4">
           <Text className="text-xl font-bold mb-6 text-black">
-            Route Overview
+            {t.routeOverview}
           </Text>
           <View className="ml-2">
             {stops.map((stop, index) => {
@@ -555,10 +607,10 @@ export default function RideInProgress() {
           )}
           <Text className="text-white text-[17px] font-bold mr-1">
             {isActionLoading
-              ? 'Processing...'
+              ? t.processing
               : (rideStarted
-                ? (isLastStop ? 'Complete Trip' : 'Mark as Arrived')
-                : 'Begin ride')}
+                ? (isLastStop ? t.completeTrip : t.markAsArrived)
+                : t.beginRide)}
           </Text>
         </Pressable>
       </View>
@@ -585,10 +637,10 @@ export default function RideInProgress() {
           <View className="px-5 pb-4 pt-2 flex-row justify-between items-center">
             <View>
               <Text className="text-xl font-bold mb-1 text-black">
-                {stopForAttendance?.name || 'Current Stop'}
+                {stopForAttendance?.name || t.currentStop}
               </Text>
               <Text className="text-sm text-[#6B7280]">
-                Mark employees as present or absent
+                {t.markAttendanceSubtitle}
               </Text>
             </View>
           </View>
@@ -626,7 +678,7 @@ export default function RideInProgress() {
                       </Text>
                       <View className="flex-row items-center mt-1">
                         <Text className="text-[#8E8E93] text-[15px] mr-2" numberOfLines={1}>
-                          {emp.status === 'present' ? 'Present' : emp.status === 'absent' ? 'Absent' : (emp.number || 'No number')}
+                          {emp.status === 'present' ? t.present : emp.status === 'absent' ? t.absent : (emp.number || t.noNumber)}
                         </Text>
                       </View>
                     </View>
@@ -659,7 +711,7 @@ export default function RideInProgress() {
                             }).unwrap();
                             setDriverMarkedIds((prev) => new Set(prev).add(emp.id));
                           } catch {
-                            Alert.alert('Error', "Couldn't mark as absent.");
+                            Alert.alert('Error', t.couldNotMarkAbsent);
                           } finally {
                             setEmployeeLoading(emp.id, null);
                           }
@@ -696,7 +748,7 @@ export default function RideInProgress() {
                             }).unwrap();
                             setDriverMarkedIds((prev) => new Set(prev).add(emp.id));
                           } catch {
-                            Alert.alert('Error', "Couldn't mark as present.");
+                            Alert.alert('Error', t.couldNotMarkPresent);
                           } finally {
                             setEmployeeLoading(emp.id, null);
                           }
@@ -734,7 +786,7 @@ export default function RideInProgress() {
                   toast.show(
                     <CustomToast
                       type="error"
-                      message={isUrdu ? 'شروع کرنے سے پہلے تمام حاضری درج کریں' : 'Mark all attendance before proceeding'}
+                      message={t.markAllAttendance}
                     />,
                     { duration: 3500, position: 'top', backgroundColor: '#ff4545' },
                   );
@@ -747,7 +799,7 @@ export default function RideInProgress() {
                   try {
                     await proceedFromStop({ tripId: activeTrip.id }).unwrap();
                   } catch {
-                    Alert.alert('Error', 'Failed to proceed to next stop. Please try again.');
+                    Alert.alert('Error', t.failedProceed);
                     return;
                   }
                 }
@@ -770,7 +822,7 @@ export default function RideInProgress() {
                 <ActivityIndicator size="small" color="#FFFFFF" style={{ marginRight: 8 }} />
               )}
               <Text className="text-white text-[17px] font-bold mr-1">
-                {isProceeding ? 'Proceeding...' : 'Proceed to next stop'}
+                {isProceeding ? t.proceeding : t.proceedNextStop}
               </Text>
             </Pressable>
           </BottomSheetScrollView>

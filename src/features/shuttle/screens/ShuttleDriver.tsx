@@ -19,6 +19,12 @@ const ROUTE_DETAILS_LABELS = {
     stops: 'Stops',
     employees: 'Employees',
     start: 'Start',
+    today: 'Today',
+    noRides: 'You have no rides for today.',
+    nextRide: 'Next Ride',
+    morning: 'Morning',
+    evening: 'Evening',
+    blackHiace: 'Black Hiace',
   },
   ur: {
     sectionTitle: 'راستے کی تفصیلات',
@@ -26,6 +32,12 @@ const ROUTE_DETAILS_LABELS = {
     stops: 'اسٹاپ',
     employees: 'افراد',
     start: 'سفر کا آغاز',
+    today: 'آج',
+    noRides: 'آج کوئی سواری مقرر نہیں ہے',
+    nextRide: 'اگلی سواری',
+    morning: 'صبح',
+    evening: 'شام',
+    blackHiace: 'کالی ہائس',
   },
 } as const;
 
@@ -206,7 +218,7 @@ export function ShuttleDriver() {
     () =>
       upcomingTrips.map((trip) => {
         const details = buildRouteDetails(trip);
-        const directionLabel = trip.direction === 'MORNING' ? 'Morning' : 'Evening';
+        const directionLabel = trip.direction === 'MORNING' ? labels.morning : labels.evening;
         return {
           id: String(trip.id),
           title: `${details.origin} → ${details.destination} (${directionLabel})`,
@@ -320,7 +332,7 @@ export function ShuttleDriver() {
 
         {/* Title Section */}
         <View className="mb-6">
-          <Text className="text-[34px] font-bold text-black">Today</Text>
+          <Text className="text-[34px] font-bold text-black">{labels.today}</Text>
           <Text className="text-base font-medium text-[#6B7280]">
             February 6, 2026
           </Text>
@@ -332,7 +344,7 @@ export function ShuttleDriver() {
         {!hasTrips && (
           <View className="mt-4 my-auto">
             <Text className={`py-2 font-medium text-black ${language === 'ur' ? 'ml-auto text-2xl ' : 'text-base '}`}>
-              {language === 'en' ? 'You have no rides for today.' : 'آج کوئی سواری مقرر نہیں ہے'}
+              {language === 'en' ? labels.noRides : labels.noRides}
             </Text>
           </View>
         )}
@@ -350,7 +362,7 @@ export function ShuttleDriver() {
                     </View>
                     <View>
                       <Text className="text-xs font-semibold tracking-wider text-[#6B7280]">
-                        Black Hiace
+                        {labels.blackHiace}
                       </Text>
                       <Text className="text-lg font-semibold text-black">
                         ABR‑986
@@ -440,7 +452,7 @@ export function ShuttleDriver() {
             {accordionItems.length > 0 && (
               <View className="mb-8">
                 <Text className="text-xl px-2 font-bold mb-4 text-black">
-                  Next Ride
+                  {labels.nextRide}
                 </Text>
 
                 {accordionItems.map((item) => {

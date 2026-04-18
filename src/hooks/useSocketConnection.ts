@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { AppState, AppStateStatus } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import NetInfo from '@react-native-community/netinfo';
 import { socketService } from '../services/socket.service';
 import { ACTIVE_RIDE_KEY } from '../services/location/backgroundLocationTask';
 
@@ -53,6 +54,16 @@ export function useSocketConnection(token: string | null | undefined) {
             socketService.off('disconnect', onDisconnect);
             subscription.remove();
         };
+    }, [token]);
+
+    // Reconnect socket when network comes back online
+    useEffect(() => {
+        if (!token) return;
+        return NetInfo.addEventListener((state) => {
+            if (state.isConnected && !socketService.isConnected()) {
+                socketService.connect(token);
+            }
+        });
     }, [token]);
 
     return { isConnected };

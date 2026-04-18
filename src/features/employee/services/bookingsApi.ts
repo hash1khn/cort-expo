@@ -260,6 +260,22 @@ export const bookingsApi = baseApi.injectEndpoints({
         }
       },
     }),
+
+    /**
+     * GET /employee/companies/:companyId/chauffeur-bookings/:id
+     * Full detail for a single completed or active chauffeur booking.
+     * Used by the Ride Details screen.
+     */
+    getEmployeeBookingDetail: builder.query<
+      EmployeeActiveChauffeurBooking,
+      { companyId: number; bookingId: number }
+    >({
+      query: ({ companyId, bookingId }) =>
+        `/employee/companies/${companyId}/chauffeur-bookings/${bookingId}`,
+      transformResponse: (response: { data: EmployeeActiveChauffeurBooking }) =>
+        response.data,
+      providesTags: ['ChauffeurBooking'],
+    }),
   }),
 });
 
@@ -269,5 +285,6 @@ export const {
   useRequestNextDayPickupMutation,
   useSubmitChauffeurReviewMutation,
   useGetChauffeurRoutePolylineQuery,
+  useGetEmployeeBookingDetailQuery,
 } = bookingsApi;
 

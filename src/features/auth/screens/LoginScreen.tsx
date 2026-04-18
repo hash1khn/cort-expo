@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import {
   Keyboard,
   KeyboardAvoidingView,
@@ -14,6 +14,7 @@ import {
   Image,
   TouchableOpacity,
 } from 'react-native';
+import BottomSheet, { BottomSheetBackdrop, BottomSheetView } from '@gorhom/bottom-sheet';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
@@ -44,6 +45,22 @@ export function LoginScreen() {
   const router = useRouter();
   const [login, { isLoading: isSubmitting }] = useLoginMutation();
   const [isBiometricLoading, setIsBiometricLoading] = useState(false);
+  const forgotPasswordSheetRef = useRef<BottomSheet>(null);
+
+  const openForgotPassword = useCallback(() => {
+    forgotPasswordSheetRef.current?.expand();
+  }, []);
+
+  const closeForgotPassword = useCallback(() => {
+    forgotPasswordSheetRef.current?.close();
+  }, []);
+
+  const renderBackdrop = useCallback(
+    (props: any) => (
+      <BottomSheetBackdrop {...props} disappearsOnIndex={-1} appearsOnIndex={0} opacity={0.4} />
+    ),
+    []
+  );
 
   const canLogin = useMemo(() => email.trim().length > 0 && password.length > 0, [email, password]);
 
@@ -167,7 +184,7 @@ export function LoginScreen() {
               </View>
               
               {/* Forgot Password Link - Right Aligned below input */}
-              <Pressable onPress={() => navigation.navigate('ForgotPassword')}>
+              <Pressable onPress={openForgotPassword}>
                 <Text style={styles.forgotPass}>Forgot password?</Text>
               </Pressable>
             </View>
@@ -189,9 +206,7 @@ export function LoginScreen() {
               />
             </View>
 
-            {/* Debug: API URL */}
-            <Text style={styles.debugText}>API: {env.API_URL}</Text>
-
+            
             {/* Biometric Option */}
             <View style={styles.footer}>
               <Pressable
@@ -216,6 +231,33 @@ export function LoginScreen() {
 
           </ScrollView>
       </KeyboardAvoidingView>
+      {/* Forgot Password Bottom Sheet */}
+      <BottomSheet
+        ref={forgotPasswordSheetRef}
+        index={-1}
+        snapPoints={['35%']}
+        enableDynamicSizing={false}
+        enablePanDownToClose
+        backdropComponent={renderBackdrop}
+        detached
+        bottomInset={40}
+        style={styles.sheetContainer}
+        backgroundStyle={styles.sheetBackground}
+        handleIndicatorStyle={styles.sheetIndicator}
+      >
+        <BottomSheetView style={styles.sheetContent}>
+          <View style={styles.sheetIconWrap}>
+            <Ionicons name="lock-closed-outline" size={28} color="#FF5A00" />
+          </View>
+          <Text style={styles.sheetTitle}>Forgot Password?</Text>
+          <Text style={styles.sheetBody}>
+            Please contact your company admin for password reissuance.
+          </Text>
+          <Pressable style={styles.sheetCloseBtn} onPress={closeForgotPassword}>
+            <Text style={styles.sheetCloseBtnText}>Close</Text>
+          </Pressable>
+        </BottomSheetView>
+      </BottomSheet>
     </SafeAreaView>
   );
 }
@@ -337,5 +379,67 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#1A1A1A',
     marginTop: 8,
+  },
+  sheetContainer: {
+    marginHorizontal: 10,
+  },
+  sheetBackground: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: '#eaeaea',
+  },
+  sheetIndicator: {
+    backgroundColor: '#D1D5DB',
+    width: 40,
+  },
+  sheetContent: {
+    flex: 1,
+    paddingHorizontal: 24,
+    paddingTop: 8,
+    paddingBottom: 24,
+    alignItems: 'center',
+  },
+  sheetIconWrap: {
+    width: 52,
+    height: 52,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255, 90, 0, 0.08)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+  sheetTitle: {
+    fontFamily: typography.family.regular,
+    fontWeight: '700',
+    fontSize: 18,
+    color: '#1A1A1A',
+    marginBottom: 8,
+    marginTop: 8,
+    letterSpacing: -0.3,
+  },
+  sheetBody: {
+    fontFamily: typography.family.regular,
+    fontWeight: '400',
+    fontSize: 14,
+    color: '#6B7280',
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: 24,
+  },
+  sheetCloseBtn: {
+    width: '100%',
+    height: 52,
+    borderRadius: 14,
+    marginTop: 0,
+    backgroundColor: '#FF5A00',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sheetCloseBtnText: {
+    fontFamily: typography.family.regular,
+    fontWeight: '600',
+    fontSize: 16,
+    color: '#FFFFFF',
   },
 });

@@ -109,8 +109,8 @@ export default ({ config }: ConfigContext): ExpoConfig => {
      [
         "react-native-maps",
         {
-          "iosGoogleMapsApiKey": process.env.EXPO_PUBLIC_GOOGLE_API_KEY,
-          "androidGoogleMapsApiKey": process.env.EXPO_PUBLIC_GOOGLE_API_KEY
+          "iosGoogleMapsApiKey": process.env.EXPO_PUBLIC_IOS_GOOGLE_API_KEY,
+          "androidGoogleMapsApiKey": process.env.EXPO_PUBLIC_ANDROID_GOOGLE_API_KEY
         }
       ],
       [

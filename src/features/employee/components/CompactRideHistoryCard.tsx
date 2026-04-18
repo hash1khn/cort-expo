@@ -24,24 +24,25 @@ export function CompactRideHistoryCard({
     return (
         <Pressable
             onPress={onPress}
-            className="rounded-[1.25rem] bg-[#eaeaea] py-3.5 px-5 mb-1 flex-row items-center active:opacity-90"
+            className="rounded-[1.25rem] bg-[#eaeaea] px-5 mb-1 flex-row items-center active:opacity-90"
+            style={{ minHeight: 84, paddingVertical: 14 }}
         >
-            <View className="items-center justify-center mr-4 mt-2">
+            <View className="items-center justify-center mr-4">
                 <Image
                     source={iconSource}
                     style={{ width: 40, height: 40 }}
                     resizeMode="contain"
                 />
             </View>
-            <View className="flex-1 pr-4">
+            <View className="flex-1 pr-4" style={{ minWidth: 0 }}>
                 <Text className="text-black text-lg font-bold mb-0.5" numberOfLines={1}>
                     {destination}
                 </Text>
-                <Text className="text-gray-500 text-[13px] font-medium">
+                <Text className="text-gray-500 text-[13px] font-medium" numberOfLines={1}>
                     {date} • {rideType}
                 </Text>
             </View>
-            <View>
+            <View style={{ minWidth: 72, alignItems: 'flex-end' }}>
                 <Text className="text-black text-base font-bold">{timeOfDropoff}</Text>
             </View>
         </Pressable>

@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { configureStore } from '@reduxjs/toolkit';
+import { setupListeners } from '@reduxjs/toolkit/query';
 import { persistStore, persistReducer } from 'redux-persist';
 import { rootReducer } from './rootReducer';
 import { baseApi } from '../core/api/baseApi';
@@ -21,6 +22,8 @@ export const store = configureStore({
       },
     }).concat(baseApi.middleware),
 });
+
+setupListeners(store.dispatch);
 
 export const persistor = persistStore(store, null, () => {
   // Set hydration flag after rehydration

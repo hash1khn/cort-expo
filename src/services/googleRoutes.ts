@@ -6,8 +6,11 @@ type LatLng = {
 const ROUTES_ENDPOINT =
   'https://routes.googleapis.com/directions/v2:computeRoutes';
 
-// Configure this in your .env as EXPO_PUBLIC_GOOGLE_MAPS_API_KEY
-const API_KEY = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY;
+import { Platform } from 'react-native';
+
+const API_KEY = Platform.OS === 'ios'
+  ? process.env.EXPO_PUBLIC_IOS_GOOGLE_API_KEY
+  : process.env.EXPO_PUBLIC_ANDROID_GOOGLE_API_KEY;
 
 // Hard-coded waypoints for the current demo route.
 const STOP_1: LatLng = {
@@ -38,7 +41,7 @@ export async function fetchRoutePolyline(
 if (!API_KEY) {
   // eslint-disable-next-line no-console
   console.warn(
-    '[googleRoutes] Missing EXPO_PUBLIC_GOOGLE_MAPS_API_KEY; live route requests will fail.',
+    '[googleRoutes] Missing platform Google API key; live route requests will fail.',
   );
 }
 

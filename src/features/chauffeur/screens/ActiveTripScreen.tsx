@@ -23,10 +23,130 @@ import { useToast } from '@/shared/ui/molecules/Toast';
 import { CustomToast } from '@/features/shared/components/CustomToast';
 import { useRiderLocationTracking } from '@/hooks/useRiderLocationTracking';
 import { LocationDisclosureModal } from '@/components/LocationDisclosureModal';
+import { useLanguage } from '@/features/shared/context/LanguageContext';
 
 const Text = (props: React.ComponentProps<typeof RNText>) => {
     return <RNText {...props} style={[{ fontFamily }, props.style]} />;
 };
+
+// ─── Translations ─────────────────────────────────────────────────────────────
+
+const LABELS = {
+  en: {
+    headerTitle: 'Ride In Progress',
+    passenger: 'PASSENGER',
+    pickupAddress: 'PICKUP ADDRESS',
+    cancel: 'Cancel',
+    endFullTrip: 'End full trip',
+    meterReading: 'Meter Reading',
+    meterPhoto: 'Meter Photo',
+    tapToRetake: 'Tap to retake',
+    tapToCaptureMeterPhoto: 'Tap to capture meter photo',
+    enterStartMeter: 'Enter start meter',
+    capturing: 'Capturing…',
+    tapToCaptureMeter: 'Tap to capture meter',
+    cameraRequired: 'Camera required',
+    cameraPermissionMsg: 'Please allow camera access to take the meter photo.',
+    punchline: {
+      START_TRIP: 'Lets start the trip! Your passenger is expecting arrival.',
+      MARK_ARRIVED: 'Almost there! Mark arrived so the passenger knows.',
+      RESUME_TRIP: 'Passenger is coming! Ready to go?',
+      MARK_DROPPED_OFF: 'You are on your way. Good luck and travel safe.',
+      END_RIDE: 'Lets head back home. Great work today!',
+      default: 'Ready for your next ride?',
+    } as Record<string, string>,
+    buttonLabel: {
+      starting: 'Starting...',
+      markingArrived: 'Marking arrived...',
+      resumingTrip: 'Resuming trip...',
+      markingDropoff: 'Marking dropped off...',
+      endingDay: 'Ending day...',
+      startTrip: 'Start trip',
+      markArrived: 'Mark as arrived',
+      resumeTrip: 'Resume trip',
+      markDropoff: 'Mark as dropped off',
+      endDay: 'End day',
+      endRide: 'End ride',
+    },
+    modal: {
+      titleStart: 'Start this ride?',
+      titleEndDay: "End today's trip?",
+      titleDropoff: 'Mark dropped off?',
+      subtitleStart: 'You want to start this ride now.',
+      subtitleEndDay: 'This completes today, but the trip continues tomorrow.',
+      subtitleDropoff: 'You want to mark this ride as dropped off.',
+      confirmStart: 'Yes, Start',
+      confirmEndDay: 'Yes, End day',
+      confirmMark: 'Yes, Mark',
+    },
+    errors: {
+      meterRequired: 'Meter reading and photo are required for OUT_STATION trips.',
+      arrivedFail: 'Could not mark as arrived. Please try again.',
+      resumeFail: 'Could not resume trip. Please try again.',
+      dropoffFail: 'Could not mark as dropped off. Please try again.',
+      mapsFail: 'Could not open Google Maps',
+      endDayFail: "Could not complete today's trip. Please try again.",
+      startFail: 'Ride could not be started. Please try again.',
+    },
+  },
+  ur: {
+    headerTitle: 'سفر جاری ہے',
+    passenger: 'مسافر',
+    pickupAddress: 'پک اپ پتہ',
+    cancel: 'منسوخ',
+    endFullTrip: 'مکمل سفر ختم کریں',
+    meterReading: 'میٹر ریڈنگ',
+    meterPhoto: 'میٹر فوٹو',
+    tapToRetake: 'دوبارہ لینے کے لیے دبائیں',
+    tapToCaptureMeterPhoto: 'میٹر فوٹو لینے کے لیے دبائیں',
+    enterStartMeter: 'ابتدائی میٹر درج کریں',
+    capturing: 'فوٹو لی جا رہی ہے…',
+    tapToCaptureMeter: 'میٹر فوٹو لینے کے لیے دبائیں',
+    cameraRequired: 'کیمرہ درکار ہے',
+    cameraPermissionMsg: 'میٹر فوٹو کے لیے کیمرے کی اجازت دیں۔',
+    punchline: {
+      START_TRIP: 'سفر شروع کریں! آپ کے مسافر کو آپ کا انتظار ہے۔',
+      MARK_ARRIVED: 'تقریباً پہنچ گئے! مسافر کو بتانے کے لیے پہنچنے کا نشان لگائیں۔',
+      RESUME_TRIP: 'مسافر آ رہا ہے! چلنے کے لیے تیار؟',
+      MARK_DROPPED_OFF: 'آپ راستے میں ہیں۔ محفوظ سفر کریں۔',
+      END_RIDE: 'گھر کی طرف چلیں۔ آج کا کام بہت اچھا رہا!',
+      default: 'کیا آپ اگلی بکنگ کے لیے تیار ہیں؟',
+    } as Record<string, string>,
+    buttonLabel: {
+      starting: 'شروع ہو رہا ہے...',
+      markingArrived: 'پہنچنے کا نشان لگ رہا ہے...',
+      resumingTrip: 'سفر دوبارہ شروع ہو رہا ہے...',
+      markingDropoff: 'اتارنے کا نشان لگ رہا ہے...',
+      endingDay: 'دن ختم ہو رہا ہے...',
+      startTrip: 'سفر شروع کریں',
+      markArrived: 'مسافر کے پاس پہنچ گئے',
+      resumeTrip: 'سفر دوبارہ شروع کریں',
+      markDropoff: ' مسافر  کو  اُتار  دیا  ہے',
+      endDay: 'دن ختم کریں',
+      endRide: 'بکنگ ختم کریں',
+    },
+    modal: {
+      titleStart: 'یہ بکنگ شروع کریں؟',
+      titleEndDay: 'آج کا سفر ختم کریں؟',
+      titleDropoff: 'اتارنا درج کریں؟',
+      subtitleStart: 'کیا آپ یہ بکنگ ابھی شروع کرنا چاہتے ہیں؟',
+      subtitleEndDay: 'آج مکمل ہوتا ہے، لیکن سفر کل جاری رہے گا۔',
+      subtitleDropoff: 'کیا آپ اس بکنگ کو اتارنا درج کرنا چاہتے ہیں؟',
+      confirmStart: 'ہاں، شروع کریں',
+      confirmEndDay: 'ہاں، دن ختم کریں',
+      confirmMark: 'ہاں، درج کریں',
+    },
+    errors: {
+      meterRequired: 'آؤٹ اسٹیشن بکنگ کے لیے میٹر ریڈنگ اور فوٹو ضروری ہے۔',
+      arrivedFail: 'پہنچنا درج نہ ہو سکا۔ دوبارہ کوشش کریں۔',
+      resumeFail: 'سفر دوبارہ شروع نہ ہو سکا۔ دوبارہ کوشش کریں۔',
+      dropoffFail: 'اتارنا درج نہ ہو سکا۔ دوبارہ کوشش کریں۔',
+      mapsFail: 'گوگل میپس نہیں کھل سکا',
+      endDayFail: 'آج کا سفر مکمل نہ ہو سکا۔ دوبارہ کوشش کریں۔',
+      startFail: 'بکنگ شروع نہ ہو سکی۔ دوبارہ کوشش کریں۔',
+    },
+  },
+} as const;
 
 // Maps the backend trip status to what button to show next
 type TripStep = 'START_TRIP' | 'MARK_ARRIVED' | 'RESUME_TRIP' | 'MARK_DROPPED_OFF' | 'END_RIDE';
@@ -61,6 +181,8 @@ function deriveTripStep(status: TripStatus | undefined, todayLog: ChauffeurDaily
 export function ActiveTripScreen() {
     const confirmSheetRef = useRef<BottomSheet>(null);
     const toast = useToast();
+    const { language } = useLanguage();
+    const t = LABELS[language];
 
     const renderBackdrop = useCallback(
         (props: any) => (
@@ -128,15 +250,8 @@ export function ActiveTripScreen() {
     }, [tripStep]);
 
     const punchline = useMemo(() => {
-        switch (tripStep) {
-            case 'START_TRIP': return 'Lets start the trip! Your passenger is expecting arrival.';
-            case 'MARK_ARRIVED': return 'Almost there! Mark arrived so the passenger knows.';
-            case 'RESUME_TRIP': return 'Passenger is coming! Ready to go?';
-            case 'MARK_DROPPED_OFF': return 'You are on your way. Good luck and travel safe.';
-            case 'END_RIDE': return 'Lets head back home. Great work today!';
-            default: return 'Ready for your next ride?';
-        }
-    }, [tripStep]);
+        return t.punchline[tripStep] ?? t.punchline.default;
+    }, [tripStep, t]);
 
     const showError = (message: string) => {
         toast.show(
@@ -146,17 +261,17 @@ export function ActiveTripScreen() {
     };
 
     const buttonLabel = () => {
-        if (isStartingTrip)    return 'Starting...';
-        if (isMarkingArrived)  return 'Marking arrived...';
-        if (isMarkingOnboard)  return 'Resuming trip...';
-        if (isMarkingDropoff)  return 'Marking dropped off...';
-        if (isEndingTrip)      return 'Ending day...';
+        if (isStartingTrip)    return t.buttonLabel.starting;
+        if (isMarkingArrived)  return t.buttonLabel.markingArrived;
+        if (isMarkingOnboard)  return t.buttonLabel.resumingTrip;
+        if (isMarkingDropoff)  return t.buttonLabel.markingDropoff;
+        if (isEndingTrip)      return t.buttonLabel.endingDay;
         switch (tripStep) {
-            case 'START_TRIP':        return 'Start trip';
-            case 'MARK_ARRIVED':      return 'Mark as arrived';
-            case 'RESUME_TRIP':       return 'Resume trip';
-            case 'MARK_DROPPED_OFF':  return 'Mark as dropped off';
-            case 'END_RIDE':          return isMultiDayIntermediateEnd ? 'End day' : 'End ride';
+            case 'START_TRIP':        return t.buttonLabel.startTrip;
+            case 'MARK_ARRIVED':      return t.buttonLabel.markArrived;
+            case 'RESUME_TRIP':       return t.buttonLabel.resumeTrip;
+            case 'MARK_DROPPED_OFF':  return t.buttonLabel.markDropoff;
+            case 'END_RIDE':          return isMultiDayIntermediateEnd ? t.buttonLabel.endDay : t.buttonLabel.endRide;
         }
     };
 
@@ -171,13 +286,13 @@ export function ActiveTripScreen() {
             try {
                 await markArrived({ bookingId: id }).unwrap();
             } catch {
-                showError('Could not mark as arrived. Please try again.');
+                showError(t.errors.arrivedFail);
             }
         } else if (tripStep === 'RESUME_TRIP') {
             try {
                 await markOnboard({ bookingId: id }).unwrap();
             } catch {
-                showError('Could not resume trip. Please try again.');
+                showError(t.errors.resumeFail);
             }
         } else if (tripStep === 'MARK_DROPPED_OFF') {
             // Confirmation sheet handles the API call
@@ -199,17 +314,17 @@ export function ActiveTripScreen() {
         }
     };
 
-    const modalTitle = tripStep === 'START_TRIP' ? 'Start this ride?' 
-                     : tripStep === 'END_RIDE' ? 'End today\'s trip?'
-                     : 'Mark dropped off?';
+    const modalTitle = tripStep === 'START_TRIP' ? t.modal.titleStart
+                     : tripStep === 'END_RIDE' ? t.modal.titleEndDay
+                     : t.modal.titleDropoff;
     
-    const modalSubtitle = tripStep === 'START_TRIP' ? 'You want to start this ride now.'
-                        : tripStep === 'END_RIDE' ? 'This completes today, but the trip continues tomorrow.'
-                        : 'You want to mark this ride as dropped off.';
+    const modalSubtitle = tripStep === 'START_TRIP' ? t.modal.subtitleStart
+                        : tripStep === 'END_RIDE' ? t.modal.subtitleEndDay
+                        : t.modal.subtitleDropoff;
     
-    const modalConfirmLabel = tripStep === 'START_TRIP' ? 'Yes, Start' 
-                            : tripStep === 'END_RIDE' ? 'Yes, End day'
-                            : 'Yes, Mark';
+    const modalConfirmLabel = tripStep === 'START_TRIP' ? t.modal.confirmStart
+                            : tripStep === 'END_RIDE' ? t.modal.confirmEndDay
+                            : t.modal.confirmMark;
 
     const handleModalConfirm = async () => {
         if (!activeBooking?.id) return;
@@ -219,7 +334,7 @@ export function ActiveTripScreen() {
             try {
                 const isOutstation = activeBooking.trip_type === 'OUT_STATION';
                 if (isOutstation && (!startMeterValue || !startMeterPhoto)) {
-                    showError('Meter reading and photo are required for OUT_STATION trips.');
+                    showError(t.errors.meterRequired);
                     return;
                 }
 
@@ -255,19 +370,19 @@ export function ActiveTripScreen() {
                 const openMaps = displayPickupAddress
                     ? () => {
                           const url = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(displayPickupAddress)}`;
-                          Linking.openURL(url).catch(() => showError('Could not open Google Maps'));
+                          Linking.openURL(url).catch(() => showError(t.errors.mapsFail));
                       }
                     : undefined;
                 await startTracking(id, openMaps);
             } catch {
-                showError('Ride could not be started. Please try again.');
+                showError(t.errors.startFail);
             }
         } else if (tripStep === 'MARK_DROPPED_OFF') {
             try {
                 confirmSheetRef.current?.close();
                 await markDropoff({ bookingId: id }).unwrap();
             } catch {
-                showError('Could not mark as dropped off. Please try again.');
+                showError(t.errors.dropoffFail);
             }
         } else if (tripStep === 'END_RIDE') {
             try {
@@ -276,7 +391,7 @@ export function ActiveTripScreen() {
                 await stopTracking().catch(console.warn);
                 router.push('/chauffeur');
             } catch {
-                showError('Could not complete today\'s trip. Please try again.');
+                showError(t.errors.endDayFail);
             }
         }
     };
@@ -296,7 +411,7 @@ export function ActiveTripScreen() {
         if (!permission?.granted) {
             const { granted } = await requestPermission();
             if (!granted) {
-                Alert.alert('Camera required', 'Please allow camera access to take the meter photo.');
+                Alert.alert(t.cameraRequired, t.cameraPermissionMsg);
                 return;
             }
         }
@@ -334,12 +449,12 @@ export function ActiveTripScreen() {
                     <Pressable style={styles.backButton} onPress={() => router.back()}>
                         <Ionicons name="chevron-back" size={24} color="#000" />
                     </Pressable>
-                    <Text style={styles.headerTitle}>Ride In Progress</Text>
+                    <Text style={styles.headerTitle}>{t.headerTitle}</Text>
                     <View style={{ width: 40 }} />
                 </View>
 
-                <View style={styles.illustrationContainer}>
-                    <View style={styles.illustrationFrame}>
+                <View style={[styles.illustrationContainer, language === 'ur' && { paddingVertical: 10 }]}>
+                    <View style={[styles.illustrationFrame, language === 'ur' && { height: 180, marginBottom: 12 }]}>
                         <Animated.View
                             key={tripStep}
                             entering={FadeIn.duration(280)}
@@ -349,15 +464,15 @@ export function ActiveTripScreen() {
                         >
                             <Image
                                 source={illustrationSource}
-                                style={styles.illustration}
+                                style={[styles.illustration, language === 'ur' && { height: 180 }]}
                                 resizeMode="contain"
                             />
                         </Animated.View>
                     </View>
-                    <Text style={styles.punchline}>{punchline}</Text>
+                    <Text style={[styles.punchline, language === 'ur' && { paddingVertical: 12 }]}>{punchline}</Text>
                 </View>
 
-                <View style={styles.divider} />
+                <View style={[styles.divider, language === 'ur' && { marginVertical: 16 }]} />
 
                 <View style={styles.mainContent} >
                     <View style={styles.passengerRow}>
@@ -365,7 +480,7 @@ export function ActiveTripScreen() {
                             <Text style={styles.avatarInitials}>{initials}</Text>
                         </View>
                         <View style={styles.passengerInfoBox}>
-                            <Text style={styles.passengerRole}>PASSENGER</Text>
+                            <Text style={styles.passengerRole}>{t.passenger}</Text>
                             <Text style={styles.passengerName}>{passengerName}</Text>
                         </View>
                     </View>
@@ -375,7 +490,7 @@ export function ActiveTripScreen() {
                             <View style={styles.addressInfo}>
                                 <Ionicons name="location-outline" size={20} color="#666" />
                                 <View style={styles.addressTextContainer}>
-                                    <Text style={styles.addressLabel}>PICKUP ADDRESS</Text>
+                                    <Text style={styles.addressLabel}>{t.pickupAddress}</Text>
                                     <Text style={styles.addressValue} numberOfLines={2}>
                                         {displayPickupAddress}
                                     </Text>
@@ -393,7 +508,10 @@ export function ActiveTripScreen() {
                         </View>
                     )}
 
-                    <View style={styles.actionContainer}>
+                </View>
+
+            {/* Action buttons — pinned above safe area */}
+            <View style={[styles.actionContainer, { bottom: insets.bottom + 16 }]}>
                         <Pressable
                             style={[styles.primaryButton, (isAnyLoading || !activeBooking) && styles.primaryButtonDisabled]}
                             disabled={isAnyLoading || !activeBooking}
@@ -415,11 +533,10 @@ export function ActiveTripScreen() {
                                 onPress={handleEndFullTrip}
                                 disabled={isAnyLoading}
                             >
-                                <Text style={styles.endFullTripText}>End full trip</Text>
+                                <Text style={styles.endFullTripText}>{t.endFullTrip}</Text>
                             </Pressable>
                         )}
                     </View>
-                </View>
 
             {/* Confirmation Bottom Sheet */}
             <BottomSheet
@@ -438,10 +555,10 @@ export function ActiveTripScreen() {
                             
                             {isOutstationStart ? (
                                 <View style={{ width: '100%', marginBottom: 20 }}>
-                                    <Text style={[styles.modalSubtitle, { textAlign: 'left', marginBottom: 8 }]}>Meter Reading</Text>
+                                    <Text style={[styles.modalSubtitle, { textAlign: 'left', marginBottom: 8 }]}>{t.meterReading}</Text>
                                     <TextInput
                                         style={styles.input}
-                                        placeholder="Enter start meter"
+                                        placeholder={t.enterStartMeter}
                                         keyboardType="numeric"
                                         value={startMeterValue}
                                         onChangeText={setStartMeterValue}
@@ -451,13 +568,13 @@ export function ActiveTripScreen() {
                                         onSubmitEditing={Keyboard.dismiss}
                                     />
                                     
-                                    <Text style={[styles.modalSubtitle, { textAlign: 'left', marginTop: 16, marginBottom: 8 }]}>Meter Photo</Text>
+                                    <Text style={[styles.modalSubtitle, { textAlign: 'left', marginTop: 16, marginBottom: 8 }]}>{t.meterPhoto}</Text>
                                     {startMeterPhoto ? (
                                         <Pressable onPress={handleOpenCamera} style={{ width: '100%', borderRadius: 12, overflow: 'hidden', marginBottom: 8 }}>
                                             <Image source={{ uri: startMeterPhoto }} style={{ width: '100%', height: 120, borderRadius: 12 }} resizeMode="cover" />
                                             <View style={{ position: 'absolute', bottom: 6, right: 6, backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4, flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                                                 <Ionicons name="camera-outline" size={14} color="#fff" />
-                                                <Text style={{ color: '#fff', fontSize: 11, fontWeight: '600' }}>Tap to retake</Text>
+                                                <Text style={{ color: '#fff', fontSize: 11, fontWeight: '600' }}>{t.tapToRetake}</Text>
                                             </View>
                                         </Pressable>
                                     ) : (
@@ -466,7 +583,7 @@ export function ActiveTripScreen() {
                                             style={{ height: 120, borderRadius: 12, backgroundColor: '#F9FAFB', borderWidth: 1, borderColor: '#FF5A00', borderStyle: 'dashed', alignItems: 'center', justifyContent: 'center' }}
                                         >
                                             <Ionicons name="camera-outline" size={32} color="#9CA3AF" />
-                                            <Text style={{ color: '#9CA3AF', fontSize: 13, marginTop: 8, fontWeight: '500' }}>Tap to capture meter photo</Text>
+                                            <Text style={{ color: '#9CA3AF', fontSize: 13, marginTop: 8, fontWeight: '500' }}>{t.tapToCaptureMeterPhoto}</Text>
                                         </Pressable>
                                     )}
                                 </View>
@@ -490,7 +607,7 @@ export function ActiveTripScreen() {
                                 style={[styles.modalButton, styles.modalButtonSecondary]}
                                 onPress={() => confirmSheetRef.current?.close()}
                             >
-                                <Text style={styles.modalButtonSecondaryText}>Cancel</Text>
+                                <Text style={styles.modalButtonSecondaryText}>{t.cancel}</Text>
                             </Pressable>
                         </View>
                     </TouchableWithoutFeedback>
@@ -510,7 +627,7 @@ export function ActiveTripScreen() {
                                 {isCapturing ? <ActivityIndicator color="#fff" /> : <View style={{ width: 56, height: 56, borderRadius: 28, backgroundColor: '#fff' }} />}
                             </Pressable>
                             <Text style={{ color: '#fff', marginTop: 8, fontSize: 14, fontWeight: '500' }}>
-                                {isCapturing ? 'Capturing…' : 'Tap to capture meter'}
+                                {isCapturing ? t.capturing : t.tapToCaptureMeter}
                             </Text>
                         </View>
                     </View>
@@ -565,6 +682,7 @@ const styles = StyleSheet.create({
         color: '#374151',
         textAlign: 'center',
         lineHeight: 24,
+        paddingVertical: 8,
     },
     mainContent: {
         paddingHorizontal: 24,
@@ -573,7 +691,11 @@ const styles = StyleSheet.create({
             justifyContent:'space-between'
     },
     actionContainer: {
-        marginTop: 25,
+        position: 'absolute',
+        left: 24,
+        right: 24,
+        backgroundColor: '#FFFFFF',
+        paddingTop: 8,
     },
     backButton: {
         width: 40,
