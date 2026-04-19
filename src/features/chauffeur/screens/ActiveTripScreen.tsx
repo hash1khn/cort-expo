@@ -1,5 +1,6 @@
 import React, { useMemo, useRef, useState, useCallback } from 'react';
-import { StyleSheet, Text as RNText, View, Pressable, Modal, ActivityIndicator, Linking, TextInput, Image, ScrollView, Alert, TouchableWithoutFeedback, Keyboard } from 'react-native';
+import { StyleSheet, Text as RNText, View, Pressable, Modal, ActivityIndicator, Linking, TextInput, Image, ScrollView, Alert, TouchableWithoutFeedback, Keyboard, Platform } from 'react-native';
+import { Image as ExpoImage } from 'expo-image';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import BottomSheet, { BottomSheetView, BottomSheetBackdrop } from '@gorhom/bottom-sheet';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -383,7 +384,7 @@ export function ActiveTripScreen() {
                           Linking.openURL(url).catch(() => showError(t.errors.mapsFail));
                       }
                     : undefined;
-                await startTracking(id, openMaps, 'chauffeur');
+                await startTracking(id, openMaps);
             } catch {
                 showError(t.errors.startFail);
             }
@@ -557,7 +558,7 @@ export function ActiveTripScreen() {
                 enablePanDownToClose={false}
                 backgroundStyle={{ borderRadius: 28 }}
             >
-                <BottomSheetView style={styles.sheetContent}>
+                <BottomSheetView style={[styles.sheetContent, { paddingBottom: Platform.OS === 'android' ? insets.bottom + 16 : 40 }]}>
                     <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
                         <View style={{ width: '100%', alignItems: 'center' }}>
                             <Ionicons name="alert-circle-sharp" size={36} color="#FF5A00" style={{ marginBottom: 16 }} />
@@ -580,8 +581,8 @@ export function ActiveTripScreen() {
                                     
                                     <Text style={[styles.modalSubtitle, { textAlign: 'left', marginTop: 16, marginBottom: 8 }]}>{t.meterPhoto}</Text>
                                     {startMeterPhoto ? (
-                                        <Pressable onPress={handleOpenCamera} style={{ width: '100%', borderRadius: 12, overflow: 'hidden', marginBottom: 8 }}>
-                                            <Image source={{ uri: startMeterPhoto }} style={{ width: '100%', height: 120, borderRadius: 12 }} resizeMode="cover" />
+                                        <Pressable onPress={handleOpenCamera} style={{ width: '100%', borderRadius: 12, marginBottom: 8 }}>
+                                            <ExpoImage key={startMeterPhoto} source={{ uri: Platform.OS === 'android' && !startMeterPhoto.startsWith('file://') ? `file://${startMeterPhoto}` : startMeterPhoto }} style={{ width: '100%', height: 120, borderRadius: 12 }} contentFit="cover" cachePolicy="none" />
                                             <View style={{ position: 'absolute', bottom: 6, right: 6, backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4, flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                                                 <Ionicons name="camera-outline" size={14} color="#fff" />
                                                 <Text style={{ color: '#fff', fontSize: 11, fontWeight: '600' }}>{t.tapToRetake}</Text>

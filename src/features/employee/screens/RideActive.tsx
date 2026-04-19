@@ -2,9 +2,9 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Linking, Platform, Pressable, StyleSheet, Text as RNText, View, ActivityIndicator, Image, Dimensions } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
 import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
-import { Ionicons, MaterialCommunityIcons, Octicons } from '@expo/vector-icons';
+import { EvilIcons, Ionicons, MaterialCommunityIcons, Octicons } from '@expo/vector-icons';
 import BottomSheet, { BottomSheetView } from '@gorhom/bottom-sheet';
-import Animated, { useSharedValue, useAnimatedStyle, interpolate, useDerivedValue } from 'react-native-reanimated';
+import Animated, { useSharedValue, useAnimatedStyle, interpolate } from 'react-native-reanimated';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useAppDispatch, useAppSelector } from '../../../store/hooks';
 import { setIsOutstationDev } from '../store';
@@ -17,6 +17,7 @@ import { useScanBoardingMutation } from '../services/boardingApi';
 import { useToast } from '@/shared/ui/molecules/Toast';
 import { CustomToast } from '@/features/shared/components/CustomToast';
 import { useRefetchOnReconnect } from '@/hooks/useRefetchOnReconnect';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const Text = (props: React.ComponentProps<typeof RNText>) => {
   return <RNText {...props} style={[{ fontFamily }, props.style]} />;
@@ -70,6 +71,7 @@ const SCREEN_HEIGHT = Dimensions.get('window').height;
 
 export default function RideActive() {
   const dispatch = useAppDispatch();
+  const insets = useSafeAreaInsets();
   const isWaitingForDriverResponse = useAppSelector(
     (state) => state.employeeRide.isWaitingForDriverResponse,
   );
@@ -181,7 +183,7 @@ export default function RideActive() {
     if (apiIdx > currentIdx) {
       setChauffeurStatus(apiStatus);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeChauffeurBooking?.status]);
 
   // ── Real-time state ───────────────────────────────────────────────────────
@@ -217,7 +219,7 @@ export default function RideActive() {
     { skip: activeTripId === 0 || isChauffeurMode },
   );
 
-  const { data: chauffeurPolylineData } = useGetChauffeurRoutePolylineQuery(
+  const { data: chauffeurPolylineData, refetch: refetchChauffeurPolyline } = useGetChauffeurRoutePolylineQuery(
     { companyId: companyId as number, bookingId: activeChauffeurBookingId },
     { skip: !isChauffeurMode || !activeChauffeurBookingId || !companyId },
   );
@@ -304,11 +306,17 @@ export default function RideActive() {
     onLocationUpdate: isChauffeurMode ? handleLocationUpdate : undefined,
     onStatusChange: isChauffeurMode
       ? (data) => {
-          setChauffeurStatus(data.status);
-          if (data.status === 'DROPPED_OFF' || data.status === 'ENDED') {
-            handleRideEnded();
-          }
+        setChauffeurStatus(data.status);
+        if (data.status === 'OTW') {
+          // Driver started a new day leg — the backend has updated the
+          // encoded_polyline in chauffeur_trip_logs. Invalidate the RTK
+          // Query cache so the map redraws with the correct day 2+ route.
+          refetchChauffeurPolyline();
         }
+        if (data.status === 'DROPPED_OFF' || data.status === 'ENDED') {
+          handleRideEnded();
+        }
+      }
       : undefined,
     onRideEnded: isChauffeurMode ? handleRideEnded : undefined,
   });
@@ -316,23 +324,16 @@ export default function RideActive() {
   // ── Bottom Sheet refs ─────────────────────────────────────────────────────
   const bottomSheetRef = useRef<BottomSheet>(null);
   const mapRef = useRef<MapView>(null);
-  const snapPoints = useMemo(() => ['35%', '55%'], []);
+  const snapPoints = useMemo(() => Platform.OS === 'android' ? ['40%', '55%'] : ['35%', '55%'], []);
 
-  // ── ANIMATION FIX ─────────────────────────────────────────────────────────
-  // Use animatedPosition (continuous pixel value) instead of animatedIndex (snappy integer).
-  // This gives us a smooth, gesture-driven value we can interpolate against every frame.
-  const animatedPosition = useSharedValue(0);
+  // ── ANIMATION ─────────────────────────────────────────────────────────────
+  // animatedIndex is continuously interpolated 0→1 between snap points by
+  // @gorhom/bottom-sheet on every platform — no screen-height math needed.
+  const animatedIndex = useSharedValue(0);
 
-  // Derive a normalized 0→1 progress from the sheet's pixel position.
-  //   - animatedPosition = distance in px from the top of the screen to the sheet's top edge.
-  //   - At snap 0 (40% sheet height): sheet top ≈ SCREEN_HEIGHT * 0.60  → progress = 0
-  //   - At snap 1 (55% sheet height): sheet top ≈ SCREEN_HEIGHT * 0.45  → progress = 1
-  // 'clamp' ensures values outside the range don't bleed.
-  const sheetProgress = useDerivedValue(() => {
-    const closedY = SCREEN_HEIGHT * 0.60;
-    const openY   = SCREEN_HEIGHT * 0.45;
-    return interpolate(animatedPosition.value, [openY, closedY], [1, 0], 'clamp');
-  });
+  // sheetProgress is just animatedIndex re-exported for readability.
+  // 0 = closed (snap 0), 1 = open (snap 1).
+  const sheetProgress = animatedIndex;
 
   // Small/horizontal layout — fades out in the first 45% of the drag.
   // translateY adds a subtle lift so the exit feels physical.
@@ -545,12 +546,12 @@ export default function RideActive() {
   // ── Status text ───────────────────────────────────────────────────────────
   const chauffeurStatusText = (() => {
     switch (chauffeurStatus) {
-      case 'OTW':         return 'Chauffeur is on the way';
-      case 'ARRIVED':     return 'Chauffeur has arrived at your pickup';
+      case 'OTW': return 'Chauffeur is on the way';
+      case 'ARRIVED': return 'Chauffeur has arrived at your pickup';
       case 'IN_PROGRESS': return "Sit tight, you're on your way";
       case 'DROPPED_OFF': return "You've been dropped off";
-      case 'ENDED':       return 'Trip complete';
-      default:            return 'Chauffeur ride';
+      case 'ENDED': return 'Trip complete';
+      default: return 'Chauffeur ride';
     }
   })();
 
@@ -577,14 +578,14 @@ export default function RideActive() {
       <MapView
         provider={PROVIDER_GOOGLE}
         ref={mapRef}
-        style={styles.map}
+        style={[styles.map, Platform.OS === 'android' && { bottom: insets.bottom }]}
         initialRegion={{
           latitude: 24.8607,
           longitude: 67.0104,
           latitudeDelta: 0.02,
           longitudeDelta: 0.02,
         }}
-   
+
         toolbarEnabled={false}
         showsMyLocationButton={false}
         showsUserLocation
@@ -669,15 +670,14 @@ export default function RideActive() {
         </Pressable>
       </View>
 
-      {/* BottomSheet: animatedPosition replaces animatedIndex */}
+      {/* BottomSheet: animatedIndex drives the crossfade — 0→1 between snap points */}
       <BottomSheet
         ref={bottomSheetRef}
         index={0}
-        animatedPosition={animatedPosition}
+        animatedIndex={animatedIndex}
         snapPoints={snapPoints}
         enableDynamicSizing={false}
         enablePanDownToClose={false}
-        
         handleIndicatorStyle={styles.sheetHandle}
         backgroundStyle={styles.sheetBackground}
       >
@@ -743,7 +743,11 @@ export default function RideActive() {
             </Pressable>
 
             <Pressable style={styles.iconActionBtn}>
-              <Octicons name="share" size={20} color="black" />
+              {Platform.OS === 'android' ? (
+                <EvilIcons name="share-apple" size={25} color="black" />
+              ) : (
+                <Octicons name="share" size={20} color="black" />
+              )}
               <Text style={styles.iconActionText}>Share ride</Text>
             </Pressable>
 
@@ -763,7 +767,7 @@ export default function RideActive() {
             )}
           </View>
 
-          <View style={{ height: 40 }} />
+          <View style={{ height: Platform.OS === 'android' ? insets.bottom + 4 : 40 }} />
         </BottomSheetView>
       </BottomSheet>
     </View>
@@ -1021,7 +1025,7 @@ const styles = StyleSheet.create({
   },
   iconActionText: {
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: Platform.OS === 'android' ? '800' : '600',
     color: '#141414',
   },
 });

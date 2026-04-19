@@ -103,10 +103,12 @@ export function LoginScreen() {
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.select({ ios: 'padding', android: 'height' })}
+        keyboardVerticalOffset={Platform.select({ ios: 0, android: 8 })}
       >
-        <ScrollView
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+          <ScrollView
             style={styles.container}
-            contentContainerStyle={[styles.scrollContent, { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 24 }]}
+            contentContainerStyle={[styles.scrollContent, { paddingTop: insets.top , paddingBottom: insets.bottom + 24 }]}
             keyboardShouldPersistTaps="handled"
             keyboardDismissMode="on-drag"
             showsVerticalScrollIndicator={false}
@@ -230,6 +232,7 @@ export function LoginScreen() {
             </View>
 
           </ScrollView>
+        </TouchableWithoutFeedback>
       </KeyboardAvoidingView>
       {/* Forgot Password Bottom Sheet */}
       <BottomSheet

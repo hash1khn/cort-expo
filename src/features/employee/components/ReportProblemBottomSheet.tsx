@@ -1,5 +1,5 @@
 import React, { forwardRef, useCallback, useMemo, useState } from 'react';
-import { View, Text as RNText, StyleSheet, Pressable } from 'react-native';
+import { View, Text as RNText, StyleSheet, Pressable, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { BottomSheetBackdrop, BottomSheetModal, BottomSheetScrollView, BottomSheetTextInput } from '@gorhom/bottom-sheet';
@@ -39,13 +39,13 @@ export const ReportProblemBottomSheet = forwardRef<BottomSheetModal, Record<stri
         ref={ref}
         index={0}
         snapPoints={snapPoints}
-        topInset={insets.top}
+        topInset={Platform.OS === 'android' ? insets.top + 80 : insets.top}
         backdropComponent={renderBackdrop}
         enablePanDownToClose
         enableDismissOnClose
         handleIndicatorStyle={styles.handle}
         backgroundStyle={styles.background}
-        keyboardBehavior="interactive"
+        keyboardBehavior={Platform.OS === 'android' ? 'fillParent' : 'interactive'}
         keyboardBlurBehavior="restore"
         android_keyboardInputMode="adjustResize"
       >
@@ -55,15 +55,13 @@ export const ReportProblemBottomSheet = forwardRef<BottomSheetModal, Record<stri
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.headerRow}>
-            <View style={styles.iconWrap}>
-              <Ionicons name="warning-outline" size={18} color="#FF5A00" />
-            </View>
+            <Text style={styles.title}>Report a problem</Text>
             <Pressable onPress={handleClose} hitSlop={10}>
               <Ionicons name="close" size={20} color="#6B7280" />
             </Pressable>
           </View>
 
-          <Text style={styles.title}>Report a problem</Text>
+          
           <Text style={styles.subtitle}>
             Tell us what went wrong?. Your report helps us investigate and improve your experience.
           </Text>
@@ -115,7 +113,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFF2EB',
   },
   title: {
-    marginTop: 14,
+    marginTop: 0,
     fontSize: 22,
     fontWeight: '800',
     color: '#0B1220',

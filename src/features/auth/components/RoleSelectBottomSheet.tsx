@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, forwardRef, useState } from 'react';
-import { View, Text, Pressable, StyleSheet } from 'react-native';
+import { View, Text, Pressable, StyleSheet, Platform } from 'react-native';
 import {
   BottomSheetModal,
   BottomSheetView,
@@ -7,6 +7,7 @@ import {
 } from '@gorhom/bottom-sheet';
 import { Ionicons } from '@expo/vector-icons';
 import { CortButton } from '@/components';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 type RoleKey = 'employee' | 'driver' | 'chauffeur';
 
@@ -36,12 +37,16 @@ const ROLES = [
   },
 ];
 
+const BASE_BOTTOM_PADDING = 30;
+
 export const RoleSelectBottomSheet = forwardRef<BottomSheetModal, Props>(
   ({ onSelectRole, onChauffeurApply }, ref) => {
     const [selectedRole, setSelectedRole] = useState<RoleKey>('employee');
-    
-    // Slightly reduced snap point for a more compact feel
-    const snapPoints = useMemo(() => ['51%'], []);
+    const insets = useSafeAreaInsets();
+    const isAndroid = Platform.OS === 'android';
+
+    const snapPoints = useMemo(() => [isAndroid ? '55%' : '51%'], [isAndroid]);
+    const androidBottomInset = isAndroid ? insets.bottom : 0;
 
     const handleContinue = useCallback(() => {
       if (ref && typeof ref !== 'function' && ref.current) {
@@ -76,8 +81,14 @@ export const RoleSelectBottomSheet = forwardRef<BottomSheetModal, Props>(
         handleIndicatorStyle={styles.handle}
         backgroundStyle={styles.sheetBg}
         enableDynamicSizing={false}
+        bottomInset={androidBottomInset}
       >
-        <BottomSheetView style={styles.container}>
+        <BottomSheetView
+          style={[
+            styles.container,
+            isAndroid && { paddingBottom: BASE_BOTTOM_PADDING + androidBottomInset + 12 },
+          ]}
+        >
           {/* Header */}
           <View style={styles.header}>
             <Text style={styles.title}>Select your role</Text>
@@ -152,7 +163,7 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: 20,
     paddingTop: 8,
-    paddingBottom: 30,
+    paddingBottom: BASE_BOTTOM_PADDING,
   },
   header: {
     marginBottom: 20,

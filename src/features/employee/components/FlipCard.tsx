@@ -435,6 +435,9 @@ const PickupSheet = ({ visible, screenHeight, booking, onClose, onDone }: Pickup
     const [mapCoords, setMapCoords] = useState<{ latitude: number; longitude: number } | null>(null);
     const [isGeocodingMap, setIsGeocodingMap] = useState(false);
     const [headerHeight, setHeaderHeight] = useState(50);
+    // Controls whether the autocomplete list is shown — lets us programmatically
+    // hide it after a row is selected without relying on blur events.
+    const [showSuggestions, setShowSuggestions] = useState(false);
     const geocodeDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const mapRef = useRef<MapView>(null);
 
@@ -552,7 +555,7 @@ const PickupSheet = ({ visible, screenHeight, booking, onClose, onDone }: Pickup
     const sheetTop = isFullScreen ? insets.top : undefined;
     // Compact height accounts for Android bottom nav bar via insets.bottom
     const sheetHeight = isFullScreen
-        ? screenHeight - insets.top
+        ? undefined
         : SHEET_COMPACT_HEIGHT + insets.bottom;
 
     return (
@@ -620,43 +623,78 @@ const PickupSheet = ({ visible, screenHeight, booking, onClose, onDone }: Pickup
                 )}
 
                 {mode === 'searchmap' && (
-                    // ── Merged: Google Places autocomplete overlaid on live map ──
                     <View style={{ flex: 1 }}>
 
-                        {/* Header row */}
-                        <View
-                            style={styles.searchMapHeader}
-                            onLayout={(e) => setHeaderHeight(e.nativeEvent.layout.height)}
+                        {/* Non-scrolling ScrollView: sole job is keyboard persistence for
+                             touches on the map area and confirm bar. */}
+                        <ScrollView
+                            style={StyleSheet.absoluteFill}
+                            scrollEnabled={false}
+                            keyboardShouldPersistTaps="always"
+                            contentContainerStyle={{ flex: 1 }}
                         >
-                            <Pressable onPress={() => setMode('compact')} hitSlop={12}>
-                                <Ionicons name="arrow-back" size={22} color="#000" />
-                            </Pressable>
-                            <Text style={styles.searchMapHeaderTitle}>Pick your location</Text>
-                        </View>
-
-                        {/* Map container — autocomplete is NOT nested here to avoid MapView touch interception */}
-                        <View style={{ flex: 1 }}>
-                            <MapView
-                                ref={mapRef}
-                                provider={PROVIDER_GOOGLE}
-                                style={StyleSheet.absoluteFill}
-                                region={mapRegion}
-                                onRegionChangeComplete={(region) => {
-                                    setMapRegion(region);
-                                    geocodeMapCenter(region.latitude, region.longitude);
-                                }}
-                                showsUserLocation
-                                showsMyLocationButton={false}
-                            />
-
-                            {/* Fixed center pin — tip sits at exact centre */}
-                            <View style={styles.mapPinContainer} pointerEvents="none">
-                                <Ionicons name="location" size={44} color="#F4593B" />
+                            {/* Header row */}
+                            <View
+                                style={styles.searchMapHeader}
+                                onLayout={(e) => setHeaderHeight(e.nativeEvent.layout.height)}
+                            >
+                                <Pressable onPress={() => setMode('compact')} hitSlop={12}>
+                                    <Ionicons name="arrow-back" size={22} color="#000" />
+                                </Pressable>
+                                <Text style={styles.searchMapHeaderTitle}>Pick your location</Text>
                             </View>
-                        </View>
 
-                        {/* Autocomplete — rendered AFTER map container so iOS hit-tests it first;
-                             positioned absolutely over the map but NOT a child of the MapView container */}
+                            {/* Map container */}
+                            <View style={{ flex: 1 }} pointerEvents="box-none">
+                                <MapView
+                                    ref={mapRef}
+                                    provider={PROVIDER_GOOGLE}
+                                    style={StyleSheet.absoluteFill}
+                                    initialRegion={mapRegion}
+                                    onRegionChangeComplete={(region) => {
+                                        geocodeMapCenter(region.latitude, region.longitude);
+                                    }}
+                                    showsUserLocation
+                                    showsMyLocationButton={false}
+                                />
+                                {/* Fixed center pin */}
+                                <View style={styles.mapPinContainer} pointerEvents="none">
+                                    <Ionicons name="location" size={44} color="#F4593B" />
+                                </View>
+                            </View>
+
+                            {/* Confirm bar */}
+                            <View style={[styles.mapConfirmBar, { paddingBottom: 16 + insets.bottom }]}>
+                                <View style={{ flex: 1, marginRight: 12 }}>
+                                    {isGeocodingMap ? (
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                            <ActivityIndicator size="small" color="#999" />
+                                            <Text style={styles.locationOptionSub}>Resolving address…</Text>
+                                        </View>
+                                    ) : (
+                                        <Text style={styles.mapAddressText} numberOfLines={2}>
+                                            {mapAddress ?? 'Pan the map to select a location'}
+                                        </Text>
+                                    )}
+                                </View>
+                                <Pressable
+                                    onPress={() => mapAddress ? submitPickup(mapAddress, mapCoords ?? undefined) : undefined}
+                                    disabled={!mapAddress || isGeocodingMap || isRequesting}
+                                    style={({ pressed }) => pressed && { opacity: 0.8 }}
+                                >
+                                    <View style={[styles.mapConfirmButton, (!mapAddress || isGeocodingMap) && { opacity: 0.4 }]}>
+                                        {isRequesting
+                                            ? <ActivityIndicator size="small" color="#F1F443" />
+                                            : <Text style={styles.mapConfirmButtonText}>Confirm</Text>}
+                                    </View>
+                                </Pressable>
+                            </View>
+                        </ScrollView>
+
+                        {/* Autocomplete overlay — sibling to the ScrollView (not nested inside),
+                             so its internal FlatList never triggers the VirtualizedList-in-ScrollView
+                             warning. Its own keyboardShouldPersistTaps="always" handles persistence
+                             for suggestion row taps. */}
                         <View style={[styles.searchOverlay, { top: headerHeight + 12 }]}>
                             <GooglePlacesAutocomplete
                                 placeholder="Search address or landmark…"
@@ -664,15 +702,21 @@ const PickupSheet = ({ visible, screenHeight, booking, onClose, onDone }: Pickup
                                 debounce={400}
                                 minLength={2}
                                 enablePoweredByContainer={false}
-                                textInputProps={{ autoFocus: true }}
+                                keepResultsAfterBlur={true}
+                                listViewDisplayed={showSuggestions}
+                                textInputProps={{
+                                    autoFocus: true,
+                                    placeholderTextColor: '#9CA3AF',
+                                    onChangeText: (text) => setShowSuggestions(text.length >= 2),
+                                }}
                                 onPress={async (data, detail) => {
+                                    setShowSuggestions(false);
                                     const address = detail?.formatted_address ?? data.description;
                                     setMapAddress(address);
 
                                     let lat = detail?.geometry?.location?.lat;
                                     let lng = detail?.geometry?.location?.lng;
 
-                                    // Fallback: fetchDetails silently fails on real devices with restricted keys
                                     if ((lat == null || lng == null) && data.place_id) {
                                         const coords = await fetchPlaceCoords(data.place_id);
                                         if (coords) { lat = coords.lat; lng = coords.lng; }
@@ -685,15 +729,12 @@ const PickupSheet = ({ visible, screenHeight, booking, onClose, onDone }: Pickup
                                             latitudeDelta: 0.005,
                                             longitudeDelta: 0.005,
                                         };
-                                        setMapRegion(newRegion);
-                                        mapRef.current?.animateToRegion(newRegion, 500);
+                                        mapRef.current?.animateToRegion(newRegion, 600);
                                     }
                                 }}
                                 query={{ key: GOOGLE_REST_KEY, language: 'en' }}
                                 styles={{
-                                    container: {
-                                        flex: 0,
-                                    },
+                                    container: { flex: 0 },
                                     textInputContainer: {
                                         paddingHorizontal: 0,
                                         paddingTop: 0,
@@ -711,7 +752,7 @@ const PickupSheet = ({ visible, screenHeight, booking, onClose, onDone }: Pickup
                                         shadowOffset: { width: 0, height: 2 },
                                         shadowOpacity: 0.12,
                                         shadowRadius: 6,
-                                        elevation: 4,
+                                        elevation: 100,
                                         margin: 0,
                                     },
                                     listView: {
@@ -723,7 +764,7 @@ const PickupSheet = ({ visible, screenHeight, booking, onClose, onDone }: Pickup
                                         shadowOffset: { width: 0, height: 4 },
                                         shadowOpacity: 0.1,
                                         shadowRadius: 10,
-                                        elevation: 6,
+                                        elevation: 9999,
                                     },
                                     row: {
                                         paddingHorizontal: 14,
@@ -741,8 +782,8 @@ const PickupSheet = ({ visible, screenHeight, booking, onClose, onDone }: Pickup
                                     poweredContainer: { display: 'none' },
                                 }}
                                 renderRow={(data) => (
-                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }} pointerEvents="none">
-                                        <View style={styles.suggestionIcon}>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                                        <View style={styles.suggestionIcon} pointerEvents="none">
                                             <Ionicons name="location-outline" size={15} color="#555" />
                                         </View>
                                         <Text style={[styles.suggestionText, { flex: 1 }]} numberOfLines={2}>
@@ -750,38 +791,12 @@ const PickupSheet = ({ visible, screenHeight, booking, onClose, onDone }: Pickup
                                         </Text>
                                     </View>
                                 )}
-                                keyboardShouldPersistTaps="handled"
+                                keyboardShouldPersistTaps="always"
                             />
-                        </View>
-
-                        {/* Confirm bar — shows reverse-geocoded address + confirm button */}
-                        <View style={[styles.mapConfirmBar, { paddingBottom: 16 + insets.bottom }]}>
-                            <View style={{ flex: 1, marginRight: 12 }}>
-                                {isGeocodingMap ? (
-                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                                        <ActivityIndicator size="small" color="#999" />
-                                        <Text style={styles.locationOptionSub}>Resolving address…</Text>
-                                    </View>
-                                ) : (
-                                    <Text style={styles.mapAddressText} numberOfLines={2}>
-                                        {mapAddress ?? 'Pan the map to select a location'}
-                                    </Text>
-                                )}
-                            </View>
-                            <Pressable
-                                onPress={() => mapAddress ? submitPickup(mapAddress, mapCoords ?? undefined) : undefined}
-                                disabled={!mapAddress || isGeocodingMap || isRequesting}
-                                style={({ pressed }) => pressed && { opacity: 0.8 }}
-                            >
-                                <View style={[styles.mapConfirmButton, (!mapAddress || isGeocodingMap) && { opacity: 0.4 }]}>
-                                    {isRequesting
-                                        ? <ActivityIndicator size="small" color="#F1F443" />
-                                        : <Text style={styles.mapConfirmButtonText}>Confirm</Text>}
-                                </View>
-                            </Pressable>
                         </View>
                     </View>
                 )}
+
             </Animated.View>
         </>
     );
@@ -809,6 +824,12 @@ export default function CorporateShuttleCard({
     const showBack = !!booking || !!shuttleTrip; // Allow flipping when any trip data is present
 
     const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = useWindowDimensions();
+    const cardWidth = React.useMemo(() => {
+        if (Platform.OS !== 'android') return CARD_WIDTH;
+
+        const horizontalMargin = 32;
+        return Math.min(CARD_WIDTH, Math.max(300, SCREEN_WIDTH - horizontalMargin));
+    }, [SCREEN_WIDTH]);
     const cardRef = React.useRef<View>(null);
 
     const [modalVisible, setModalVisible] = useState(false);
@@ -879,7 +900,7 @@ export default function CorporateShuttleCard({
     }));
 
     const cardContainerStyle = useAnimatedStyle(() => {
-        const targetX = (SCREEN_WIDTH - CARD_WIDTH) / 2;
+        const targetX = (SCREEN_WIDTH - cardWidth) / 2;
         const targetY = (SCREEN_HEIGHT - CARD_HEIGHT) / 2;
 
         const deltaX = measX.value - targetX;
@@ -893,10 +914,10 @@ export default function CorporateShuttleCard({
                 { translateX },
                 { translateY },
             ],
-            width: CARD_WIDTH,
+            width: cardWidth,
             height: CARD_HEIGHT,
         };
-    });
+    }, [SCREEN_WIDTH, SCREEN_HEIGHT, cardWidth]);
 
     // Make the inline card stay visible until the spring is actually moving 
     // to prevent the background flashing through right before the modal renders
@@ -935,7 +956,7 @@ export default function CorporateShuttleCard({
     return (
         <View style={styles.safeArea}>
             {/* Inline PlaceHolder / Wrapper */}
-            <Animated.View ref={cardRef} style={[{ width: CARD_WIDTH, height: CARD_HEIGHT }, inlineCardStyle]}>
+            <Animated.View ref={cardRef} style={[{ width: cardWidth, height: CARD_HEIGHT }, inlineCardStyle]}>
                 <Pressable onPress={openModal} style={{ flex: 1 }}>
                     <View style={[StyleSheet.absoluteFill, { borderRadius: 28, overflow: 'hidden' }]}>
                         <FrontContent booking={booking} shuttleTrip={shuttleTrip} isLoading={isLoading} isChauffeurEnabled={isChauffeurEnabled} isShuttleEnabled={isShuttleEnabled} />
@@ -953,7 +974,17 @@ export default function CorporateShuttleCard({
 
                 {/* Animated Wrapper Container */}
                 <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
-                    <Animated.View style={[styles.centerContainer, cardContainerStyle]} pointerEvents="box-none">
+                    <Animated.View
+                        style={[
+                            styles.centerContainer,
+                            {
+                                marginLeft: -cardWidth / 2,
+                                width: cardWidth,
+                            },
+                            cardContainerStyle,
+                        ]}
+                        pointerEvents="box-none"
+                    >
 
                         {/* Front Side */}
                         <Animated.View

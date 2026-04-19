@@ -1,6 +1,7 @@
 import React, { useState, useRef, useCallback } from 'react';
 import {
   Image,
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -10,6 +11,7 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
+  TouchableWithoutFeedback,
   View,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -85,17 +87,20 @@ export function OtpLoginScreen() {
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.select({ ios: 'padding', android: 'height' })}
+        keyboardVerticalOffset={Platform.select({ ios: 0, android: 8 })}
       >
-        <ScrollView
-          style={styles.container}
-          contentContainerStyle={[
-            styles.scrollContent,
-            { paddingTop: insets.top + 12, paddingBottom: insets.bottom + 24 },
-          ]}
-          keyboardShouldPersistTaps="handled"
-          keyboardDismissMode="on-drag"
-          showsVerticalScrollIndicator={false}
-        >
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+          <ScrollView
+            style={styles.container}
+            contentContainerStyle={[
+              styles.scrollContent,
+              { paddingTop: insets.top + 12, paddingBottom: insets.bottom + 24 },
+            ]}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="on-drag"
+            automaticallyAdjustKeyboardInsets
+            showsVerticalScrollIndicator={false}
+          >
           {/* Logo */}
           <View style={styles.logoContainer}>
             <Image
@@ -215,7 +220,8 @@ export function OtpLoginScreen() {
               </Pressable>
             </Animated.View>
           )}
-        </ScrollView>
+          </ScrollView>
+        </TouchableWithoutFeedback>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -231,7 +237,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
   },
   scrollContent: {
-    // no flexGrow — content anchors to top, empty space below
+    flexGrow: 1,
   },
   logoContainer: {
     alignItems: 'center',
