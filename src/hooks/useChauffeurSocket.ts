@@ -1,4 +1,4 @@
-import { useEffect, useCallback } from 'react';
+import { useEffect, useCallback, useRef } from 'react';
 import { socketService } from '../services/socket.service';
 
 interface LocationPayload {
@@ -47,6 +47,15 @@ export function useChauffeurSocket({
     onStatusChange,
     onRideEnded,
 }: UseChauffeurSocketOptions) {
+    // Keep refs to the latest callbacks so handlers registered once on mount
+    // always call the current version without causing the effect to re-run.
+    const onLocationUpdateRef = useRef(onLocationUpdate);
+    const onStatusChangeRef = useRef(onStatusChange);
+    const onRideEndedRef = useRef(onRideEnded);
+    onLocationUpdateRef.current = onLocationUpdate;
+    onStatusChangeRef.current = onStatusChange;
+    onRideEndedRef.current = onRideEnded;
+
     useEffect(() => {
         if (!bookingId || !userId) return;
 
@@ -54,13 +63,13 @@ export function useChauffeurSocket({
         socketService.joinRide(bookingId, userId, 'employee', 'chauffeur');
 
         const handleLocation = (data: LocationPayload) => {
-            onLocationUpdate?.(data);
+            onLocationUpdateRef.current?.(data);
         };
 
         const handleStatus = (data: ChauffeurStatusPayload) => {
-            onStatusChange?.(data);
+            onStatusChangeRef.current?.(data);
             if (data.status === 'ENDED') {
-                onRideEnded?.();
+                onRideEndedRef.current?.();
             }
         };
 
@@ -72,7 +81,6 @@ export function useChauffeurSocket({
             socketService.off('chauffeur:status', handleStatus);
             socketService.leaveRide();
         };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [bookingId, userId]);
 
     /**
@@ -83,7 +91,7 @@ export function useChauffeurSocket({
      */
     const requestCaptain = useCallback(
         (pickupLocation?: string) => {
-            socketService['socket']?.emit('chauffeur:request-captain', {
+            socketService.emit('chauffeur:request-captain', {
                 bookingId: String(bookingId),
                 userId,
                 pickupLocation,

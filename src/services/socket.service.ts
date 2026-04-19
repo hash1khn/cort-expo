@@ -1,5 +1,6 @@
 import { io, Socket } from 'socket.io-client';
 import { env } from '../core/config/env';
+import { tokenStorage } from '../features/auth/utils/tokenStorage';
 
 class SocketService {
   private socket: Socket | null = null;
@@ -44,8 +45,11 @@ class SocketService {
       auth: { token },
       transports: ['websocket'],
       reconnection: true,
-      reconnectionAttempts: 10,
-      reconnectionDelay: 2000,
+      // Never stop retrying — connectivity can be restored at any point.
+      reconnectionAttempts: Infinity,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 30000, // cap at 30 s between attempts
+      randomizationFactor: 0.5,
     });
 
     // Internal system listeners (not stored in registry)
@@ -61,8 +65,28 @@ class SocketService {
       console.log('[Socket] Disconnected:', reason);
     });
 
-    this.socket.on('connect_error', (err) => {
+    // If the server rejects the connection (e.g. expired JWT), refresh the
+    // token and reconnect with a fresh one rather than retrying with the same
+    // dead credentials.
+    this.socket.on('connect_error', async (err) => {
       console.warn('[Socket] Connection error:', err.message);
+      const isAuthError =
+        err.message?.toLowerCase().includes('unauthorized') ||
+        err.message?.toLowerCase().includes('jwt') ||
+        err.message?.toLowerCase().includes('token');
+
+      if (isAuthError) {
+        try {
+          const freshToken = await tokenStorage.refreshAccessToken();
+          if (freshToken && this.socket) {
+            // Update credentials so the next reconnection attempt uses the
+            // new token without needing to tear down the socket.
+            (this.socket.auth as Record<string, string>).token = freshToken;
+          }
+        } catch {
+          console.warn('[Socket] Token refresh failed');
+        }
+      }
     });
 
     // Re-attach every listener that was registered before this socket existed
@@ -134,6 +158,18 @@ class SocketService {
     coords: { lat: number; lng: number; heading: number; speed: number },
   ) {
     this.socket?.emit('location:update', { tripId: String(tripId), ...coords });
+  }
+
+  /**
+   * Emit any arbitrary event. Prefer named helpers above for type safety.
+   * Use this for one-off events like chauffeur:request-captain.
+   */
+  emit(event: string, data: unknown) {
+    if (!this.socket?.connected) {
+      console.warn(`[Socket] emit('${event}') dropped — socket not connected`);
+      return;
+    }
+    this.socket.emit(event, data);
   }
 
   // ─────────────────────────────────────────────────────────────────────────

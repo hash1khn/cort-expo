@@ -383,7 +383,7 @@ export function ActiveTripScreen() {
                           Linking.openURL(url).catch(() => showError(t.errors.mapsFail));
                       }
                     : undefined;
-                await startTracking(id, openMaps);
+                await startTracking(id, openMaps, 'chauffeur');
             } catch {
                 showError(t.errors.startFail);
             }

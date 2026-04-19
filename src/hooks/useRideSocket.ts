@@ -1,4 +1,4 @@
-import { useEffect, useCallback } from 'react';
+import { useEffect, useCallback, useRef } from 'react';
 import { socketService } from '../services/socket.service';
 
 interface LocationPayload {
@@ -61,27 +61,45 @@ export function useRideSocket({
     onAttendanceMarked,
     onRideEnded,
 }: UseRideSocketOptions) {
+    // Refs hold the latest callbacks so handlers registered once on mount
+    // always call the current version without causing the effect to re-run.
+    const onLocationUpdateRef = useRef(onLocationUpdate);
+    const onStopArrivedRef = useRef(onStopArrived);
+    const onRideProceedingRef = useRef(onRideProceeding);
+    const onAttendanceMarkedRef = useRef(onAttendanceMarked);
+    const onRideEndedRef = useRef(onRideEnded);
+    onLocationUpdateRef.current = onLocationUpdate;
+    onStopArrivedRef.current = onStopArrived;
+    onRideProceedingRef.current = onRideProceeding;
+    onAttendanceMarkedRef.current = onAttendanceMarked;
+    onRideEndedRef.current = onRideEnded;
+
     useEffect(() => {
         if (!tripId || !userId) return;
 
         socketService.joinRide(tripId, userId, role, tripType);
 
-        if (onLocationUpdate) socketService.on('driver:location', onLocationUpdate);
-        if (onStopArrived) socketService.on('stop:arrived', onStopArrived);
-        if (onRideProceeding) socketService.on('ride:proceeding', onRideProceeding);
-        if (onAttendanceMarked) socketService.on('attendance:marked', onAttendanceMarked);
-        if (onRideEnded) socketService.on('RIDE_ENDED', onRideEnded);
+        const handleLocation = (data: LocationPayload) => onLocationUpdateRef.current?.(data);
+        const handleStopArrived = (data: StopArrivedPayload) => onStopArrivedRef.current?.(data);
+        const handleRideProceeding = (data: RideProceedingPayload) => onRideProceedingRef.current?.(data);
+        const handleAttendanceMarked = (data: AttendanceMarkedPayload) => onAttendanceMarkedRef.current?.(data);
+        const handleRideEnded = (data: RideEndedPayload) => onRideEndedRef.current?.(data);
+
+        socketService.on('driver:location', handleLocation);
+        socketService.on('stop:arrived', handleStopArrived);
+        socketService.on('ride:proceeding', handleRideProceeding);
+        socketService.on('attendance:marked', handleAttendanceMarked);
+        socketService.on('RIDE_ENDED', handleRideEnded);
 
         return () => {
-            if (onLocationUpdate) socketService.off('driver:location', onLocationUpdate);
-            if (onStopArrived) socketService.off('stop:arrived', onStopArrived);
-            if (onRideProceeding) socketService.off('ride:proceeding', onRideProceeding);
-            if (onAttendanceMarked) socketService.off('attendance:marked', onAttendanceMarked);
-            if (onRideEnded) socketService.off('RIDE_ENDED', onRideEnded);
-            // Clear the ride-room tracking so a finished trip is not replayed on reconnect
+            socketService.off('driver:location', handleLocation);
+            socketService.off('stop:arrived', handleStopArrived);
+            socketService.off('ride:proceeding', handleRideProceeding);
+            socketService.off('attendance:marked', handleAttendanceMarked);
+            socketService.off('RIDE_ENDED', handleRideEnded);
             socketService.leaveRide();
         };
-    }, [tripId, userId, role, onLocationUpdate, onStopArrived, onRideProceeding, onAttendanceMarked, onRideEnded]);
+    }, [tripId, userId, role, tripType]);
 
     const sendLocation = useCallback(
         (coords: { lat: number; lng: number; heading: number; speed: number }) => {

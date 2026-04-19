@@ -323,7 +323,7 @@ export default function RideInProgress() {
 
           await startTrip({ route_id: routeId, direction, lat: driverLat, lng: driverLng }).unwrap();
           // Start tracking first; open Maps only after location is live.
-          await startTracking(tripId ?? 0, () => openInMaps(currentStop));
+          await startTracking(tripId ?? 0, () => openInMaps(currentStop), 'shuttle');
         } catch {
           // Optionally show error
         }

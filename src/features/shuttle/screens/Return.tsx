@@ -246,7 +246,7 @@ export default function Return() {
         setReturnTripStarted(true);
         if (tripId) {
           // Start tracking first; open Maps only after location is live.
-          await startTracking(tripId, () => openStopsInMaps(stops));
+          await startTracking(tripId, () => openStopsInMaps(stops), 'shuttle');
         } else {
           openStopsInMaps(stops);
         }

@@ -1,5 +1,6 @@
 import { Platform } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
+import { env } from '../../../core/config/env';
 
 const KEYS = {
   ACCESS_TOKEN: 'cort_access_token',
@@ -83,5 +84,37 @@ export const tokenStorage = {
       return;
     }
     await SecureStore.deleteItemAsync(sanitize(KEYS.PUSH_TOKEN));
+  },
+
+  /**
+   * Uses the stored refresh token to obtain a new access token from the
+   * backend, persists both new tokens, and returns the new access token.
+   * Returns null if the refresh token is missing or the request fails.
+   */
+  async refreshAccessToken(): Promise<string | null> {
+    const refreshToken = await this.getRefreshToken();
+    if (!refreshToken) return null;
+
+    try {
+      const base = env.API_URL.replace(/\/$/, '');
+      const res = await fetch(`${base}/auth/refresh-token`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refreshToken }),
+      });
+
+      if (!res.ok) return null;
+
+      const json = await res.json();
+      const accessToken: string | undefined = json?.data?.session?.access_token;
+      const newRefreshToken: string | undefined = json?.data?.session?.refresh_token;
+
+      if (!accessToken) return null;
+
+      await this.setTokens(accessToken, newRefreshToken ?? refreshToken);
+      return accessToken;
+    } catch {
+      return null;
+    }
   },
 };

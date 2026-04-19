@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
 import * as TaskManager from 'expo-task-manager';
-import { ACTIVE_RIDE_KEY, RIDER_LOCATION_TASK } from './backgroundLocationTask';
+import { ACTIVE_RIDE_KEY, ACTIVE_RIDE_TYPE_KEY, RIDER_LOCATION_TASK } from './backgroundLocationTask';
 
 /**
  * Saves the ride ID to AsyncStorage and starts the background location task.
@@ -9,10 +9,15 @@ import { ACTIVE_RIDE_KEY, RIDER_LOCATION_TASK } from './backgroundLocationTask';
  * Safe to call even if the task is already running — isTaskRegisteredAsync
  * guards against double registration.
  *
- * @param tripId  The shuttle tripId or chauffeur bookingId for this ride.
+ * @param tripId    The shuttle tripId or chauffeur bookingId for this ride.
+ * @param tripType  'shuttle' | 'chauffeur' — stored so the HTTP fallback can
+ *                  pass it to the server for geofence routing.
  */
-export async function startLocationTracking(tripId: string | number): Promise<void> {
+export async function startLocationTracking(tripId: string | number, tripType?: 'shuttle' | 'chauffeur'): Promise<void> {
   await AsyncStorage.setItem(ACTIVE_RIDE_KEY, String(tripId));
+  if (tripType) {
+    await AsyncStorage.setItem(ACTIVE_RIDE_TYPE_KEY, tripType);
+  }
 
   const alreadyRunning = await TaskManager.isTaskRegisteredAsync(RIDER_LOCATION_TASK);
   if (alreadyRunning) return;
@@ -46,6 +51,7 @@ export async function startLocationTracking(tripId: string | number): Promise<vo
  */
 export async function stopLocationTracking(): Promise<void> {
   await AsyncStorage.removeItem(ACTIVE_RIDE_KEY);
+  await AsyncStorage.removeItem(ACTIVE_RIDE_TYPE_KEY);
 
   const isRunning = await TaskManager.isTaskRegisteredAsync(RIDER_LOCATION_TASK);
   if (isRunning) {

@@ -20,7 +20,7 @@ export interface UseRiderLocationTrackingReturn {
    * granted), false if permissions still need to be requested (a modal/dialog
    * will appear and `onReady` fires after the user accepts).
    */
-  startTracking: (tripId: string | number, onReady?: () => void) => Promise<boolean>;
+  startTracking: (tripId: string | number, onReady?: () => void, tripType?: 'shuttle' | 'chauffeur') => Promise<boolean>;
   /** Call when the ride ends to stop the background task. */
   stopTracking: () => Promise<void>;
   /** Mount <LocationDisclosureModal visible={needsDisclosure} ... /> when true */
@@ -36,10 +36,11 @@ export function useRiderLocationTracking(): UseRiderLocationTrackingReturn {
   const [needsDisclosure, setNeedsDisclosure] = useState(false);
   const pendingTripIdRef = useRef<string | number | null>(null);
   const pendingOnReadyRef = useRef<(() => void) | null>(null);
+  const pendingTripTypeRef = useRef<'shuttle' | 'chauffeur' | undefined>(undefined);
 
   /** Request permissions (if needed) then start the task, then fire onReady. */
   const requestAndStart = useCallback(
-    async (tripId: string | number, onReady?: () => void): Promise<boolean> => {
+    async (tripId: string | number, onReady?: () => void, tripType?: 'shuttle' | 'chauffeur'): Promise<boolean> => {
       const { status: fgStatus } =
         await Location.requestForegroundPermissionsAsync();
 
@@ -56,7 +57,7 @@ export function useRiderLocationTracking(): UseRiderLocationTrackingReturn {
         return false;
       }
 
-      await startLocationTracking(tripId);
+      await startLocationTracking(tripId, tripType);
       setIsTracking(true);
       onReady?.();
       return true;
@@ -65,7 +66,7 @@ export function useRiderLocationTracking(): UseRiderLocationTrackingReturn {
   );
 
   const startTracking = useCallback(
-    async (tripId: string | number, onReady?: () => void): Promise<boolean> => {
+    async (tripId: string | number, onReady?: () => void, tripType?: 'shuttle' | 'chauffeur'): Promise<boolean> => {
       // Permissions already granted — start immediately and fire onReady.
       const { status: fgStatus } =
         await Location.getForegroundPermissionsAsync();
@@ -73,7 +74,7 @@ export function useRiderLocationTracking(): UseRiderLocationTrackingReturn {
         await Location.getBackgroundPermissionsAsync();
 
       if (fgStatus === 'granted' && bgStatus === 'granted') {
-        await startLocationTracking(tripId);
+        await startLocationTracking(tripId, tripType);
         setIsTracking(true);
         onReady?.();
         return true;
@@ -84,11 +85,12 @@ export function useRiderLocationTracking(): UseRiderLocationTrackingReturn {
       if (Platform.OS === 'android') {
         pendingTripIdRef.current = tripId;
         pendingOnReadyRef.current = onReady ?? null;
+        pendingTripTypeRef.current = tripType;
         setNeedsDisclosure(true);
         return false;
       }
 
-      return requestAndStart(tripId, onReady);
+      return requestAndStart(tripId, onReady, tripType);
     },
     [requestAndStart],
   );
@@ -102,8 +104,10 @@ export function useRiderLocationTracking(): UseRiderLocationTrackingReturn {
     setNeedsDisclosure(false);
     if (pendingTripIdRef.current != null) {
       const onReady = pendingOnReadyRef.current ?? undefined;
+      const tripType = pendingTripTypeRef.current;
       pendingOnReadyRef.current = null;
-      await requestAndStart(pendingTripIdRef.current, onReady);
+      pendingTripTypeRef.current = undefined;
+      await requestAndStart(pendingTripIdRef.current, onReady, tripType);
       pendingTripIdRef.current = null;
     }
   }, [requestAndStart]);
@@ -112,6 +116,7 @@ export function useRiderLocationTracking(): UseRiderLocationTrackingReturn {
     setNeedsDisclosure(false);
     pendingTripIdRef.current = null;
     pendingOnReadyRef.current = null;
+    pendingTripTypeRef.current = undefined;
   }, []);
 
   return {

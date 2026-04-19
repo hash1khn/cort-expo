@@ -12,6 +12,7 @@ import { env } from '../../core/config/env';
  * always knows which trip to attach location updates to.
  */
 export const ACTIVE_RIDE_KEY = 'CORT_ACTIVE_RIDE_ID';
+export const ACTIVE_RIDE_TYPE_KEY = 'CORT_ACTIVE_RIDE_TYPE';
 
 /**
  * Unique task name used by TaskManager and expo-location.
@@ -58,6 +59,7 @@ TaskManager.defineTask(
     try {
       const tripId = await AsyncStorage.getItem(ACTIVE_RIDE_KEY);
       if (!tripId) return;
+      const tripType = (await AsyncStorage.getItem(ACTIVE_RIDE_TYPE_KEY)) as 'shuttle' | 'chauffeur' | null;
 
       // Prefer the shared socket instance when it is still connected
       // (Android foreground service keeps the JS process alive so the socket
@@ -78,7 +80,7 @@ TaskManager.defineTask(
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ tripId, ...coords }),
+        body: JSON.stringify({ tripId, ...coords, tripType }),
       });
     } catch (e) {
       console.warn('[RiderLocation] Failed to send location update:', e);
