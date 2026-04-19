@@ -34,8 +34,12 @@ import { useSplashPrefetch } from '../src/features/employee/hooks/useSplashPrefe
 import { useSocketConnection } from '../src/hooks/useSocketConnection';
 import { useNetworkToast } from '../src/hooks/useNetworkToast';
 import { useAppLaunchRideCheck } from '../src/hooks/useAppLaunchRideCheck';
+import { useProfileSync } from '../src/hooks/useProfileSync';
 import { tokenStorage } from '../src/features/auth/utils/tokenStorage';
 import { router } from 'expo-router';
+import { Platform } from 'react-native';
+import { apiFetch } from '../src/services/api';
+import { useNotification } from '../src/context/NotificationContext';
 
 SplashScreen.preventAutoHideAsync().catch(() => {
   // no-op (can throw if called twice in dev)
@@ -128,9 +132,21 @@ function RootLayoutContent() {
     tokenStorage.getAccessToken().then((t) => setAuthToken(t ?? null));
   }, [isLoggedIn]);
 
+  const { expoPushToken } = useNotification();
+
+  // Register push token with backend after login
+  useEffect(() => {
+    if (!isLoggedIn || !expoPushToken) return;
+    apiFetch('/notifications/push-token', {
+      method: 'POST',
+      body: JSON.stringify({ token: expoPushToken, platform: Platform.OS }),
+    }).catch((err) => console.warn('[PushToken] register failed:', err));
+  }, [isLoggedIn, expoPushToken]);
+
   // Manage socket connection lifecycle (foreground/background)
   useSocketConnection(authToken);
   useNetworkToast();
+  useProfileSync();
 
   useAppLaunchRideCheck(user?.id, (rideData) => {
     if (rideData.role === 'driver') {

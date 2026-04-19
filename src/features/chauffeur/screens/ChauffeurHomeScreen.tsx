@@ -14,6 +14,7 @@ import {
   isBetweenDays,
 } from '../services/chauffeur.api';
 import { useLanguage } from '@/features/shared/context/LanguageContext';
+import { useRefetchOnReconnect } from '@/hooks/useRefetchOnReconnect';
 
 const Text = (props: React.ComponentProps<typeof RNText>) => (
   <RNText {...props} style={[{ fontFamily }, props.style]} />
@@ -306,6 +307,7 @@ export function ChauffeurHomeScreen() {
   const { language } = useLanguage();
   const t = LABELS[language];
   const { data: activeBooking, isLoading, isError, refetch } = useGetDriverActiveBookingQuery();
+  useRefetchOnReconnect(refetch);
   const [isRequestModalVisible, setIsRequestModalVisible] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
 

@@ -11,6 +11,7 @@ import {
   ShuttleTrip,
 } from '../services/shuttleApi';
 import { AppHeader } from '../../shared/components/AppHeader';
+import { useRefetchOnReconnect } from '@/hooks/useRefetchOnReconnect';
 
 const ROUTE_DETAILS_LABELS = {
   en: {
@@ -45,6 +46,7 @@ export function ShuttleDriver() {
   const navigation = useNavigation();
   const { language } = useLanguage();
   const { data: todayTrips = [], isLoading: isTodayTripLoading, refetch } = useGetTodayTripQuery();
+  useRefetchOnReconnect(refetch);
   const [triggerLoadEmployees] = useLazyGetTripEmployeesQuery();
   const [isRefreshing, setIsRefreshing] = useState(false);
 

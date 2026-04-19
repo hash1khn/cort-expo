@@ -43,6 +43,7 @@ export type ShuttleTripForEmployee = {
     id: string;
     full_name: string | null;
     phone: string | null;
+    profile_picture_url: string | null;
   } | null;
 };
 

@@ -5,6 +5,7 @@ import {
   ScrollView,
   Pressable,
 } from 'react-native';
+import { Image as ExpoImage } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -225,7 +226,24 @@ const RideDetails = () => {
             <View className="bg-gray-50 px-4 py-3 border-b border-gray-200">
               <Text className="text-[14px] font-semibold text-gray-600">Driver information</Text>
             </View>
-            <DetailRow label="Name" value={driver?.full_name ?? '—'} />
+            <View className="flex-row items-center px-4 py-4 border-b border-gray-100">
+              <View className="w-12 h-12 rounded-full bg-black items-center justify-center overflow-hidden mr-3">
+                {driver?.profile_picture_url ? (
+                  <ExpoImage
+                    source={{ uri: driver.profile_picture_url }}
+                    style={{ width: 48, height: 48, borderRadius: 24 }}
+                    contentFit="cover"
+                  />
+                ) : (
+                  <Text className="text-[#F1F443] text-lg font-bold">
+                    {driver?.full_name
+                      ? driver.full_name.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase()
+                      : '—'}
+                  </Text>
+                )}
+              </View>
+              <Text className="text-[15px] font-semibold text-black">{driver?.full_name ?? '—'}</Text>
+            </View>
             <DetailRow
               label="Vehicle"
               value={
@@ -291,7 +309,24 @@ const RideDetails = () => {
           <View className="bg-gray-50 px-4 py-3 border-b border-gray-200">
             <Text className="text-[14px] font-semibold text-gray-600">Driver information</Text>
           </View>
-          <DetailRow label="Name" value={driver?.full_name ?? '—'} />
+          <View className="flex-row items-center px-4 py-4 border-b border-gray-100">
+            <View className="w-12 h-12 rounded-full bg-black items-center justify-center overflow-hidden mr-3">
+              {driver?.profile_picture_url ? (
+                <ExpoImage
+                  source={{ uri: driver.profile_picture_url }}
+                  style={{ width: 48, height: 48, borderRadius: 24 }}
+                  contentFit="cover"
+                />
+              ) : (
+                <Text className="text-[#F1F443] text-lg font-bold">
+                  {driver?.full_name
+                    ? driver.full_name.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase()
+                    : '—'}
+                </Text>
+              )}
+            </View>
+            <Text className="text-[15px] font-semibold text-black">{driver?.full_name ?? '—'}</Text>
+          </View>
           {vehicle && (
             <>
               <DetailRow label="Vehicle" value={`${vehicle.make ?? ''} ${vehicle.model ?? ''}`.trim() || '—'} />

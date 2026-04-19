@@ -61,8 +61,7 @@ export const mockApi = {
           full_name: safeUser.full_name,
           phone: safeUser.phone,
           company_id: safeUser.company_id,
-          account_status: safeUser.account_status,
-          enabled_services: safeUser.enabled_services,
+          account_status: safeUser.account_status,          profile_picture_url: null,          enabled_services: safeUser.enabled_services,
         },
       };
     }
@@ -88,6 +87,7 @@ export const mockApi = {
         phone: app.phone || '+92300000000',
         company_id: 1,
         account_status: 'ACTIVE' as const,
+        profile_picture_url: null,
         enabled_services: {
           shuttle: false,
           chauffeur: true,

@@ -14,6 +14,7 @@ export interface AuthState {
     full_name: string;
     company_id: number | null;
     account_status: 'ACTIVE' | 'INACTIVE' | 'SUSPENDED';
+    profile_picture_url: string | null;
     enabled_services: {
       shuttle: boolean;
       chauffeur: boolean;

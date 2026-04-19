@@ -17,6 +17,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { AntDesign, Entypo, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { fontFamily } from '@/core/theme';
 import { useToast } from '@/shared/ui/molecules/Toast';
+import { useRefetchOnReconnect } from '@/hooks/useRefetchOnReconnect';
 
 const Text = (props: React.ComponentProps<typeof RNText>) => {
   return <RNText {...props} style={[{ fontFamily }, props.style]} />;
@@ -124,6 +125,8 @@ export default function NewHome() {
     { companyId },
     { skip: !companyId || !hasChauffeur },
   );
+
+  useRefetchOnReconnect(refetchShuttleTrips, refetchActiveChauffeurBooking, refetchChauffeurBookings);
 
   const router = useRouter();
   const navigation = useNavigation();

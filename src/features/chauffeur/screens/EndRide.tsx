@@ -145,8 +145,8 @@ export function EndRideScreen() {
         const tollStep = STEPS.indexOf('Toll receipt');
 
         const meterUrl = meterStep !== -1 ? photos[meterStep]?.[0] : undefined;
-        const parkingUrl = parkingStep !== -1 ? photos[parkingStep]?.[0] : undefined;
-        const tollUrl = tollStep !== -1 ? photos[tollStep]?.[0] : undefined;
+        const parkingUrls = parkingStep !== -1 ? (photos[parkingStep] ?? []) : [];
+        const tollUrls = tollStep !== -1 ? (photos[tollStep] ?? []) : [];
 
         try {
             await endRide({
@@ -157,8 +157,8 @@ export function EndRideScreen() {
                     expense_parking: parkingValue ? parseFloat(parkingValue) : undefined,
                     expense_toll: tollValue ? parseFloat(tollValue) : undefined,
                     meter_reading_end_image_url: meterUrl,
-                    expense_parking_image_url: parkingUrl,
-                    expense_toll_image_url: tollUrl,
+                    expense_parking_image_urls: parkingUrls.length ? parkingUrls : undefined,
+                    expense_toll_image_urls: tollUrls.length ? tollUrls : undefined,
                     ...(isForceComplete ? { force_complete: true } : {}),
                 }
             }).unwrap();

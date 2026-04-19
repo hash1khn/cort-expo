@@ -12,9 +12,9 @@ const baseQuery = fetchBaseQuery({
     if (token) {
       headers.set('authorization', `Bearer ${token}`);
     }
-    if (!headers.has('content-type')) {
-      headers.set('content-type', 'application/json');
-    }
+    // Do NOT force content-type here — RTK Query sets 'application/json' for
+    // plain-object bodies automatically, and FormData uploads need the browser
+    // to set 'multipart/form-data; boundary=...' themselves.
     return headers;
   },
 });
@@ -57,7 +57,6 @@ const baseQueryWithReauth = async (args: any, api: any, extraOptions: any) => {
 export const baseApi = createApi({
   reducerPath: 'api',
   baseQuery: baseQueryWithReauth,
-  refetchOnReconnect: true,
   tagTypes: ['Auth', 'Booking', 'ChauffeurBooking', 'ShuttleTrip', 'Attendance'],
   endpoints: () => ({}),
 });

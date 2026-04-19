@@ -212,6 +212,7 @@ const MOCK_DRIVER = {
   id: 'd3dc467d-706d-4f50-b52c-a8c26db84ef5',
   full_name: 'Sajjad Hussain',
   phone: '03162211320',
+  profile_picture_url: null,
 };
 
 /** The employee's assigned pickup stop (second stop on the route) */

@@ -1,5 +1,6 @@
 import { env } from '../../../core/config/env';
 import { tokenStorage } from '../utils/tokenStorage';
+import { Platform } from 'react-native';
 import type { UserRole } from '../../../core/types/navigation';
 
 type BackendRole = 'SUPER_ADMIN' | 'COMPANY_ADMIN' | 'EMPLOYEE' | 'DRIVER';
@@ -24,6 +25,7 @@ type LoginResponse = {
       company_id?: number | null;
       account_status?: 'ACTIVE' | 'INACTIVE' | 'SUSPENDED';
       driver_type?: BackendDriverType;
+      profile_picture_url?: string | null;
       enabled_services?: {
         shuttle: boolean;
         chauffeur: boolean;
@@ -42,6 +44,7 @@ export type LoginResult = {
     phone: string;
     company_id: number | null;
     account_status: 'ACTIVE' | 'INACTIVE' | 'SUSPENDED';
+    profile_picture_url: string | null;
     enabled_services: {
       shuttle: boolean;
       chauffeur: boolean;
@@ -92,6 +95,7 @@ export async function login(email: string, password: string): Promise<LoginResul
       phone: user.phone,
       company_id: user.company_id ?? null,
       account_status: user.account_status,
+      profile_picture_url: user.profile_picture_url ?? null,
       enabled_services: user.enabled_services ?? null,
     },
     role: mapRole(user.role as BackendRole, user.driver_type),
@@ -101,8 +105,27 @@ export async function login(email: string, password: string): Promise<LoginResul
 export async function logout(): Promise<void> {
   const access = await tokenStorage.getAccessToken();
   const base = env.API_URL.replace(/\/$/, '');
+  const platform: 'ios' | 'android' = Platform.OS === 'android' ? 'android' : 'ios';
 
   if (access) {
+    // Remove push token before JWT is cleared so the request is still authenticated
+    try {
+      const pushToken = await tokenStorage.getPushToken();
+      if (pushToken) {
+        await fetch(`${base}/notifications/push-token`, {
+          method: 'DELETE',
+          headers: {
+            Authorization: `Bearer ${access}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ token: pushToken, platform }),
+        });
+        await tokenStorage.clearPushToken();
+      }
+    } catch {
+      // ignore — stale tokens will be cleaned up by DeviceNotRegistered receipts
+    }
+
     try {
       await fetch(`${base}/auth/logout`, {
         method: 'POST',

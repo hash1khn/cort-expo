@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text as RNText,
@@ -8,9 +8,11 @@ import {
   TextInput,
   TouchableWithoutFeedback,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import BottomSheet, {
   BottomSheetScrollView,
   BottomSheetBackdrop,
+  BottomSheetTextInput,
 } from '@gorhom/bottom-sheet';
 import { Ionicons } from '@expo/vector-icons';
 import { fontFamily } from '@/core/theme';
@@ -120,8 +122,16 @@ function RideReviewSheetContent({
   vehiclePlate,
   onSuccess,
 }: Required<Omit<RideReviewSheetProps, 'visible'>>) {
+  const insets = useSafeAreaInsets();
   const [rating, setRating] = useState(0);
   const [reviewText, setReviewText] = useState('');
+  const reviewInputRef = useRef<any>(null);
+
+  const handleRating = useCallback((star: number) => {
+    setRating(star);
+    // Auto-open keyboard so the Continue button is never cropped
+    setTimeout(() => reviewInputRef.current?.focus(), 100);
+  }, []);
   const [submitReview, { isLoading: isSubmitting }] = useSubmitChauffeurReviewMutation();
   const canSubmit = rating > 0 && !isSubmitting;
   const toast = useToast();
@@ -180,6 +190,10 @@ function RideReviewSheetContent({
       // frame drop. The scroll view handles inset adjustment natively instead.
       enablePanDownToClose={false}
       enableDynamicSizing={false}
+      topInset={insets.top}
+      keyboardBehavior="interactive"
+      keyboardBlurBehavior="restore"
+      android_keyboardInputMode="adjustResize"
       backdropComponent={renderBackdrop}
       handleIndicatorStyle={styles.handle}
       backgroundStyle={styles.background}
@@ -227,7 +241,7 @@ function RideReviewSheetContent({
               {[1, 2, 3, 4, 5].map((star) => (
                 <Pressable
                   key={star}
-                  onPress={() => setRating(star)}
+                  onPress={() => handleRating(star)}
                   hitSlop={8}
                   style={styles.starBtn}
                 >
@@ -245,7 +259,8 @@ function RideReviewSheetContent({
             )}
 
             {/* ── Text input ────────────────────────────────────────────── */}
-            <TextInput
+            <BottomSheetTextInput
+              ref={reviewInputRef}
               placeholder="Share your experience (optional)..."
               placeholderTextColor="#9CA3AF"
               multiline

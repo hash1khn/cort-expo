@@ -16,6 +16,7 @@ import { fontFamily } from '@/core/theme';
 import { useScanBoardingMutation } from '../services/boardingApi';
 import { useToast } from '@/shared/ui/molecules/Toast';
 import { CustomToast } from '@/features/shared/components/CustomToast';
+import { useRefetchOnReconnect } from '@/hooks/useRefetchOnReconnect';
 
 const Text = (props: React.ComponentProps<typeof RNText>) => {
   return <RNText {...props} style={[{ fontFamily }, props.style]} />;
@@ -110,7 +111,7 @@ export default function RideActive() {
   const companyId = (user?.company_id ?? 0) as number;
   const employeeId = (user?.id ?? '') as string;
 
-  const { data: shuttleTrips = [], isLoading: isTripsLoading } = useGetShuttleTripsForEmployeeQuery(
+  const { data: shuttleTrips = [], isLoading: isTripsLoading, refetch: refetchShuttleTrips } = useGetShuttleTripsForEmployeeQuery(
     { companyId, employeeId },
     { skip: !companyId || !employeeId || isChauffeurMode },
   );
@@ -119,11 +120,13 @@ export default function RideActive() {
     [shuttleTrips, activeTripId],
   );
 
-  const { data: activeChauffeurBooking, isLoading: isChauffeurLoading } =
+  const { data: activeChauffeurBooking, isLoading: isChauffeurLoading, refetch: refetchActiveChauffeurBooking } =
     useGetEmployeeActiveChauffeurBookingQuery(
       { companyId },
       { skip: !companyId || !isChauffeurMode },
     );
+
+  useRefetchOnReconnect(refetchShuttleTrips, refetchActiveChauffeurBooking);
 
   const isDataLoading = isChauffeurMode ? isChauffeurLoading : isTripsLoading;
 

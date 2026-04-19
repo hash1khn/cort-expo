@@ -1,5 +1,6 @@
 import React from 'react';
 import { Pressable, Text as RNText, View } from 'react-native';
+import { Image as ExpoImage } from 'expo-image';
 import {
     DrawerContentScrollView,
     DrawerContentComponentProps,
@@ -60,8 +61,16 @@ export function ChauffeurDrawerContent(props: DrawerContentComponentProps) {
         >
             <View className="px-5 pb-6 flex-1">
                 <View className="mt-4">
-                    <View className="w-24 h-24 rounded-full bg-white/20 items-center justify-center">
-                        <Text className="text-white text-3xl font-bold">{initials}</Text>
+                    <View className="w-24 h-24 rounded-full bg-white/20 items-center justify-center overflow-hidden">
+                        {user?.profile_picture_url ? (
+                            <ExpoImage
+                                source={{ uri: user.profile_picture_url }}
+                                style={{ width: 96, height: 96, borderRadius: 48 }}
+                                contentFit="cover"
+                            />
+                        ) : (
+                            <Text className="text-white text-3xl font-bold">{initials}</Text>
+                        )}
                     </View>
                     <Text className="text-white text-3xl font-bold mt-3">{fullName}</Text>
                     <Text className="text-gray-400 text-md mt-1">Chauffeur</Text>

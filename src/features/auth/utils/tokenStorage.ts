@@ -4,6 +4,7 @@ import * as SecureStore from 'expo-secure-store';
 const KEYS = {
   ACCESS_TOKEN: 'cort_access_token',
   REFRESH_TOKEN: 'cort_refresh_token',
+  PUSH_TOKEN: 'cort_push_token',
 } as const;
 
 /** SecureStore allows only alphanumeric, ".", "-", "_" */
@@ -61,5 +62,26 @@ export const tokenStorage = {
   async hasTokens(): Promise<boolean> {
     const access = await this.getAccessToken();
     return access != null && access.length > 0;
+  },
+
+  async getPushToken(): Promise<string | null> {
+    if (isWeb) return webStorage.getItem(KEYS.PUSH_TOKEN);
+    return SecureStore.getItemAsync(sanitize(KEYS.PUSH_TOKEN));
+  },
+
+  async setPushToken(token: string): Promise<void> {
+    if (isWeb) {
+      await webStorage.setItem(KEYS.PUSH_TOKEN, token);
+      return;
+    }
+    await SecureStore.setItemAsync(sanitize(KEYS.PUSH_TOKEN), token);
+  },
+
+  async clearPushToken(): Promise<void> {
+    if (isWeb) {
+      await webStorage.removeItem(KEYS.PUSH_TOKEN);
+      return;
+    }
+    await SecureStore.deleteItemAsync(sanitize(KEYS.PUSH_TOKEN));
   },
 };

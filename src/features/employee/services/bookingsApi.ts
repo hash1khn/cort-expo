@@ -28,6 +28,7 @@ type ChauffeurBooking = {
     id: string;
     full_name: string;
     phone: string;
+    profile_picture_url?: string | null;
   };
   vehicles?: {
     id: number;
@@ -79,6 +80,7 @@ export type EmployeeActiveChauffeurBooking = {
     id: string;
     full_name: string;
     phone: string | null;
+    profile_picture_url: string | null;
   } | null;
   vehicles: {
     id: number;
@@ -174,12 +176,12 @@ export const bookingsApi = baseApi.injectEndpoints({
 
     requestNextDayPickup: builder.mutation<
       any,
-      { companyId: number; bookingId: number; pickup_location: string }
+      { companyId: number; bookingId: number; pickup_location: string; pickup_coords?: { latitude: number; longitude: number } }
     >({
-      query: ({ companyId, bookingId, pickup_location }) => ({
+      query: ({ companyId, bookingId, pickup_location, pickup_coords }) => ({
         url: `/employee/companies/${companyId}/chauffeur-bookings/${bookingId}/request-driver`,
         method: 'POST',
-        body: { pickup_location },
+        body: { pickup_location, ...(pickup_coords ? { pickup_coords } : {}) },
       }),
       // Use optimistic update instead of invalidation to prevent skeleton loader
       async onQueryStarted({ companyId, bookingId, pickup_location }, { dispatch, queryFulfilled }) {

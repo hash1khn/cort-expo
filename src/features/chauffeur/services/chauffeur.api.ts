@@ -38,6 +38,9 @@ export type ChauffeurDailyLog = {
   dropoff_location: string | null;
   distance_km: string | null;
   hours_used: string | null;
+  /** GPS coordinates extracted from pickup_location_geo — populated by backend when available */
+  pickup_lat: number | null;
+  pickup_lng: number | null;
 };
 
 export type ActiveBooking = {
@@ -90,8 +93,10 @@ export type EndDailyTripDto = {
   meter_reading_end_image_url?: string;
   expense_toll?: number;
   expense_parking?: number;
-  expense_toll_image_url?: string;
-  expense_parking_image_url?: string;
+  /** Multiple toll receipt images — backend joins them with commas in the DB */
+  expense_toll_image_urls?: string[];
+  /** Multiple parking receipt images — backend joins them with commas in the DB */
+  expense_parking_image_urls?: string[];
   force_complete?: boolean;
 };
 
@@ -181,11 +186,26 @@ export const chauffeurApi = baseApi.injectEndpoints({
         driver_lng?: number;
       }
     >({
-      query: ({ bookingId, meter_reading_start, meter_reading_start_image_url, driver_lat, driver_lng }) => ({
-        url: `/driver/bookings/${bookingId}/start`,
-        method: 'PATCH',
-        body: { meter_reading_start, meter_reading_start_image_url, driver_lat, driver_lng },
-      }),
+      query: ({ bookingId, meter_reading_start, meter_reading_start_image_url, driver_lat, driver_lng }) => {
+        const formData = new FormData();
+        if (meter_reading_start !== undefined) {
+          formData.append('meter_reading_start', String(meter_reading_start));
+        }
+        if (meter_reading_start_image_url) {
+          formData.append('meter_reading_start_image', {
+            uri: meter_reading_start_image_url,
+            type: 'image/jpeg',
+            name: 'meter_start.jpg',
+          } as any);
+        }
+        if (driver_lat !== undefined) formData.append('driver_lat', String(driver_lat));
+        if (driver_lng !== undefined) formData.append('driver_lng', String(driver_lng));
+        return {
+          url: `/driver/bookings/${bookingId}/start`,
+          method: 'PATCH',
+          body: formData,
+        };
+      },
       invalidatesTags: ['ChauffeurBooking'],
       async onQueryStarted(_args, { dispatch, queryFulfilled }) {
         try {
@@ -292,11 +312,48 @@ export const chauffeurApi = baseApi.injectEndpoints({
       { success: boolean; is_last_day: boolean },
       { bookingId: number; body: EndDailyTripDto }
     >({
-      query: ({ bookingId, body }) => ({
-        url: `/driver/bookings/${bookingId}/end`,
-        method: 'PATCH',
-        body,
-      }),
+      query: ({ bookingId, body }) => {
+        const formData = new FormData();
+        if (body.end_time) formData.append('end_time', body.end_time);
+        if (body.meter_reading_end !== undefined) {
+          formData.append('meter_reading_end', String(body.meter_reading_end));
+        }
+        if (body.expense_toll !== undefined) {
+          formData.append('expense_toll', String(body.expense_toll));
+        }
+        if (body.expense_parking !== undefined) {
+          formData.append('expense_parking', String(body.expense_parking));
+        }
+        if (body.force_complete !== undefined) {
+          formData.append('force_complete', String(body.force_complete));
+        }
+        if (body.meter_reading_end_image_url) {
+          formData.append('meter_reading_end_image', {
+            uri: body.meter_reading_end_image_url,
+            type: 'image/jpeg',
+            name: 'meter_end.jpg',
+          } as any);
+        }
+        (body.expense_toll_image_urls ?? []).forEach((uri, idx) => {
+          formData.append('expense_toll_images', {
+            uri,
+            type: 'image/jpeg',
+            name: `toll_${idx}.jpg`,
+          } as any);
+        });
+        (body.expense_parking_image_urls ?? []).forEach((uri, idx) => {
+          formData.append('expense_parking_images', {
+            uri,
+            type: 'image/jpeg',
+            name: `parking_${idx}.jpg`,
+          } as any);
+        });
+        return {
+          url: `/driver/bookings/${bookingId}/end`,
+          method: 'PATCH',
+          body: formData,
+        };
+      },
       invalidatesTags: ['ChauffeurBooking'],
     }),
   }),

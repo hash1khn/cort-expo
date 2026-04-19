@@ -24,6 +24,7 @@ import { CustomToast } from '@/features/shared/components/CustomToast';
 import { useRiderLocationTracking } from '@/hooks/useRiderLocationTracking';
 import { LocationDisclosureModal } from '@/components/LocationDisclosureModal';
 import { useLanguage } from '@/features/shared/context/LanguageContext';
+import { useRefetchOnReconnect } from '@/hooks/useRefetchOnReconnect';
 
 const Text = (props: React.ComponentProps<typeof RNText>) => {
     return <RNText {...props} style={[{ fontFamily }, props.style]} />;
@@ -200,7 +201,8 @@ export function ActiveTripScreen() {
     const [startMeterPhoto, setStartMeterPhoto] = useState<string | null>(null);
     const [startMeterValue, setStartMeterValue] = useState('');
 
-    const { data: activeBooking } = useGetDriverActiveBookingQuery();
+    const { data: activeBooking, refetch: refetchActiveBooking } = useGetDriverActiveBookingQuery();
+    useRefetchOnReconnect(refetchActiveBooking);
     const [startDriverBooking, { isLoading: isStartingTrip }] = useStartDriverBookingMutation();
     const [markArrived, { isLoading: isMarkingArrived }] = useMarkDriverArrivedMutation();
     const [markOnboard, { isLoading: isMarkingOnboard }] = useMarkDriverOnboardMutation();

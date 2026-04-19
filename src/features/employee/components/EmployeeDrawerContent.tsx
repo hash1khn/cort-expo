@@ -1,9 +1,11 @@
 import React from 'react';
 import { Pressable, Text as RNText, View, Image, StyleSheet, ActivityIndicator } from 'react-native';
+import { Image as ExpoImage } from 'expo-image';
 import {
     DrawerContentScrollView,
     DrawerContentComponentProps,
 } from '@react-navigation/drawer';
+import { BottomSheetModal } from '@gorhom/bottom-sheet';
 import { Ionicons, MaterialCommunityIcons, Feather, MaterialIcons } from '@expo/vector-icons';
 import { useAppSelector, useAppDispatch } from '../../../store/hooks';
 import { logOut } from '@/features/auth/store';
@@ -11,6 +13,7 @@ import { logout } from '@/features/auth/services';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { fontFamily } from '@/core/theme';
 import { useRouter } from 'expo-router';
+import { ReportProblemBottomSheet } from './ReportProblemBottomSheet';
 
 const Text = (props: React.ComponentProps<typeof RNText>) => {
     return <RNText {...props} style={[{ fontFamily }, props.style]} />;
@@ -23,6 +26,15 @@ export function EmployeeDrawerContent(props: DrawerContentComponentProps) {
     const router = useRouter();
 
     const [isLoggingOut, setIsLoggingOut] = React.useState(false);
+    const reportProblemSheetRef = React.useRef<BottomSheetModal>(null);
+
+    const openReportProblemSheet = React.useCallback(() => {
+        props.navigation.closeDrawer();
+        setTimeout(() => {
+            reportProblemSheetRef.current?.present();
+        }, 220);
+    }, [props.navigation]);
+
     const handleLogout = async () => {
         if (isLoggingOut) return;
         setIsLoggingOut(true);
@@ -50,9 +62,17 @@ export function EmployeeDrawerContent(props: DrawerContentComponentProps) {
             <View className="px-4   flex-1 w-full">
                 {/* --- Profile Section --- */}
                 <View className="mt-4">
-                    {/* Profile Image (Placeholder logic) */}
-                    <View className="w-24 h-24 rounded-full bg-white/10 items-center justify-center border border-white/20">
-                        <Text className="text-white text-3xl font-bold uppercase">{fullName.charAt(0)}</Text>
+                    {/* Profile Image */}
+                    <View className="w-24 h-24 rounded-full bg-white/10 items-center justify-center border border-white/20 overflow-hidden">
+                        {user?.profile_picture_url ? (
+                            <ExpoImage
+                                source={{ uri: user.profile_picture_url }}
+                                style={{ width: 96, height: 96, borderRadius: 48 }}
+                                contentFit="cover"
+                            />
+                        ) : (
+                            <Text className="text-white text-3xl font-bold uppercase">{fullName.charAt(0)}</Text>
+                        )}
                     </View>
 
                     <View className="flex-row items-center mt-3">
@@ -90,7 +110,7 @@ export function EmployeeDrawerContent(props: DrawerContentComponentProps) {
                     </Pressable>
 
                     <Pressable
-                        onPress={() => { }}
+                        onPress={openReportProblemSheet}
                         className="py-3 mb-2 flex-row items-center"
                     >
                         <MaterialIcons name="report-gmailerrorred" size={20} color="white" />
@@ -119,6 +139,8 @@ export function EmployeeDrawerContent(props: DrawerContentComponentProps) {
                     </Pressable>
                 </View>
             </View>
+
+            <ReportProblemBottomSheet ref={reportProblemSheetRef} />
         </DrawerContentScrollView>
     );
 }

@@ -208,6 +208,9 @@ const BackContent = ({ booking, shuttleTrip, onClose, onRequestCaptain }: BackCo
         ? (driver?.full_name ?? 'Assigning...')
         : (shuttleDriver?.full_name ?? 'Assigning...');
     const driverPhone = isChauffeurMode ? driver?.phone : shuttleDriver?.phone;
+    const driverPictureUrl = isChauffeurMode
+        ? (driver?.profile_picture_url ?? null)
+        : (shuttleDriver?.profile_picture_url ?? null);
     const isAssigning = !driverPhone && !showRequestCaptain;
     const plateNumber = isChauffeurMode
         ? (chauffeurVehicle?.plate_number ?? '—')
@@ -248,7 +251,15 @@ const BackContent = ({ booking, shuttleTrip, onClose, onRequestCaptain }: BackCo
                     {/* Captain avatar */}
                     <View style={styles.captainSection}>
                         <View style={styles.avatarCircle}>
-                            <Text style={styles.avatarInitials}>{initials}</Text>
+                            {driverPictureUrl ? (
+                                <Image
+                                    source={{ uri: driverPictureUrl }}
+                                    style={{ width: 64, height: 64, borderRadius: 32 }}
+                                    contentFit="cover"
+                                />
+                            ) : (
+                                <Text style={styles.avatarInitials}>{initials}</Text>
+                            )}
                         </View>
                         <Text style={styles.captainRole}>Your Captain</Text>
                         <Text style={styles.captainName}>{driverName}</Text>
@@ -351,31 +362,36 @@ const GOOGLE_PLACES_API_KEY = Platform.OS === 'ios'
     ? (process.env.EXPO_PUBLIC_IOS_GOOGLE_API_KEY ?? '')
     : (process.env.EXPO_PUBLIC_ANDROID_GOOGLE_API_KEY ?? '');
 
+// Key with NO app restriction (None) — used for HTTP REST calls (Places Autocomplete + Geocoding).
+// App-restricted keys (above) only work for native SDK calls; REST calls don't send bundle IDs.
+const GOOGLE_REST_KEY = process.env.EXPO_PUBLIC_GOOGLE_REST_KEY ?? '';
+
 /**
  * Reverse-geocode coordinates to a human-readable address string.
- * Tries Google Geocoding REST API first (best accuracy). If that fails or the
- * key doesn't have Geocoding API enabled, falls back to expo-location with
- * de-duplicated formatting so cities don't appear twice.
+ *
+ * Priority:
+ * 1. Google Geocoding REST API (requires EXPO_PUBLIC_GOOGLE_REST_KEY with no app restriction)
+ * 2. expo-location system geocoder as reliable fallback (works on-device without a key)
  */
 async function reverseGeocodeAddress(lat: number, lon: number): Promise<string> {
-    // 1. Google Geocoding REST API
-    try {
-        const url = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lon}&key=${GOOGLE_PLACES_API_KEY}&language=en`;
-        const res = await fetch(url);
-        const json = await res.json();
-        if (json.status === 'OK' && json.results?.length > 0) {
-            return json.results[0].formatted_address as string;
-        }
-    } catch { /* fall through */ }
+    // 1. Google Geocoding REST API — only if the REST key is configured
+    if (GOOGLE_REST_KEY && GOOGLE_REST_KEY !== 'REPLACE_WITH_YOUR_REST_KEY') {
+        try {
+            const url = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lon}&key=${GOOGLE_REST_KEY}&language=en`;
+            const res = await fetch(url);
+            const json = await res.json();
+            if (json.status === 'OK' && json.results?.length > 0) {
+                return json.results[0].formatted_address as string;
+            }
+        } catch { /* fall through */ }
+    }
 
-    // 2. expo-location fallback with smart deduplication
+    // 2. expo-location system geocoder — deduplicate repeated city names
     try {
         const results = await Location.reverseGeocodeAsync({ latitude: lat, longitude: lon });
         if (results.length > 0) {
             const a = results[0];
-            // expo-location ≥15 may expose formattedAddress directly
             if ((a as any).formattedAddress) return (a as any).formattedAddress as string;
-            // Build manually — filter nulls then deduplicate consecutive identical tokens
             const parts = [a.name, a.street, a.district, a.city, a.country]
                 .filter((p): p is string => !!p && p.trim().length > 0);
             const deduped = parts.filter((p, i) => p !== parts[i - 1]);
@@ -384,6 +400,22 @@ async function reverseGeocodeAddress(lat: number, lon: number): Promise<string> 
     } catch { /* fall through */ }
 
     return 'Current Location';
+}
+
+/**
+ * Resolve lat/lng for a place_id via Places Details REST API.
+ * Used as fallback when GooglePlacesAutocomplete fetchDetails returns null on real devices.
+ */
+async function fetchPlaceCoords(placeId: string): Promise<{ lat: number; lng: number } | null> {
+    if (!GOOGLE_REST_KEY) return null;
+    try {
+        const url = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${placeId}&fields=geometry&key=${GOOGLE_REST_KEY}`;
+        const res = await fetch(url);
+        const json = await res.json();
+        const loc = json?.result?.geometry?.location;
+        if (loc?.lat != null && loc?.lng != null) return loc;
+    } catch { /* fall through */ }
+    return null;
 }
 
 const PickupSheet = ({ visible, screenHeight, booking, onClose, onDone }: PickupSheetProps) => {
@@ -400,7 +432,9 @@ const PickupSheet = ({ visible, screenHeight, booking, onClose, onDone }: Pickup
     const DEFAULT_REGION: Region = { latitude: 24.8607, longitude: 67.0011, latitudeDelta: 0.01, longitudeDelta: 0.01 };
     const [mapRegion, setMapRegion] = useState<Region>(DEFAULT_REGION);
     const [mapAddress, setMapAddress] = useState<string | null>(null);
+    const [mapCoords, setMapCoords] = useState<{ latitude: number; longitude: number } | null>(null);
     const [isGeocodingMap, setIsGeocodingMap] = useState(false);
+    const [headerHeight, setHeaderHeight] = useState(50);
     const geocodeDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const mapRef = useRef<MapView>(null);
 
@@ -427,7 +461,7 @@ const PickupSheet = ({ visible, screenHeight, booking, onClose, onDone }: Pickup
             );
             setTimeout(() => setMounted(false), 450);
         }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [visible]);
 
     const resolveCurrentLocation = async () => {
@@ -442,6 +476,7 @@ const PickupSheet = ({ visible, screenHeight, booking, onClose, onDone }: Pickup
             const { latitude, longitude } = loc.coords;
             const region: Region = { latitude, longitude, latitudeDelta: 0.01, longitudeDelta: 0.01 };
             setMapRegion(region);
+            setMapCoords({ latitude, longitude });
             // Use Google Geocoding for proper street-level address
             const address = await reverseGeocodeAddress(latitude, longitude);
             setResolvedCurrentAddress(address);
@@ -460,6 +495,7 @@ const PickupSheet = ({ visible, screenHeight, booking, onClose, onDone }: Pickup
         if (geocodeDebounceRef.current) clearTimeout(geocodeDebounceRef.current);
         geocodeDebounceRef.current = setTimeout(async () => {
             setIsGeocodingMap(true);
+            setMapCoords({ latitude: lat, longitude: lon });
             try {
                 const address = await reverseGeocodeAddress(lat, lon);
                 setMapAddress(address);
@@ -469,12 +505,13 @@ const PickupSheet = ({ visible, screenHeight, booking, onClose, onDone }: Pickup
         }, 400);
     }, []);
 
-    const submitPickup = async (address: string) => {
+    const submitPickup = async (address: string, coords?: { latitude: number; longitude: number }) => {
         try {
             await requestNextDayPickup({
                 companyId: booking.companies?.id ?? 0,
                 bookingId: booking.id,
                 pickup_location: address,
+                ...(coords ? { pickup_coords: coords } : {}),
             }).unwrap();
 
             const driver = booking.users_chauffeur_bookings_driver_idTousers;
@@ -534,7 +571,7 @@ const PickupSheet = ({ visible, screenHeight, booking, onClose, onDone }: Pickup
                         <Pressable
                             onPress={() => {
                                 if (!isResolvingLocation && resolvedCurrentAddress && resolvedCurrentAddress !== 'Location permission denied') {
-                                    submitPickup(resolvedCurrentAddress);
+                                    submitPickup(resolvedCurrentAddress, mapCoords ?? undefined);
                                 }
                             }}
                             disabled={isResolvingLocation || isRequesting}
@@ -587,16 +624,18 @@ const PickupSheet = ({ visible, screenHeight, booking, onClose, onDone }: Pickup
                     <View style={{ flex: 1 }}>
 
                         {/* Header row */}
-                        <View style={styles.searchMapHeader}>
+                        <View
+                            style={styles.searchMapHeader}
+                            onLayout={(e) => setHeaderHeight(e.nativeEvent.layout.height)}
+                        >
                             <Pressable onPress={() => setMode('compact')} hitSlop={12}>
                                 <Ionicons name="arrow-back" size={22} color="#000" />
                             </Pressable>
                             <Text style={styles.searchMapHeaderTitle}>Pick your location</Text>
                         </View>
 
-                        {/* Map + search overlay container */}
+                        {/* Map container — autocomplete is NOT nested here to avoid MapView touch interception */}
                         <View style={{ flex: 1 }}>
-                            {/* Map fills the whole area */}
                             <MapView
                                 ref={mapRef}
                                 provider={PROVIDER_GOOGLE}
@@ -614,102 +653,105 @@ const PickupSheet = ({ visible, screenHeight, booking, onClose, onDone }: Pickup
                             <View style={styles.mapPinContainer} pointerEvents="none">
                                 <Ionicons name="location" size={44} color="#F4593B" />
                             </View>
+                        </View>
 
-                            {/* Search bar overlay — floats at top of map */}
-                            <View style={styles.searchOverlay}>
-                                <GooglePlacesAutocomplete
-                                    placeholder="Search address or landmark…"
-                                    fetchDetails={true}
-                                    debounce={400}
-                                    minLength={2}
-                                    enablePoweredByContainer={false}
-                                    textInputProps={{ autoFocus: true }}
-                                    onPress={(data, detail) => {
-                                        const lat = detail?.geometry?.location?.lat;
-                                        const lng = detail?.geometry?.location?.lng;
-                                        const address = detail?.formatted_address ?? data.description;
-                                        setMapAddress(address);
-                                        if (lat != null && lng != null) {
-                                            const newRegion: Region = {
-                                                latitude: lat,
-                                                longitude: lng,
-                                                latitudeDelta: 0.005,
-                                                longitudeDelta: 0.005,
-                                            };
-                                            setMapRegion(newRegion);
-                                            mapRef.current?.animateToRegion(newRegion, 500);
-                                        }
-                                    }}
-                                    query={{ key: GOOGLE_PLACES_API_KEY, language: 'en' }}
-                                    styles={{
-                                        container: {
-                                            flex: 0,
-                                        },
-                                        textInputContainer: {
-                                            paddingHorizontal: 0,
-                                            paddingTop: 0,
-                                            paddingBottom: 0,
-                                            backgroundColor: 'transparent',
-                                        },
-                                        textInput: {
-                                            height: 46,
-                                            backgroundColor: '#fff',
-                                            borderRadius: 12,
-                                            paddingHorizontal: 14,
-                                            fontSize: 15,
-                                            color: '#000',
-                                            shadowColor: '#000',
-                                            shadowOffset: { width: 0, height: 2 },
-                                            shadowOpacity: 0.12,
-                                            shadowRadius: 6,
-                                            elevation: 4,
-                                            margin: 0,
-                                        },
-                                        listView: {
-                                            backgroundColor: '#fff',
-                                            borderRadius: 12,
-                                            marginTop: 6,
-                                            maxHeight: 220,
-                                            shadowColor: '#000',
-                                            shadowOffset: { width: 0, height: 4 },
-                                            shadowOpacity: 0.1,
-                                            shadowRadius: 10,
-                                            elevation: 6,
-                                            overflow: 'hidden',
-                                        },
-                                        row: {
-                                            paddingHorizontal: 14,
-                                            paddingVertical: 12,
-                                            borderBottomWidth: 1,
-                                            borderBottomColor: '#f4f4f4',
-                                            backgroundColor: '#fff',
-                                        },
-                                        description: {
-                                            fontSize: 14,
-                                            color: '#000',
-                                            fontWeight: '500',
-                                        },
-                                        separator: { height: 0 },
-                                        poweredContainer: { display: 'none' },
-                                    }}
-                                    renderRow={(data) => (
-                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                                            <View style={styles.suggestionIcon}>
-                                                <Ionicons name="location-outline" size={15} color="#555" />
-                                            </View>
-                                            <Text style={[styles.suggestionText, { flex: 1 }]} numberOfLines={2}>
-                                                {data.description}
-                                            </Text>
+                        {/* Autocomplete — rendered AFTER map container so iOS hit-tests it first;
+                             positioned absolutely over the map but NOT a child of the MapView container */}
+                        <View style={[styles.searchOverlay, { top: headerHeight + 12 }]}>
+                            <GooglePlacesAutocomplete
+                                placeholder="Search address or landmark…"
+                                fetchDetails={true}
+                                debounce={400}
+                                minLength={2}
+                                enablePoweredByContainer={false}
+                                textInputProps={{ autoFocus: true }}
+                                onPress={async (data, detail) => {
+                                    const address = detail?.formatted_address ?? data.description;
+                                    setMapAddress(address);
+
+                                    let lat = detail?.geometry?.location?.lat;
+                                    let lng = detail?.geometry?.location?.lng;
+
+                                    // Fallback: fetchDetails silently fails on real devices with restricted keys
+                                    if ((lat == null || lng == null) && data.place_id) {
+                                        const coords = await fetchPlaceCoords(data.place_id);
+                                        if (coords) { lat = coords.lat; lng = coords.lng; }
+                                    }
+
+                                    if (lat != null && lng != null) {
+                                        const newRegion: Region = {
+                                            latitude: lat,
+                                            longitude: lng,
+                                            latitudeDelta: 0.005,
+                                            longitudeDelta: 0.005,
+                                        };
+                                        setMapRegion(newRegion);
+                                        mapRef.current?.animateToRegion(newRegion, 500);
+                                    }
+                                }}
+                                query={{ key: GOOGLE_REST_KEY, language: 'en' }}
+                                styles={{
+                                    container: {
+                                        flex: 0,
+                                    },
+                                    textInputContainer: {
+                                        paddingHorizontal: 0,
+                                        paddingTop: 0,
+                                        paddingBottom: 0,
+                                        backgroundColor: 'transparent',
+                                    },
+                                    textInput: {
+                                        height: 46,
+                                        backgroundColor: '#fff',
+                                        borderRadius: 12,
+                                        paddingHorizontal: 14,
+                                        fontSize: 15,
+                                        color: '#000',
+                                        shadowColor: '#000',
+                                        shadowOffset: { width: 0, height: 2 },
+                                        shadowOpacity: 0.12,
+                                        shadowRadius: 6,
+                                        elevation: 4,
+                                        margin: 0,
+                                    },
+                                    listView: {
+                                        backgroundColor: '#fff',
+                                        borderRadius: 12,
+                                        marginTop: 6,
+                                        maxHeight: 220,
+                                        shadowColor: '#000',
+                                        shadowOffset: { width: 0, height: 4 },
+                                        shadowOpacity: 0.1,
+                                        shadowRadius: 10,
+                                        elevation: 6,
+                                    },
+                                    row: {
+                                        paddingHorizontal: 14,
+                                        paddingVertical: 12,
+                                        borderBottomWidth: 1,
+                                        borderBottomColor: '#f4f4f4',
+                                        backgroundColor: '#fff',
+                                    },
+                                    description: {
+                                        fontSize: 14,
+                                        color: '#000',
+                                        fontWeight: '500',
+                                    },
+                                    separator: { height: 0 },
+                                    poweredContainer: { display: 'none' },
+                                }}
+                                renderRow={(data) => (
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }} pointerEvents="none">
+                                        <View style={styles.suggestionIcon}>
+                                            <Ionicons name="location-outline" size={15} color="#555" />
                                         </View>
-                                    )}
-                                    // renderRightButton={() => (
-                                    //     <View style={{ justifyContent: 'center', paddingLeft: 12, paddingRight: 4 }}>
-                                    //         <Ionicons name="search" size={18} color="#999" />
-                                    //     </View>
-                                    // )}
-                                    keyboardShouldPersistTaps="handled"
-                                />
-                            </View>
+                                        <Text style={[styles.suggestionText, { flex: 1 }]} numberOfLines={2}>
+                                            {data.description}
+                                        </Text>
+                                    </View>
+                                )}
+                                keyboardShouldPersistTaps="handled"
+                            />
                         </View>
 
                         {/* Confirm bar — shows reverse-geocoded address + confirm button */}
@@ -727,7 +769,7 @@ const PickupSheet = ({ visible, screenHeight, booking, onClose, onDone }: Pickup
                                 )}
                             </View>
                             <Pressable
-                                onPress={() => mapAddress ? submitPickup(mapAddress) : undefined}
+                                onPress={() => mapAddress ? submitPickup(mapAddress, mapCoords ?? undefined) : undefined}
                                 disabled={!mapAddress || isGeocodingMap || isRequesting}
                                 style={({ pressed }) => pressed && { opacity: 0.8 }}
                             >
@@ -1438,11 +1480,11 @@ const styles = StyleSheet.create({
     // Search bar floating over the map
     searchOverlay: {
         position: 'absolute',
-        top: 12,
+        // top is set dynamically via inline style (headerHeight + 12)
         left: 12,
         right: 12,
-        zIndex: 10,
-        elevation: 10,
+        zIndex: 9999,
+        elevation: 9999,
     },
     // Header for searchmap mode
     searchMapHeader: {

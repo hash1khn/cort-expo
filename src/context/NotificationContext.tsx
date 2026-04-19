@@ -7,6 +7,7 @@ import React, {
 } from 'react';
 import * as Notifications from 'expo-notifications';
 import { registerForPushNotificationsAsync } from '../utils/registerForPushNotificationsAsync';
+import { tokenStorage } from '../features/auth/utils/tokenStorage';
 
 interface NotificationContextType {
   expoPushToken: string | null;
@@ -37,13 +38,15 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
 
   useEffect(() => {
     registerForPushNotificationsAsync().then(
-      (token) => setExpoPushToken(token),
+      (token) => {
+        setExpoPushToken(token);
+        tokenStorage.setPushToken(token).catch(() => {});
+      },
       (err) => setError(err),
     );
 
     Notifications.getDevicePushTokenAsync().then(
       (deviceToken) => {
-        console.log('[DevicePushToken]', deviceToken);
         setDevicePushToken(deviceToken.data);
       },
       (err) => setError(err),

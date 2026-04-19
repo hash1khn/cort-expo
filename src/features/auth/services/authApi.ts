@@ -29,6 +29,7 @@ type LoginResponse = {
       company_id?: number | null;
       account_status?: 'ACTIVE' | 'INACTIVE' | 'SUSPENDED';
       driver_type?: BackendDriverType;
+      profile_picture_url?: string | null;
       enabled_services?: {
         shuttle: boolean;
         chauffeur: boolean;
@@ -47,6 +48,7 @@ export type LoginResult = {
     phone: string;
     company_id: number | null;
     account_status: 'ACTIVE' | 'INACTIVE' | 'SUSPENDED';
+    profile_picture_url: string | null;
     enabled_services: {
       shuttle: boolean;
       chauffeur: boolean;
@@ -94,6 +96,7 @@ export const authApi = baseApi.injectEndpoints({
             phone: user.phone,
             company_id: user.company_id ?? null,
             account_status: user.account_status,
+            profile_picture_url: user.profile_picture_url ?? null,
             enabled_services: user.enabled_services ?? null,
           },
           role: mapRole(user.role as BackendRole, user.driver_type),
@@ -115,7 +118,23 @@ export const authApi = baseApi.injectEndpoints({
         }
       },
     }),
+    getProfile: builder.query<LoginResult['user'], void>({
+      query: () => '/auth/profile',
+      transformResponse: (response: { data: any }) => {
+        const d = response.data;
+        return {
+          id: d.id,
+          email: d.email,
+          full_name: d.full_name,
+          phone: d.phone,
+          company_id: d.company_id ?? null,
+          account_status: d.account_status,
+          profile_picture_url: d.profile_picture_url ?? null,
+          enabled_services: d.enabled_services ?? null,
+        };
+      },
+    }),
   }),
 });
 
-export const { useLoginMutation, useLogoutMutation } = authApi;
+export const { useLoginMutation, useLogoutMutation, useGetProfileQuery } = authApi;
