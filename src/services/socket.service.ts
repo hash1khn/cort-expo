@@ -24,7 +24,7 @@ class SocketService {
    * does NOT automatically put the socket back into ride_Y.  We track the last
    * join here and replay it on every 'connect' event.
    */
-  private pendingRideJoin: { tripId: string; userId: string; role: 'driver' | 'employee' } | null = null;
+  private pendingRideJoin: { tripId: string; userId: string; role: 'driver' | 'employee'; tripType?: 'shuttle' | 'chauffeur' } | null = null;
 
   // ─────────────────────────────────────────────────────────────────────────
   // Connection lifecycle
@@ -115,10 +115,10 @@ class SocketService {
   // Ride-specific helpers
   // ─────────────────────────────────────────────────────────────────────────
 
-  joinRide(tripId: number | string, userId: string, role: 'driver' | 'employee') {
+  joinRide(tripId: number | string, userId: string, role: 'driver' | 'employee', tripType?: 'shuttle' | 'chauffeur') {
     const tripIdStr = String(tripId);
-    this.pendingRideJoin = { tripId: tripIdStr, userId, role };
-    this.socket?.emit('join:ride', { tripId: tripIdStr, userId, role });
+    this.pendingRideJoin = { tripId: tripIdStr, userId, role, tripType };
+    this.socket?.emit('join:ride', { tripId: tripIdStr, userId, role, tripType });
   }
 
   /**

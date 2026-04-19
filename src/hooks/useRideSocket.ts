@@ -37,6 +37,8 @@ interface UseRideSocketOptions {
     tripId: number | string;
     userId: string;
     role: 'driver' | 'employee';
+    /** Pass 'shuttle' or 'chauffeur' so the server can apply the correct geofence logic */
+    tripType?: 'shuttle' | 'chauffeur';
     onLocationUpdate?: (data: LocationPayload) => void;
     onStopArrived?: (data: StopArrivedPayload) => void;
     onRideProceeding?: (data: RideProceedingPayload) => void;
@@ -52,6 +54,7 @@ export function useRideSocket({
     tripId,
     userId,
     role,
+    tripType,
     onLocationUpdate,
     onStopArrived,
     onRideProceeding,
@@ -61,7 +64,7 @@ export function useRideSocket({
     useEffect(() => {
         if (!tripId || !userId) return;
 
-        socketService.joinRide(tripId, userId, role);
+        socketService.joinRide(tripId, userId, role, tripType);
 
         if (onLocationUpdate) socketService.on('driver:location', onLocationUpdate);
         if (onStopArrived) socketService.on('stop:arrived', onStopArrived);

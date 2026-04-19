@@ -172,6 +172,7 @@ export default function RideInProgress() {
     tripId: tripId ?? 0,
     userId,
     role: 'driver',
+    tripType: 'shuttle',
     onAttendanceMarked: handleAttendanceMarked,
   });
 

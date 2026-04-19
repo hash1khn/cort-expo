@@ -290,6 +290,7 @@ export default function RideActive() {
     tripId: activeTripId,
     userId,
     role: 'employee',
+    tripType: 'shuttle',
     onLocationUpdate: isChauffeurMode ? undefined : handleLocationUpdate,
     onStopArrived: isChauffeurMode ? undefined : handleStopArrived,
     onRideProceeding: isChauffeurMode ? undefined : handleRideProceeding,

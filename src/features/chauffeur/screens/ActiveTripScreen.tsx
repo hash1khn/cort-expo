@@ -25,6 +25,8 @@ import { useRiderLocationTracking } from '@/hooks/useRiderLocationTracking';
 import { LocationDisclosureModal } from '@/components/LocationDisclosureModal';
 import { useLanguage } from '@/features/shared/context/LanguageContext';
 import { useRefetchOnReconnect } from '@/hooks/useRefetchOnReconnect';
+import { socketService } from '@/services/socket.service';
+import { useAppSelector } from '@/store/hooks';
 
 const Text = (props: React.ComponentProps<typeof RNText>) => {
     return <RNText {...props} style={[{ fontFamily }, props.style]} />;
@@ -184,6 +186,7 @@ export function ActiveTripScreen() {
     const toast = useToast();
     const { language } = useLanguage();
     const t = LABELS[language];
+    const userId = useAppSelector((s) => s.auth.user?.id ?? '');
 
     const renderBackdrop = useCallback(
         (props: any) => (
@@ -367,6 +370,11 @@ export function ActiveTripScreen() {
                     } : {})
                 }).unwrap();
 
+                // Join the socket ride room so the server knows this is a
+                // chauffeur trip and can apply the correct geofence logic.
+                if (userId) {
+                    socketService.joinRide(id, userId, 'driver', 'chauffeur');
+                }
                 // Start tracking first; open Maps only after location is live.
                 // onReady fires after permissions are granted and the task is running.
                 const openMaps = displayPickupAddress

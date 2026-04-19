@@ -51,7 +51,7 @@ export function useChauffeurSocket({
         if (!bookingId || !userId) return;
 
         // Join the ride room so we receive driver:location broadcasts
-        socketService.joinRide(bookingId, userId, 'employee');
+        socketService.joinRide(bookingId, userId, 'employee', 'chauffeur');
 
         const handleLocation = (data: LocationPayload) => {
             onLocationUpdate?.(data);
