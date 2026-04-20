@@ -17,7 +17,9 @@ export function useRefetchOnReconnect(...refetchFns: Array<() => void>) {
     return NetInfo.addEventListener((state) => {
       const connected = state.isConnected ?? true;
       if (!prevConnected && connected) {
-        fnRef.current.forEach((fn) => fn());
+        fnRef.current.forEach((fn) => {
+          try { fn(); } catch { /* query not started yet (skip:true) — ignore */ }
+        });
       }
       prevConnected = connected;
     });

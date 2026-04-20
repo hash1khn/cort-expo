@@ -760,7 +760,7 @@ export default function NewHome() {
 
           >
             <View className="flex-1 justify-between p-4 bg-black/30">
-              <Pressable >
+              <Pressable onPress={() => router.push('/employee/ride-active')}>
                 <Text className="text-white text-xs font-semibold uppercase tracking-wide">
                   Instation & Outstation
                 </Text>
