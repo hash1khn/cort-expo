@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
 import * as TaskManager from 'expo-task-manager';
 import { ACTIVE_RIDE_KEY, ACTIVE_RIDE_TYPE_KEY, RIDER_LOCATION_TASK } from './backgroundLocationTask';
+import { flushOfflineLocationQueue } from './offlineLocationQueue';
 
 /**
  * Saves the ride ID to AsyncStorage and starts the background location task.
@@ -14,6 +15,9 @@ import { ACTIVE_RIDE_KEY, ACTIVE_RIDE_TYPE_KEY, RIDER_LOCATION_TASK } from './ba
  *                  pass it to the server for geofence routing.
  */
 export async function startLocationTracking(tripId: string | number, tripType?: 'shuttle' | 'chauffeur'): Promise<void> {
+  // Best-effort flush in case we have backlog from a prior temporary outage.
+  flushOfflineLocationQueue().catch(() => null);
+
   await AsyncStorage.setItem(ACTIVE_RIDE_KEY, String(tripId));
   if (tripType) {
     await AsyncStorage.setItem(ACTIVE_RIDE_TYPE_KEY, tripType);
@@ -57,4 +61,7 @@ export async function stopLocationTracking(): Promise<void> {
   if (isRunning) {
     await Location.stopLocationUpdatesAsync(RIDER_LOCATION_TASK);
   }
+
+  // Flush any remaining buffered points after tracking stops.
+  flushOfflineLocationQueue().catch(() => null);
 }

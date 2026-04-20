@@ -155,7 +155,7 @@ class SocketService {
 
   sendLocationUpdate(
     tripId: number | string,
-    coords: { lat: number; lng: number; heading: number; speed: number },
+    coords: { lat: number; lng: number; heading: number; speed: number; clientTs?: number },
   ) {
     this.socket?.emit('location:update', { tripId: String(tripId), ...coords });
   }
