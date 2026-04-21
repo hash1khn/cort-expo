@@ -397,10 +397,20 @@ export function ActiveTripScreen() {
         } else if (tripStep === 'END_RIDE') {
             try {
                 confirmSheetRef.current?.close();
+                console.log('[EndRide] Attempting endTrip', { bookingId: id, tripStep, isMultiDayIntermediateEnd });
                 await endTrip({ bookingId: id, body: {} }).unwrap();
-                await stopTracking().catch(console.warn);
+                console.log('[EndRide] endTrip succeeded, stopping tracking');
+                await stopTracking().catch((err) => console.warn('[EndRide] stopTracking error', err));
                 router.push('/chauffeur');
-            } catch {
+            } catch (err) {
+                console.error('[EndRide] endTrip failed', {
+                    error: err,
+                    message: (err as any)?.message,
+                    status: (err as any)?.status,
+                    data: (err as any)?.data,
+                    bookingId: id,
+                    tripStep,
+                });
                 showError(t.errors.endDayFail);
             }
         }

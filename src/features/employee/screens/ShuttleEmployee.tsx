@@ -62,6 +62,7 @@ import {
   setChauffeurRide,
 } from '../store';
 import { useRideStartListener } from '../../../hooks/useRideStartListener';
+import { useNotification } from '../../../context/NotificationContext';
 import FlipCard from '../components/FlipCard';
 import { AppHeader } from '../../shared/components/AppHeader';
 import BottomSheet from '@gorhom/bottom-sheet';
@@ -110,6 +111,7 @@ export default function NewHome() {
   const {
     data: shuttleTrips = [],
     isLoading: isShuttleTripsLoading,
+    isFetching: isShuttleTripsFetching,
     refetch: refetchShuttleTrips,
   } = useGetShuttleTripsForEmployeeQuery(
     { companyId, employeeId },
@@ -261,8 +263,8 @@ export default function NewHome() {
     // Skip navigation if we've already navigated this session
     if (hasNavigatedToActiveRideRef.current) return;
     
-    // Wait for data to finish loading before checking
-    if (isShuttleTripsLoading || isActiveBookingLoading) return;
+    // Wait for data to finish loading/refetching before checking
+    if (isShuttleTripsLoading || isShuttleTripsFetching || isActiveBookingLoading || isActiveBookingFetching) return;
     
     // Skip if no company/employee ID
     if (!companyId || !employeeId) return;
@@ -373,7 +375,9 @@ export default function NewHome() {
     shuttleTrips,
     activeChauffeurBooking,
     isShuttleTripsLoading,
+    isShuttleTripsFetching,
     isActiveBookingLoading,
+    isActiveBookingFetching,
     companyId,
     employeeId,
     hasChauffeur,
@@ -389,6 +393,33 @@ export default function NewHome() {
   useEffect(() => {
     chauffeurBookingRef.current = activeChauffeurBooking;
   }, [activeChauffeurBooking]);
+
+  // Fallback: navigate to ride-active via push notification when socket is unreliable.
+  // The backend sends type=DRIVER_OTW when the driver starts a chauffeur trip.
+  const { notification } = useNotification();
+  useEffect(() => {
+    if (!notification) return;
+    const data = notification.request.content.data as Record<string, unknown>;
+    if (data?.type !== 'DRIVER_OTW') return;
+    const booking = chauffeurBookingRef.current;
+    if (!booking || String(booking.id) !== String(data.bookingId)) return;
+    const driver = booking.users_chauffeur_bookings_driver_idTousers;
+    const vehicle = booking.vehicles;
+    hasNavigatedToActiveRideRef.current = true;
+    router.push({
+      pathname: '/employee/ride-active',
+      params: {
+        mode: 'chauffeur',
+        bookingId: String(booking.id),
+        bookingStatus: (data.status as string) ?? 'OTW',
+        tripType: booking.trip_type,
+        driverName: driver?.full_name ?? 'Chauffeur',
+        driverPhone: driver?.phone ?? '',
+        vehicleDisplay: vehicle ? `${vehicle.make ?? ''} ${vehicle.model ?? ''}`.trim() : '',
+        vehiclePlate: vehicle?.plate_number ?? '',
+      },
+    });
+  }, [notification, router]);
 
   useChauffeurStatusListener(
     useCallback(
@@ -476,6 +507,9 @@ export default function NewHome() {
   const handleRefresh = useCallback(async () => {
     // Avoid duplicate refreshes if already refreshing
     if (isRefreshing) return;
+
+    // Allow the navigation effect to re-evaluate after fresh data arrives
+    hasNavigatedToActiveRideRef.current = false;
     
     setIsRefreshing(true);
     try {
@@ -605,7 +639,7 @@ export default function NewHome() {
             <FlipCard
               booking={null}
               shuttleTrip={shuttleCardTrip}
-              isLoading={isShuttleTripsLoading}
+              isLoading={isShuttleTripsLoading || isShuttleTripsFetching}
               isChauffeurEnabled={false}
               isShuttleEnabled
             />

@@ -1,6 +1,9 @@
 import { Stack, usePathname, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect, useState } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { stopLocationTracking } from '../src/services/location/riderLocationService';
+import { RIDER_LOCATION_TASK, ACTIVE_RIDE_KEY } from '../src/services/location/backgroundLocationTask';
 import * as Notifications from 'expo-notifications';
 import * as TaskManager from 'expo-task-manager';
 // ⚠️ Must be imported at module scope so the task is registered before any
@@ -117,6 +120,19 @@ function RootLayoutContent() {
       activeStack,
     });
   }, [pathname, segments, hasHydrated, isLoggedIn, role]);
+
+  // On every app boot, if the location task is still registered from a
+  // previous crash/force-kill but there is no active ride in storage,
+  // the foreground service is orphaned — stop it so the notification clears.
+  useEffect(() => {
+    TaskManager.isTaskRegisteredAsync(RIDER_LOCATION_TASK).then(async (registered) => {
+      if (!registered) return;
+      const activeRideId = await AsyncStorage.getItem(ACTIVE_RIDE_KEY);
+      if (!activeRideId) {
+        await stopLocationTracking().catch(console.warn);
+      }
+    });
+  }, []);
 
   useSplashPrefetch(fontsLoaded, hasHydrated);
 

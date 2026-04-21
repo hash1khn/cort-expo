@@ -18,6 +18,13 @@ class SocketService {
    */
   private registry: Map<string, Set<(...args: any[]) => void>> = new Map();
 
+  /** Last token used to connect — needed to reconnect after server kicks us. */
+  private currentToken: string | null = null;
+  /** Set to true when WE initiate the disconnect so we skip the server-kick recovery path. */
+  private isManualDisconnect = false;
+  /** Pending server-disconnect retry timer handle. */
+  private serverDisconnectRetryTimer: ReturnType<typeof setTimeout> | null = null;
+
   /**
    * The most recent join:ride payload.
    * Socket.IO server-side rooms are per-connection: when the transport
@@ -33,6 +40,9 @@ class SocketService {
 
   connect(token: string) {
     if (this.socket?.connected) return;
+
+    this.currentToken = token;
+    this.isManualDisconnect = false;
 
     // Tear down any stale socket (disconnected but not yet nulled)
     if (this.socket) {
@@ -61,8 +71,31 @@ class SocketService {
       }
     });
 
-    this.socket.on('disconnect', (reason) => {
+    this.socket.on('disconnect', async (reason) => {
       console.log('[Socket] Disconnected:', reason);
+
+      // Socket.IO never auto-reconnects after 'io server disconnect' because it
+      // treats a server-side socket.disconnect() as intentional. We handle it
+      // ourselves: refresh the token (server likely kicked us for an expired JWT)
+      // then create a fresh socket connection.
+      if (reason === 'io server disconnect' && !this.isManualDisconnect) {
+        console.warn('[Socket] Server-initiated disconnect — refreshing token and reconnecting');
+        try {
+          const freshToken = await tokenStorage.refreshAccessToken();
+          const tokenToUse = freshToken ?? this.currentToken;
+          if (tokenToUse) {
+            // Brief delay to avoid hammering the server if it keeps rejecting.
+            this.serverDisconnectRetryTimer = setTimeout(() => {
+              this.serverDisconnectRetryTimer = null;
+              if (!this.isManualDisconnect) {
+                this.connect(tokenToUse);
+              }
+            }, 1500);
+          }
+        } catch {
+          console.warn('[Socket] Token refresh failed after server disconnect');
+        }
+      }
     });
 
     // If the server rejects the connection (e.g. expired JWT), refresh the
@@ -97,6 +130,12 @@ class SocketService {
   }
 
   disconnect() {
+    // Mark as intentional so the 'io server disconnect' recovery path is skipped.
+    this.isManualDisconnect = true;
+    if (this.serverDisconnectRetryTimer !== null) {
+      clearTimeout(this.serverDisconnectRetryTimer);
+      this.serverDisconnectRetryTimer = null;
+    }
     if (this.socket) {
       this.socket.removeAllListeners();
       this.socket.disconnect();

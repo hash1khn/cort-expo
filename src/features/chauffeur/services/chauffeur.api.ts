@@ -314,18 +314,19 @@ export const chauffeurApi = baseApi.injectEndpoints({
     >({
       query: ({ bookingId, body }) => {
         const formData = new FormData();
-        if (body.end_time) formData.append('end_time', body.end_time);
+        let hasFields = false;
+        if (body.end_time) { formData.append('end_time', body.end_time); hasFields = true; }
         if (body.meter_reading_end !== undefined) {
-          formData.append('meter_reading_end', String(body.meter_reading_end));
+          formData.append('meter_reading_end', String(body.meter_reading_end)); hasFields = true;
         }
         if (body.expense_toll !== undefined) {
-          formData.append('expense_toll', String(body.expense_toll));
+          formData.append('expense_toll', String(body.expense_toll)); hasFields = true;
         }
         if (body.expense_parking !== undefined) {
-          formData.append('expense_parking', String(body.expense_parking));
+          formData.append('expense_parking', String(body.expense_parking)); hasFields = true;
         }
         if (body.force_complete !== undefined) {
-          formData.append('force_complete', String(body.force_complete));
+          formData.append('force_complete', String(body.force_complete)); hasFields = true;
         }
         if (body.meter_reading_end_image_url) {
           formData.append('meter_reading_end_image', {
@@ -333,6 +334,7 @@ export const chauffeurApi = baseApi.injectEndpoints({
             type: 'image/jpeg',
             name: 'meter_end.jpg',
           } as any);
+          hasFields = true;
         }
         (body.expense_toll_image_urls ?? []).forEach((uri, idx) => {
           formData.append('expense_toll_images', {
@@ -340,6 +342,7 @@ export const chauffeurApi = baseApi.injectEndpoints({
             type: 'image/jpeg',
             name: `toll_${idx}.jpg`,
           } as any);
+          hasFields = true;
         });
         (body.expense_parking_image_urls ?? []).forEach((uri, idx) => {
           formData.append('expense_parking_images', {
@@ -347,11 +350,14 @@ export const chauffeurApi = baseApi.injectEndpoints({
             type: 'image/jpeg',
             name: `parking_${idx}.jpg`,
           } as any);
+          hasFields = true;
         });
         return {
           url: `/driver/bookings/${bookingId}/end`,
           method: 'PATCH',
-          body: formData,
+          // Sending an empty FormData on Android causes "Network request failed".
+          // Only use FormData when there are actual fields; otherwise send no body.
+          ...(hasFields ? { body: formData } : {}),
         };
       },
       invalidatesTags: ['ChauffeurBooking'],

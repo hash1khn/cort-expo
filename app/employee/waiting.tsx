@@ -1,4 +1,4 @@
-import React, { useRef, useCallback } from 'react';
+import React, { useRef, useCallback, useEffect } from 'react';
 import { View, Text as RNText, TouchableOpacity } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import LottieView from 'lottie-react-native';
@@ -8,6 +8,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useChauffeurSocket } from '@/hooks/useChauffeurSocket';
 import { useAppSelector } from '@/store/hooks';
 import * as Linking from 'expo-linking';
+import { useNotification } from '@/context/NotificationContext';
 
 const Text = (props: React.ComponentProps<typeof RNText>) => {
     return <RNText {...props} style={[{ fontFamily }, props.style]} />;
@@ -90,6 +91,28 @@ export default function WaitingScreen() {
         userId,
         onStatusChange: isChauffeurMode ? handleStatusChange : undefined,
     });
+
+    // Fallback: navigate to ride-active via push notification when socket is unreliable.
+    const { notification } = useNotification();
+    useEffect(() => {
+        if (!notification) return;
+        const data = notification.request.content.data as Record<string, unknown>;
+        if (data?.type !== 'DRIVER_OTW') return;
+        if (String(data.bookingId) !== String(bookingId)) return;
+        router.replace({
+            pathname: '/employee/ride-active',
+            params: {
+                mode: 'chauffeur',
+                bookingId: String(bookingId),
+                bookingStatus: (data.status as string) ?? 'OTW',
+                tripType: tripTypeParam ?? '',
+                driverName: driverNameParam ?? 'Captain',
+                driverPhone: driverPhoneParam ?? '',
+                vehicleDisplay: vehicleDisplayParam ?? '',
+                vehiclePlate: vehiclePlateParam ?? '',
+            },
+        });
+    }, [notification, bookingId, router, tripTypeParam, driverNameParam, driverPhoneParam, vehicleDisplayParam, vehiclePlateParam]);
 
     const handleCallCaptain = useCallback(() => {
         if (!driverPhone) return;

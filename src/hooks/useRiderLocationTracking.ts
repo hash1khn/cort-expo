@@ -1,10 +1,12 @@
-import { useState, useCallback, useRef } from 'react';
-import { Platform } from 'react-native';
+import { useState, useCallback, useRef, useEffect } from 'react';
+import { Platform, Alert, Linking } from 'react-native';
 import * as Location from 'expo-location';
+import * as TaskManager from 'expo-task-manager';
 import {
   startLocationTracking,
   stopLocationTracking,
 } from '../services/location/riderLocationService';
+import { RIDER_LOCATION_TASK } from '../services/location/backgroundLocationTask';
 
 export interface UseRiderLocationTrackingReturn {
   /** True while startLocationUpdatesAsync is active */
@@ -34,6 +36,15 @@ export interface UseRiderLocationTrackingReturn {
 export function useRiderLocationTracking(): UseRiderLocationTrackingReturn {
   const [isTracking, setIsTracking] = useState(false);
   const [needsDisclosure, setNeedsDisclosure] = useState(false);
+
+  // Sync isTracking with the real task state on mount — handles the case
+  // where the app is reopened mid-ride and the foreground service is
+  // already running from a previous session.
+  useEffect(() => {
+    TaskManager.isTaskRegisteredAsync(RIDER_LOCATION_TASK).then((registered) => {
+      if (registered) setIsTracking(true);
+    });
+  }, []);
   const pendingTripIdRef = useRef<string | number | null>(null);
   const pendingOnReadyRef = useRef<(() => void) | null>(null);
   const pendingTripTypeRef = useRef<'shuttle' | 'chauffeur' | undefined>(undefined);
@@ -54,6 +65,14 @@ export function useRiderLocationTracking(): UseRiderLocationTrackingReturn {
 
       if (bgStatus !== 'granted') {
         console.warn('[RiderLocation] Background permission denied');
+        Alert.alert(
+          'Always Allow Required',
+          'To track your location during a ride, please open Settings and set location access to "Always".',
+          [
+            { text: 'Open Settings', onPress: () => Linking.openSettings() },
+            { text: 'Cancel', style: 'cancel' },
+          ],
+        );
         return false;
       }
 

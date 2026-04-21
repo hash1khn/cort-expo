@@ -663,12 +663,6 @@ export default function RideActive() {
         )}
       </MapView>
 
-      <View style={styles.floatingButtons}>
-        <Pressable style={styles.floatingBtn} onPress={() => router.back()}>
-          <Ionicons name="arrow-back" size={24} color="#000000" />
-        </Pressable>
-      </View>
-
       {/* BottomSheet: animatedPosition replaces animatedIndex */}
       <BottomSheet
         ref={bottomSheetRef}

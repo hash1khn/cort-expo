@@ -37,13 +37,15 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({
   const show = useCallback(
     (content: React.ReactNode | string, options?: ToastOptions): string => {
       const id = Math.random().toString(36).substring(2, 9);
+      const mergedOptions = { ...DEFAULT_TOAST_OPTIONS, ...options };
+      if (mergedOptions.type === "error") {
+        const reason = typeof content === "string" ? content : "[non-string content]";
+        console.error("[Toast Error]", reason, { options: mergedOptions });
+      }
       const toast: Toast = {
         id,
         content,
-        options: {
-          ...DEFAULT_TOAST_OPTIONS,
-          ...options,
-        },
+        options: mergedOptions,
       };
       setToasts((prevToasts) => [...prevToasts, toast]);
       return id;
