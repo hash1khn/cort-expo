@@ -57,6 +57,14 @@ export function useRiderLocationTracking(): UseRiderLocationTrackingReturn {
 
       if (fgStatus !== 'granted') {
         console.warn('[RiderLocation] Foreground permission denied');
+        Alert.alert(
+          'Location Permission Required',
+          'Please go to Settings → App → Permissions and enable Location to start a ride.',
+          [
+            { text: 'Open Settings', onPress: () => Linking.openSettings() },
+            { text: 'Cancel', style: 'cancel' },
+          ],
+        );
         return false;
       }
 
@@ -67,7 +75,7 @@ export function useRiderLocationTracking(): UseRiderLocationTrackingReturn {
         console.warn('[RiderLocation] Background permission denied');
         Alert.alert(
           'Always Allow Required',
-          'To track your location during a ride, please open Settings and set location access to "Always".',
+          "Set location access to 'Allow all the time' in Settings so your location is tracked during rides.",
           [
             { text: 'Open Settings', onPress: () => Linking.openSettings() },
             { text: 'Cancel', style: 'cancel' },
@@ -78,7 +86,7 @@ export function useRiderLocationTracking(): UseRiderLocationTrackingReturn {
 
       await startLocationTracking(tripId, tripType);
       setIsTracking(true);
-      onReady?.();
+      await Promise.resolve(onReady?.());
       return true;
     },
     [],
@@ -95,7 +103,7 @@ export function useRiderLocationTracking(): UseRiderLocationTrackingReturn {
       if (fgStatus === 'granted' && bgStatus === 'granted') {
         await startLocationTracking(tripId, tripType);
         setIsTracking(true);
-        onReady?.();
+        await Promise.resolve(onReady?.());
         return true;
       }
 

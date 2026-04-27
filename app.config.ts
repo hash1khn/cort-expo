@@ -1,17 +1,17 @@
 import { ConfigContext, ExpoConfig } from "expo/config";
 import { version } from "./package.json";
 
-const EAS_PROJECT_ID = "a65c02f9-c871-48e9-ada3-75d921c93682";
-const PROJECT_SLUG = "Cort";
+const EAS_PROJECT_ID = "abf6baa8-ec29-4e5f-ab9c-1a48308f1794";
+const PROJECT_SLUG = "traflinq";  // was "Traflinq"
 const OWNER = "cort-technologies";
 
 // App production config
-const APP_NAME = "Cort";
-const BUNDLE_IDENTIFIER = "com.corttechnologies.cort";
-const PACKAGE_NAME = "com.corttechnologies.cort";
-const ICON = "./assets/cort-app-icon.png";
+const APP_NAME = "Traflinq";
+const BUNDLE_IDENTIFIER = "com.corttechnologies.traflinq";
+const PACKAGE_NAME = "com.corttechnologies.traflinq";
+const ICON = "./assets/app_icon.png";
 const ADAPTIVE_ICON = "./assets/adaptive-icon.png";
-const SCHEME = "cort";
+const SCHEME = "traflinq";
 
 export default ({ config }: ConfigContext): ExpoConfig => {
   console.log(" Building app for environment:", process.env.APP_ENV);
@@ -32,9 +32,9 @@ export default ({ config }: ConfigContext): ExpoConfig => {
     icon: icon,
     scheme: scheme,
     splash: {
-      image: "./assets/cort-app-icon.png",
+      image: "./assets/app_icon.png",
       resizeMode: "contain",
-      backgroundColor: "#F4593B",
+      backgroundColor: "#000000",
     },
     ios: {
       supportsTablet: true,
@@ -43,12 +43,15 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       infoPlist: {
         ITSAppUsesNonExemptEncryption: false,
         UIBackgroundModes: ["fetch", "remote-notification", "location"],
+        // Required by App Store for apps that use Face ID
+        NSFaceIDUsageDescription:
+          "$(PRODUCT_NAME) uses Face ID to sign you in quickly and securely without entering your password.",
       },
     },
     android: {
       adaptiveIcon: {
         foregroundImage: adaptiveIcon,
-        backgroundColor: "#f47f00",
+        backgroundColor: "#000000",
       },
       package: packageName,
       edgeToEdgeEnabled: true,
@@ -86,6 +89,13 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       "expo-font",
       "expo-secure-store",
       [
+        "expo-local-authentication",
+        {
+          faceIDPermission:
+            "$(PRODUCT_NAME) uses Face ID to sign you in quickly and securely without entering your password.",
+        },
+      ],
+      [
         "expo-dev-client",
         {
           addGeneratedScheme: IS_DEV,
@@ -100,10 +110,10 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       [
         "expo-splash-screen",
         {
-          image: "./assets/cort-app-icon.png",
+          image: "./assets/app_icon.png",
           imageWidth: 200,
           resizeMode: "contain",
-          backgroundColor: "#F4593B",
+          backgroundColor: "#000000",
         },
       ],
      [

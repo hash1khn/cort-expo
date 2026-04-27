@@ -45,7 +45,7 @@ export const RoleSelectBottomSheet = forwardRef<BottomSheetModal, Props>(
     const insets = useSafeAreaInsets();
     const isAndroid = Platform.OS === 'android';
 
-    const snapPoints = useMemo(() => [isAndroid ? '55%' : '51%'], [isAndroid]);
+    const snapPoints = useMemo(() => [isAndroid ? '80%' : '51%'], [isAndroid]);
     const androidBottomInset = isAndroid ? insets.bottom : 0;
 
     const handleContinue = useCallback(() => {

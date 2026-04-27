@@ -1,5 +1,6 @@
-import React, { useCallback, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Alert,
   Keyboard,
   KeyboardAvoidingView,
   Platform,
@@ -8,27 +9,25 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  TouchableOpacity,
   TouchableWithoutFeedback,
   View,
   StatusBar,
-  Image,
-  TouchableOpacity,
 } from 'react-native';
+import { Image } from 'expo-image';
 import BottomSheet, { BottomSheetBackdrop, BottomSheetView } from '@gorhom/bottom-sheet';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 
-// Assuming these are your core components
 import { CortButton } from '../../../components';
 import { colors, radii, typography } from '../../../core/theme';
 import { useRouter } from 'expo-router';
 import { useAppDispatch } from '../../../store/hooks';
 import { logIn } from '../store';
 import { useLoginMutation } from '../services/authApi';
-import { mockApi } from '../../../services/mockApi';
 import { getHomePathForRole } from '../utils/getHomePathForRole';
-import { env } from '../../../core/config/env';
+import { credentialStorage, BiometricType } from '../utils/credentialStorage';
 
 export function LoginScreen() {
   const insets = useSafeAreaInsets();
@@ -37,15 +36,31 @@ export function LoginScreen() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
 
-  // UI States
   const [focusedField, setFocusedField] = useState<'email' | 'password' | null>(null);
   const [showPassword, setShowPassword] = useState(false);
+
+  // Biometric state
+  const [biometricAvailable, setBiometricAvailable] = useState(false);
+  const [biometricType, setBiometricType] = useState<BiometricType>(null);
+  const [isBiometricLoading, setIsBiometricLoading] = useState(false);
 
   const dispatch = useAppDispatch();
   const router = useRouter();
   const [login, { isLoading: isSubmitting }] = useLoginMutation();
-  const [isBiometricLoading, setIsBiometricLoading] = useState(false);
   const forgotPasswordSheetRef = useRef<BottomSheet>(null);
+
+  // On mount: check if biometric login is available and credentials are saved
+  useEffect(() => {
+    (async () => {
+      const [available, hasCreds, type] = await Promise.all([
+        credentialStorage.isBiometricAvailable(),
+        credentialStorage.hasSavedCredentials(),
+        credentialStorage.getBiometricType(),
+      ]);
+      setBiometricAvailable(available && hasCreds);
+      setBiometricType(type);
+    })();
+  }, []);
 
   const openForgotPassword = useCallback(() => {
     forgotPasswordSheetRef.current?.expand();
@@ -64,11 +79,68 @@ export function LoginScreen() {
 
   const canLogin = useMemo(() => email.trim().length > 0 && password.length > 0, [email, password]);
 
-  const handleLogin = async () => {
+  /**
+   * After a successful password login, optionally prompt the user to enable
+   * biometric login for future sessions. Only shown once, or if they haven't
+   * saved credentials yet.
+   */
+  const promptBiometricEnrollment = useCallback(
+    async (savedEmail: string, savedPassword: string) => {
+      const [hwAvailable, alreadyPrompted, hasCreds] = await Promise.all([
+        credentialStorage.isBiometricAvailable(),
+        credentialStorage.hasBeenPrompted(),
+        credentialStorage.hasSavedCredentials(),
+      ]);
+
+      if (!hwAvailable || (alreadyPrompted && hasCreds)) return;
+
+      const type = await credentialStorage.getBiometricType();
+      const label =
+        type === 'faceid'
+          ? 'Face ID'
+          : type === 'iris'
+          ? 'Iris Recognition'
+          : 'Fingerprint';
+
+      await credentialStorage.markAsPrompted();
+
+      Alert.alert(
+        `Enable ${label}`,
+        `Would you like to use ${label} to sign in faster next time?`,
+        [
+          {
+            text: 'Not Now',
+            style: 'cancel',
+          },
+          {
+            text: 'Enable',
+            onPress: async () => {
+              await credentialStorage.saveCredentials(savedEmail, savedPassword);
+              setBiometricAvailable(true);
+              setBiometricType(type);
+            },
+          },
+        ],
+        { cancelable: false }
+      );
+    },
+    []
+  );
+
+  const runLogin = async (candidateEmail: string, candidatePassword: string) => {
+    const normalizedEmail = candidateEmail.trim();
     try {
       setError(null);
-      const result = await login({ email: email.trim(), password }).unwrap();
+      const result = await login({ email: normalizedEmail, password: candidatePassword }).unwrap();
       dispatch(logIn({ role: result.role, user: result.user }));
+      // Keep saved biometric credentials in sync when password changes.
+      const hasSavedBiometricCredentials = await credentialStorage.hasSavedCredentials();
+      if (hasSavedBiometricCredentials) {
+        await credentialStorage.saveCredentials(normalizedEmail, candidatePassword);
+      } else {
+        // Prompt to enable biometrics for first-time enrollment.
+        promptBiometricEnrollment(normalizedEmail, candidatePassword);
+      }
       router.replace(getHomePathForRole(result.role) as Parameters<typeof router.replace>[0]);
     } catch (e: any) {
       const msg = e?.data?.message || e?.message || 'Login failed';
@@ -76,21 +148,43 @@ export function LoginScreen() {
     }
   };
 
+  const handleLogin = async () => {
+    await runLogin(email, password);
+  };
+
+  const isFaceIdBiometric = biometricType === 'faceid';
+
+  const biometricLabel = useMemo(() => {
+    if (biometricType === 'faceid') return 'Sign in with Face ID';
+    if (biometricType === 'iris') return 'Sign in with Iris';
+    return 'Sign in with Fingerprint';
+  }, [biometricType]);
+
   const handleBiometricLogin = async () => {
     try {
       setIsBiometricLoading(true);
       setError(null);
 
-      // Simulate face/fingerprint scan delay
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      const storedCredentials = await credentialStorage.getCredentialsWithBiometricPrompt();
 
-      // Use mock employee credentials from mockData.ts
-      const { role, user } = await mockApi.login('employee@cort.com', '123456');
-      dispatch(logIn({ role, user }));
-      router.replace(getHomePathForRole(role) as Parameters<typeof router.replace>[0]);
+      if (!storedCredentials) {
+        setError('No saved login found. Please sign in with your email and password first.');
+        return;
+      }
+
+      // Populate fields visually so the user sees what's happening
+      setEmail(storedCredentials.email);
+      setPassword(storedCredentials.password);
+      await runLogin(storedCredentials.email, storedCredentials.password);
     } catch (e) {
-      const msg = typeof e === 'string' ? e : e instanceof Error ? e.message : 'Biometric authentication failed';
-      setError(msg);
+      const rawMessage =
+        typeof e === 'string'
+          ? e
+          : e instanceof Error
+          ? e.message
+          : 'Biometric authentication failed';
+      if (rawMessage === 'cancelled') return; // silent cancel
+      setError(rawMessage);
     } finally {
       setIsBiometricLoading(false);
     }
@@ -116,7 +210,7 @@ export function LoginScreen() {
             {/* Centered Logo */}
             <View style={styles.logoContainer}>
               <Image
-                source={require('../../../../assets/cort-with-at-your.png')}
+                source={require('../../../../assets/traflinq-logo-big.svg')}
                 style={styles.logoImage}
                 resizeMode="contain"
               />
@@ -209,27 +303,37 @@ export function LoginScreen() {
             </View>
 
             
-            {/* Biometric Option */}
-            <View style={styles.footer}>
-              <Pressable
-                onPress={handleBiometricLogin}
-                disabled={isBiometricLoading || isSubmitting}
-                style={({ pressed }) => [
-                  styles.biometricBtn,
-                  pressed && styles.biometricBtnPressed
-                ]}
-              >
-                <Ionicons
-                  name="finger-print-outline"
-                  size={32}
-                  color="#1A1A1A"
-                  className='text-center'
-                />
-                <Text style={styles.biometricText}>
-                  {isBiometricLoading ? 'Verifying...' : 'Unlock with Face ID'}
-                </Text>
-              </Pressable>
-            </View>
+            {/* Biometric Option – only rendered when hardware + credentials are ready */}
+            {biometricAvailable && (
+              <View style={styles.footer}>
+                <Pressable
+                  onPress={handleBiometricLogin}
+                  disabled={isBiometricLoading || isSubmitting}
+                  style={({ pressed }) => [
+                    styles.biometricBtn,
+                    (isBiometricLoading || isSubmitting) && styles.biometricBtnDisabled,
+                    pressed && styles.biometricBtnPressed,
+                  ]}
+                >
+                  <View style={styles.biometricIconWrap}>
+                    {isBiometricLoading ? (
+                      <Ionicons name="ellipsis-horizontal" size={30} color="#141414" />
+                    ) : isFaceIdBiometric ? (
+                      <Image
+                        source={require('../../../../assets/faceid.svg')}
+                        style={styles.faceIdIcon}
+                        contentFit="contain"
+                      />
+                    ) : (
+                      <Ionicons name="finger-print-outline" size={30} color="#141414" />
+                    )}
+                  </View>
+                  <Text style={styles.biometricText}>
+                    {isBiometricLoading ? 'Verifying…' : biometricLabel}
+                  </Text>
+                </Pressable>
+              </View>
+            )}
 
           </ScrollView>
         </TouchableWithoutFeedback>
@@ -279,11 +383,12 @@ const styles = StyleSheet.create({
   },
   logoContainer: {
     alignItems: 'center',
+    marginRight:15
   },
+
   logoImage: {
-    
-    width: 200, // Adjusted size to be an elegant top-center accent
-    height: 200,
+    width: 280,
+    height: 250,
   },
   title: {
     fontFamily: typography.family.regular,
@@ -372,16 +477,36 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     padding: 12,
+    gap: 10,
+    width: '100%',
   },
   biometricBtnPressed: {
-    opacity: 0.5,
+    opacity: 0.55,
+  },
+  biometricBtnDisabled: {
+    opacity: 0.4,
+  },
+  biometricIconWrap: {
+    width: 56,
+    height: 56,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255, 90, 0, 0.08)',
+    alignItems: 'center',
+    marginHorizontal:'auto',
+    justifyContent: 'center',
+  },
+  faceIdIcon: {
+    width: 30,
+    height: 30,
   },
   biometricText: {
     fontFamily: typography.family.regular,
     fontWeight: '600',
     fontSize: 14,
     color: '#1A1A1A',
-    marginTop: 8,
+    marginTop:8,
+    textAlign: 'center',
+    alignSelf: 'center',
   },
   sheetContainer: {
     marginHorizontal: 10,

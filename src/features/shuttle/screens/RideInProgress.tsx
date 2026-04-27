@@ -12,8 +12,9 @@ import {
 } from 'react-native';
 import * as Location from 'expo-location';
 import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { colors } from '@/core/theme';
+import { colors, fontFamily } from '@/core/theme';
 import { router } from 'expo-router';
+import { useFocusEffect } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import BottomSheet, {
   BottomSheetBackdrop,
@@ -185,6 +186,31 @@ export default function RideInProgress() {
     onDisclosureDecline,
   } = useRiderLocationTracking();
 
+  const [locationPermissionWarning, setLocationPermissionWarning] = useState<
+    'foreground' | 'background' | null
+  >(null);
+
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
+      (async () => {
+        const fg = await Location.getForegroundPermissionsAsync();
+        const bg = await Location.getBackgroundPermissionsAsync();
+        if (cancelled) return;
+        if (bg.status === 'denied') {
+          setLocationPermissionWarning('background');
+        } else if (fg.status === 'denied') {
+          setLocationPermissionWarning('foreground');
+        } else {
+          setLocationPermissionWarning(null);
+        }
+      })();
+      return () => {
+        cancelled = true;
+      };
+    }, []),
+  );
+
   const { data: realEmployees = [], isLoading: isEmployeesLoading } = useGetTripEmployeesQuery(
     tripId as number,
     { skip: !tripId },
@@ -298,34 +324,54 @@ export default function RideInProgress() {
     }
 
     if (!rideStarted) {
+      // Last-resort: only when permanently denied — do not skip disclosure / OS dialogs for undetermined.
+      const { status: fgGuard } = await Location.getForegroundPermissionsAsync();
+      const { status: bgGuard } = await Location.getBackgroundPermissionsAsync();
+      if (fgGuard === 'denied' || bgGuard === 'denied') {
+        Alert.alert(
+          'Location required',
+          'Location permission was denied. Open Settings to allow location access so you can start this ride.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Open Settings', onPress: () => Linking.openSettings() },
+          ],
+        );
+        return;
+      }
+
       // First slide: read current GPS position, then call start trip API, then open maps
       const routeId = activeTrip?.route_id;
       const direction = activeTrip?.direction;
       if (routeId != null && direction) {
         try {
-          // Ask for location permission and get the driver's current position
-          // so the backend can generate the polyline from the real start point.
-          let driverLat: number | undefined;
-          let driverLng: number | undefined;
-          const { status } = await Location.requestForegroundPermissionsAsync();
-          if (status === 'granted') {
-            let loc = await Location.getLastKnownPositionAsync();
-            if (!loc) {
-              loc = await Location.getCurrentPositionAsync({
+          // Start background tracking and OS/disclosure flow first; only then hit
+          // the server (startTrip) so denying the permission modal cannot leave a started ride.
+          const afterTrackingReady = async () => {
+            let driverLat: number | undefined;
+            let driverLng: number | undefined;
+            try {
+              const loc = await Location.getCurrentPositionAsync({
                 accuracy: Location.Accuracy.Balanced,
               });
-            }
-            if (loc) {
               driverLat = loc.coords.latitude;
               driverLng = loc.coords.longitude;
+            } catch (e) {
+              console.warn('Could not read GPS for trip start', e);
             }
+            await startTrip({ route_id: routeId, direction, lat: driverLat, lng: driverLng }).unwrap();
+            openInMaps(currentStop);
+          };
+          const trackingStarted = await startTracking(tripId ?? 0, afterTrackingReady, 'shuttle');
+          // false = Android disclosure shown, or iOS permission flow did not complete — do not treat as error.
+          if (!trackingStarted) {
+            return;
           }
-
-          await startTrip({ route_id: routeId, direction, lat: driverLat, lng: driverLng }).unwrap();
-          // Start tracking first; open Maps only after location is live.
-          await startTracking(tripId ?? 0, () => openInMaps(currentStop), 'shuttle');
         } catch {
-          // Optionally show error
+          Alert.alert(
+            'Error',
+            'Could not start ride. Please try again.',
+            [{ text: 'OK' }],
+          );
         }
       } else {
         openInMaps(currentStop);
@@ -597,11 +643,32 @@ export default function RideInProgress() {
 
       </ScrollView>
 
-      <View className="absolute bottom-20 left-5 right-5 pointer-events-auto">
+      <View className="absolute bottom-20 left-5 right-5 pointer-events-auto gap-2">
+        {locationPermissionWarning && (
+          <View className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2">
+            <Text className="text-[13px] text-amber-900 leading-[18px]" style={{ fontFamily }}>
+              {locationPermissionWarning === 'background'
+                ? isUrdu
+                  ? 'ترتیبات میں لوکیشن کو "ہمیشہ اجازت" پر سیٹ کریں تاکہ سفر کے دوران ٹریکنگ ہو سکے۔'
+                  : 'Set location access to "Allow all the time" in Settings so rides can be tracked.'
+                : isUrdu
+                  ? 'ترتیبات میں ایپ کی اجازتوں سے لوکیشن چالو کریں، پھر سفر شروع کریں۔'
+                  : 'Enable Location in Settings (App → Permissions) before starting a ride.'}
+            </Text>
+            <Pressable onPress={() => Linking.openSettings()} className="mt-2 self-start">
+              <Text className="text-[13px] font-semibold text-amber-950" style={{ fontFamily }}>
+                {isUrdu ? 'ترتیبات کھولیں' : 'Open Settings'}
+              </Text>
+            </Pressable>
+          </View>
+        )}
         <Pressable
           onPress={handleSlideComplete}
-          disabled={isActionLoading}
-          className="bg-[#FF5A00] flex-row items-center justify-center py-6 rounded-xl active:opacity-90 disabled:opacity-70"
+          disabled={isActionLoading || (!rideStarted && locationPermissionWarning !== null)}
+          className="bg-[#FF5A00] flex-row items-center justify-center py-6 rounded-xl active:opacity-90"
+          style={{
+            opacity: isActionLoading ? 0.7 : (!rideStarted && locationPermissionWarning !== null) ? 0.5 : 1,
+          }}
         >
           {isActionLoading && (
             <ActivityIndicator size="small" color="#FFFFFF" style={{ marginRight: 8 }} />

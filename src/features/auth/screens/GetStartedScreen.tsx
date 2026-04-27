@@ -156,7 +156,7 @@ export function GetStartedScreen({ onGetStarted }: { onGetStarted?: (role: strin
         {/* Header */}
         <View style={styles.header}>
           <Image
-            source={require('../../../../assets/cort-without-at-your.png')}
+            source={require('../../../../assets/traflinq-logo-big.svg')}
             style={styles.logoImage}
             contentFit="contain"
           />
@@ -223,14 +223,15 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   header: {
-    height: 60,
+    height: 50,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 10,
+    marginTop: 45,
+    marginRight:18,
   },
   logoImage: {
-    width: 120,
-    height: 40,
+    width: 280,
+    height: 250,
   },
   flatListContent: {
     alignItems: 'center',
@@ -244,7 +245,8 @@ const styles = StyleSheet.create({
   illustrationWrapper: {
     width: width  * 0.8,
     height: height * 0.32,
-    marginBottom: 32, // Tighter spacing to connect image/text
+    marginBottom: 32, 
+    marginTop:5,// Tighter spacing to connect image/text
   },
   illustration: {
     width: '100%',

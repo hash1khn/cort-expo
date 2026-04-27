@@ -5,6 +5,7 @@ import BottomSheet, { BottomSheetView, BottomSheetBackdrop } from '@gorhom/botto
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
+import { useFocusEffect } from '@react-navigation/native';
 import * as Location from 'expo-location';
 import Animated, { FadeIn, FadeOut, LinearTransition } from 'react-native-reanimated';
 import { fontFamily } from '@/core/theme';
@@ -225,6 +226,31 @@ export function ActiveTripScreen() {
         onDisclosureDecline,
     } = useRiderLocationTracking();
 
+    const [locationPermissionWarning, setLocationPermissionWarning] = useState<
+        'foreground' | 'background' | null
+    >(null);
+
+    useFocusEffect(
+        useCallback(() => {
+            let cancelled = false;
+            (async () => {
+                const fg = await Location.getForegroundPermissionsAsync();
+                const bg = await Location.getBackgroundPermissionsAsync();
+                if (cancelled) return;
+                if (bg.status === 'denied') {
+                    setLocationPermissionWarning('background');
+                } else if (fg.status === 'denied') {
+                    setLocationPermissionWarning('foreground');
+                } else {
+                    setLocationPermissionWarning(null);
+                }
+            })();
+            return () => {
+                cancelled = true;
+            };
+        }, []),
+    );
+
     const totalDays = activeBooking?.no_of_days ?? 1;
     const completedDays = activeBooking?.chauffeur_trip_daily_logs?.filter(l => l.status === 'COMPLETED').length ?? 0;
     const isMultiDayIntermediateEnd = activeBooking?.trip_type === 'IN_CITY' && totalDays > 1 && (completedDays + 1) < totalDays;
@@ -245,12 +271,12 @@ export function ActiveTripScreen() {
 
     const illustrationSource = useMemo(() => {
         switch (tripStep) {
-            case 'START_TRIP': return require('@/../assets/points.png');
-            case 'MARK_ARRIVED': return require('@/../assets/waiting.png');
-            case 'RESUME_TRIP': return require('@/../assets/passenger_coming.png');
-            case 'MARK_DROPPED_OFF': return require('@/../assets/otw.png');
-            case 'END_RIDE': return require('@/../assets/return.png');
-            default: return require('@/../assets/points.png');
+            case 'START_TRIP': return require('@/../assets/points.svg');
+            case 'MARK_ARRIVED': return require('@/../assets/waiting.svg');
+            case 'RESUME_TRIP': return require('@/../assets/passenger_coming.svg');
+            case 'MARK_DROPPED_OFF': return require('@/../assets/otw.svg');
+            case 'END_RIDE': return require('@/../assets/return.svg');
+            default: return require('@/../assets/points.svg');
         }
     }, [tripStep]);
 
@@ -285,6 +311,22 @@ export function ActiveTripScreen() {
         const id = activeBooking.id;
 
         if (tripStep === 'START_TRIP') {
+            // Last-resort: only when permanently denied — do not skip disclosure / OS dialogs for undetermined.
+            const { status: fgGuard } = await Location.getForegroundPermissionsAsync();
+            const { status: bgGuard } = await Location.getBackgroundPermissionsAsync();
+            if (fgGuard === 'denied' || bgGuard === 'denied') {
+                Alert.alert(
+                    language === 'ur' ? 'لوکیشن درکار ہے' : 'Location required',
+                    language === 'ur'
+                        ? 'لوکیشن کی اجازت نہیں ملی۔ ترتیبات میں جا کر لوکیشن چالو کریں تاکہ آپ سفر شروع کر سکیں۔'
+                        : 'Location permission was denied. Open Settings to allow location access so you can start this ride.',
+                    [
+                        { text: language === 'ur' ? 'منسوخ' : 'Cancel', style: 'cancel' },
+                        { text: language === 'ur' ? 'ترتیبات کھولیں' : 'Open Settings', onPress: () => Linking.openSettings() },
+                    ],
+                );
+                return;
+            }
             // Confirmation sheet handles the API call
             confirmSheetRef.current?.snapToIndex(0);
         } else if (tripStep === 'MARK_ARRIVED') {
@@ -343,47 +385,65 @@ export function ActiveTripScreen() {
                     return;
                 }
 
-                // ── Capture Driver Location (for polyline) ────────────────────────────────
-                let currentPos: Location.LocationObject | null = null;
-                try {
-                    const { status } = await Location.requestForegroundPermissionsAsync();
-                    if (status === 'granted') {
-                        currentPos = await Location.getCurrentPositionAsync({
-                            accuracy: Location.Accuracy.Balanced,
-                        });
-                    }
-                } catch (err) {
-                    console.warn('Failed to capture start location', err);
-                    // allow proceed without location
+                // Last-resort: only when permanently denied — safety net if the sheet was open when revoked.
+                const { status: fgGuard } = await Location.getForegroundPermissionsAsync();
+                const { status: bgGuard } = await Location.getBackgroundPermissionsAsync();
+                if (fgGuard === 'denied' || bgGuard === 'denied') {
+                    confirmSheetRef.current?.close();
+                    Alert.alert(
+                        language === 'ur' ? 'لوکیشن درکار ہے' : 'Location required',
+                        language === 'ur'
+                            ? 'لوکیشن کی اجازت نہیں ملی۔ ترتیبات میں جا کر لوکیشن چالو کریں تاکہ آپ سفر شروع کر سکیں۔'
+                            : 'Location permission was denied. Open Settings to allow location access so you can start this ride.',
+                        [
+                            { text: language === 'ur' ? 'منسوخ' : 'Cancel', style: 'cancel' },
+                            { text: language === 'ur' ? 'ترتیبات کھولیں' : 'Open Settings', onPress: () => Linking.openSettings() },
+                        ],
+                    );
+                    return;
                 }
-                
-                confirmSheetRef.current?.close();
-                await startDriverBooking({ 
-                    bookingId: id,
-                    ...(isOutstation ? {
-                        meter_reading_start: parseFloat(startMeterValue),
-                        meter_reading_start_image_url: startMeterPhoto!,
-                    } : {}),
-                    ...(currentPos ? {
-                        driver_lat: currentPos.coords.latitude,
-                        driver_lng: currentPos.coords.longitude,
-                    } : {})
-                }).unwrap();
 
-                // Join the socket ride room so the server knows this is a
-                // chauffeur trip and can apply the correct geofence logic.
-                if (userId) {
-                    socketService.joinRide(id, userId, 'driver', 'chauffeur');
-                }
-                // Start tracking first; open Maps only after location is live.
-                // onReady fires after permissions are granted and the task is running.
+                confirmSheetRef.current?.close();
+
                 const openMaps = displayPickupAddress
                     ? () => {
                           const url = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(displayPickupAddress)}`;
                           Linking.openURL(url).catch(() => showError(t.errors.mapsFail));
                       }
                     : undefined;
-                await startTracking(id, openMaps);
+
+                // Tracking + OS / disclosure flow first; booking API only after location is live
+                // so denying permission cannot leave a started booking.
+                const trackingStarted = await startTracking(id, async () => {
+                    let currentPos: Location.LocationObject | null = null;
+                    try {
+                        currentPos = await Location.getCurrentPositionAsync({
+                            accuracy: Location.Accuracy.Balanced,
+                        });
+                    } catch (err) {
+                        console.warn('Failed to capture start location', err);
+                    }
+
+                    await startDriverBooking({
+                        bookingId: id,
+                        ...(isOutstation ? {
+                            meter_reading_start: parseFloat(startMeterValue),
+                            meter_reading_start_image_url: startMeterPhoto!,
+                        } : {}),
+                        ...(currentPos ? {
+                            driver_lat: currentPos.coords.latitude,
+                            driver_lng: currentPos.coords.longitude,
+                        } : {}),
+                    }).unwrap();
+
+                    if (userId) {
+                        socketService.joinRide(id, userId, 'driver', 'chauffeur');
+                    }
+                    openMaps?.();
+                });
+                if (!trackingStarted) {
+                    return;
+                }
             } catch {
                 showError(t.errors.startFail);
             }
@@ -532,9 +592,31 @@ export function ActiveTripScreen() {
 
             {/* Action buttons — pinned above safe area */}
             <View style={[styles.actionContainer, { bottom: insets.bottom + 16 }]}>
+                        {locationPermissionWarning && (
+                            <View style={styles.permissionWarningBanner}>
+                                <Text style={styles.permissionWarningText}>
+                                    {locationPermissionWarning === 'background'
+                                        ? language === 'ur'
+                                            ? 'ترتیبات میں لوکیشن کو "ہمیشہ اجازت" پر سیٹ کریں تاکہ سفر کے دوران ٹریکنگ ہو سکے۔'
+                                            : 'Set location access to "Allow all the time" in Settings so rides can be tracked.'
+                                        : language === 'ur'
+                                            ? 'ترتیبات میں ایپ کی اجازتوں سے لوکیشن چالو کریں، پھر سفر شروع کریں۔'
+                                            : 'Enable Location in Settings (App → Permissions) before starting a ride.'}
+                                </Text>
+                                <Pressable onPress={() => Linking.openSettings()} hitSlop={8}>
+                                    <Text style={styles.permissionWarningLink}>
+                                        {language === 'ur' ? 'ترتیبات کھولیں' : 'Open Settings'}
+                                    </Text>
+                                </Pressable>
+                            </View>
+                        )}
                         <Pressable
-                            style={[styles.primaryButton, (isAnyLoading || !activeBooking) && styles.primaryButtonDisabled]}
-                            disabled={isAnyLoading || !activeBooking}
+                            style={[
+                                styles.primaryButton,
+                                (isAnyLoading || !activeBooking) && styles.primaryButtonDisabled,
+                                (tripStep === 'START_TRIP' && locationPermissionWarning !== null) && styles.primaryButtonPermissionBlocked,
+                            ]}
+                            disabled={isAnyLoading || !activeBooking || (tripStep === 'START_TRIP' && locationPermissionWarning !== null)}
                             onPress={handleButtonPress}
                         >
                             {isAnyLoading && (
@@ -716,6 +798,27 @@ const styles = StyleSheet.create({
         right: 24,
         backgroundColor: '#FFFFFF',
         paddingTop: 8,
+        gap: 8,
+    },
+    permissionWarningBanner: {
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: '#FDE68A',
+        backgroundColor: '#FFFBEB',
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+        marginBottom: 4,
+    },
+    permissionWarningText: {
+        fontSize: 13,
+        lineHeight: 18,
+        color: '#78350F',
+    },
+    permissionWarningLink: {
+        fontSize: 13,
+        fontWeight: '600',
+        color: '#451A03',
+        marginTop: 8,
     },
     backButton: {
         width: 40,
@@ -815,6 +918,9 @@ const styles = StyleSheet.create({
     },
     primaryButtonDisabled: {
         opacity: 0.7,
+    },
+    primaryButtonPermissionBlocked: {
+        opacity: 0.5,
     },
     primaryButtonText: {
         color: '#FFFFFF',

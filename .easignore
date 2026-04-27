@@ -30,17 +30,12 @@ yarn-error.*
 .DS_Store
 *.pem
 
-
-# typescript
-*.tsbuildinfo
-
-
 # local env files
 .env*.local
 
-
+# typescript
+*.tsbuildinfo
 .env
-
 
 # generated native folders
 /ios
@@ -57,3 +52,6 @@ yarn-error.*
 /build-1776615229209.apk
 /build-1776682417506.ipa
 /build-1776769670359.apk
+/build-1777208785617_dev.ipa
+/build-1777213149167_dev.apk
+/build-1777222376569.tar.gz

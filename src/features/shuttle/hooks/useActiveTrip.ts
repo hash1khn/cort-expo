@@ -86,7 +86,7 @@ export function useActiveTrip() {
       // Show the next stop to drive to (original logic)
       const nextIndex = indexOfCurrent + 1;
       nextStopIndex = Math.min(nextIndex, stops.length - 1);
-      isLastStop = indexOfCurrent === stops.length - 1 && indexOfCurrent >= 0;
+      isLastStop = nextStopIndex === stops.length - 1;
       currentStop = stops[nextStopIndex] ?? null;
       nextStopAfterCurrent =
         nextStopIndex + 1 < stops.length ? stops[nextStopIndex + 1] ?? null : null;

@@ -1,8 +1,9 @@
 import React, { useCallback } from 'react';
-import { View, Pressable, Image } from 'react-native';
+import { View, Pressable } from 'react-native';
 import { AntDesign } from '@expo/vector-icons';
 import { useNavigation } from 'expo-router';
 import { DrawerActions } from '@react-navigation/native';
+import { Image } from 'expo-image';
 
 export function AppHeader() {
     const navigation = useNavigation();
@@ -22,9 +23,9 @@ export function AppHeader() {
             </Pressable>
             <View className="flex-row items-center">
                 <Image
-                    source={require('../../../../assets/cort-without-at-your.png')}
-                    className="w-32 h-10"
-                    resizeMode="contain"
+                    source={require('../../../../assets/traflinq-logo-no-tagline.svg')}
+                    style={{ width: 135, height: 50 ,marginRight:5}}
+                    contentFit="contain"
                 />
             </View>
         </View>

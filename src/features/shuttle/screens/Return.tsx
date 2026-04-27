@@ -1,8 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Linking, Platform, Pressable, ScrollView, StyleSheet, Text, View, ActivityIndicator } from 'react-native';
+import { Alert, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, View, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
+import { useFocusEffect } from '@react-navigation/native';
 import { BottomSheetBackdrop, BottomSheetModal, BottomSheetView } from '@gorhom/bottom-sheet';
 import { SlideToStartTrip } from '../components';
 import {
@@ -21,6 +22,8 @@ import { useLanguage } from '@/features/shared/context/LanguageContext';
 import * as Location from 'expo-location';
 import { useRiderLocationTracking } from '@/hooks/useRiderLocationTracking';
 import { LocationDisclosureModal } from '@/components/LocationDisclosureModal';
+import { useAppSelector } from '@/store/hooks';
+import { socketService } from '@/services/socket.service';
 
 const AppText = ({ style, ...props }: any) => (
   <Text style={[{ fontFamily }, style]} {...props} />
@@ -63,6 +66,20 @@ export default function Return() {
   const absentSheetRef = useRef<BottomSheetModal>(null);
   const absentSnapPoints = useMemo(() => ['40%'], []);
   const { activeTrip, tripId, stops, isLoading: isTripsLoading } = useActiveTrip();
+  const userId = useAppSelector((s) => s.auth.user?.id ?? '');
+
+  // Join the ride socket room as driver so the background location task's
+  // socketService.sendLocationUpdate() is broadcast to employees in real time.
+  // Without this, socket.role is never set to 'driver' and the gateway silently
+  // drops every location:update, falling back to batch HTTP uploads only.
+  useEffect(() => {
+    if (!tripId || !userId) return;
+    socketService.joinRide(tripId, userId, 'driver', 'shuttle');
+    return () => {
+      socketService.leaveRide();
+    };
+  }, [tripId, userId]);
+
   const { data: realTripEmployeesRaw = [], isLoading: isEmployeesLoading } = useGetTripEmployeesQuery(
     tripId as number,
     { skip: !tripId },
@@ -91,6 +108,9 @@ export default function Return() {
   const [employees, setEmployees] = useState<ReturnEmployee[]>([]);
   const [employeeForAbsent, setEmployeeForAbsent] = useState<ReturnEmployee | null>(null);
   const [sliderKey, setSliderKey] = useState(0);
+  const [locationPermissionWarning, setLocationPermissionWarning] = useState<
+    'foreground' | 'background' | null
+  >(null);
 
   // Derive returnTripStarted from the persisted trip status so that on crash
   // recovery the screen immediately shows "Complete Trip" (not "Begin ride").
@@ -185,6 +205,23 @@ export default function Return() {
 
     // First slide: submit bulk return attendance and open maps with all stops
     if (!returnTripStarted) {
+      // Last-resort: only when permanently denied — do not skip disclosure / OS dialogs for undetermined.
+      const { status: fgGuard } = await Location.getForegroundPermissionsAsync();
+      const { status: bgGuard } = await Location.getBackgroundPermissionsAsync();
+      if (fgGuard === 'denied' || bgGuard === 'denied') {
+        Alert.alert(
+          isUrdu ? 'لوکیشن درکار ہے' : 'Location required',
+          isUrdu
+            ? 'لوکیشن کی اجازت نہیں ملی۔ ترتیبات میں جا کر لوکیشن چالو کریں تاکہ آپ سفر شروع کر سکیں۔'
+            : 'Location permission was denied. Open Settings to allow location access so you can start this ride.',
+          [
+            { text: isUrdu ? 'منسوخ' : 'Cancel', style: 'cancel' },
+            { text: isUrdu ? 'ترتیبات کھولیں' : 'Open Settings', onPress: () => Linking.openSettings() },
+          ],
+        );
+        return;
+      }
+
       if (!employees.length) {
         router.push('/shuttle');
         return;
@@ -204,53 +241,51 @@ export default function Return() {
       }
 
       try {
-        await submitReturnAttendance({
-          shuttleTripId: tripId,
-          entries: employees.map((emp) => ({
-            employee_id: emp.id,
-            status: emp.status === 'present' ? 'PRESENT' : 'ABSENT',
-            ...(emp.status === 'absent' &&
-              emp.absentReason && { absent_reason: emp.absentReason }),
-          })),
-        }).unwrap();
+        // Location / disclosure flow first; server writes only after tracking is live
+        // so denying OS permission or the disclosure sheet cannot leave a started ride.
+        const afterTrackingReady = async () => {
+          await submitReturnAttendance({
+            shuttleTripId: tripId,
+            entries: employees.map((emp) => ({
+              employee_id: emp.id,
+              status: emp.status === 'present' ? 'PRESENT' : 'ABSENT',
+              ...(emp.status === 'absent' &&
+                emp.absentReason && { absent_reason: emp.absentReason }),
+            })),
+          }).unwrap();
 
-        if (activeTrip?.route_id) {
-          let driverLat: number | undefined;
-          let driverLng: number | undefined;
-          try {
-            const { status } = await Location.requestForegroundPermissionsAsync();
-            if (status === 'granted') {
-              let loc = await Location.getLastKnownPositionAsync();
-              if (!loc) {
-                loc = await Location.getCurrentPositionAsync({
-                  accuracy: Location.Accuracy.Balanced,
-                });
-              }
-              if (loc) {
-                driverLat = loc.coords.latitude;
-                driverLng = loc.coords.longitude;
-              }
+          if (activeTrip?.route_id) {
+            let driverLat: number | undefined;
+            let driverLng: number | undefined;
+            try {
+              const loc = await Location.getCurrentPositionAsync({
+                accuracy: Location.Accuracy.Balanced,
+              });
+              driverLat = loc.coords.latitude;
+              driverLng = loc.coords.longitude;
+            } catch (error) {
+              console.warn('Could not fetch location:', error);
             }
-          } catch (error) {
-            console.warn('Could not fetch location:', error);
+
+            await startTrip({
+              route_id: activeTrip.route_id,
+              direction: 'EVENING',
+              lat: driverLat,
+              lng: driverLng,
+            }).unwrap();
           }
 
-          await startTrip({
-            route_id: activeTrip.route_id,
-            direction: 'EVENING',
-            lat: driverLat,
-            lng: driverLng,
-          }).unwrap();
-        }
-
-        setReturnTripStarted(true);
-        if (tripId) {
-          // Start tracking first; open Maps only after location is live.
-          await startTracking(tripId, () => openStopsInMaps(stops), 'shuttle');
-        } else {
+          setReturnTripStarted(true);
           openStopsInMaps(stops);
+          setSliderKey((k) => k + 1);
+        };
+
+        const trackingStarted = await startTracking(tripId, afterTrackingReady, 'shuttle');
+        if (!trackingStarted) {
+          // Disclosure still open, or permission flow incomplete — let user retry.
+          setSliderKey((k) => k + 1);
+          return;
         }
-        setSliderKey((k) => k + 1);
       } catch {
         // On error, remount slider so user can retry; stay on screen
         toast.show(
@@ -288,6 +323,7 @@ export default function Return() {
     openStopsInMaps,
     stops,
     toast,
+    isUrdu,
   ]);
 
   React.useEffect(() => {
@@ -325,10 +361,36 @@ export default function Return() {
     setEmployeeForAbsent(null);
   }, []);
 
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
+      (async () => {
+        const fg = await Location.getForegroundPermissionsAsync();
+        const bg = await Location.getBackgroundPermissionsAsync();
+        if (cancelled) return;
+        if (bg.status === 'denied') {
+          setLocationPermissionWarning('background');
+        } else if (fg.status === 'denied') {
+          setLocationPermissionWarning('foreground');
+        } else {
+          setLocationPermissionWarning(null);
+        }
+      })();
+      return () => {
+        cancelled = true;
+      };
+    }, []),
+  );
+
   // We should also suspend the screen UI while attendance is loading on crash recovery
   if (isTripsLoading || isEmployeesLoading || (tripAlreadyStarted && isAttendanceLoading)) {
     return (
       <SafeAreaView className="flex-1 bg-[#FFFFFF]" edges={['top']}>
+        <LocationDisclosureModal
+          visible={needsDisclosure}
+          onAccept={onDisclosureAccept}
+          onDecline={onDisclosureDecline}
+        />
         <View className="flex-row items-center gap-2 ml-[-4px] px-6 mb-3">
           <View className="w-6 h-6 rounded-full bg-[#EDEDEB]" />
         </View>
@@ -362,7 +424,25 @@ export default function Return() {
         </ScrollView>
 
         {/* Bottom button skeleton */}
-        <View className="absolute bottom-16 left-5 right-5">
+        <View className="absolute bottom-16 left-5 right-5 gap-2">
+          {locationPermissionWarning && (
+            <View className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2">
+              <AppText className="text-[13px] text-amber-900 leading-[18px]">
+                {locationPermissionWarning === 'background'
+                  ? isUrdu
+                    ? 'ترتیبات میں لوکیشن کو "ہمیشہ اجازت" پر سیٹ کریں تاکہ سفر کے دوران ٹریکنگ ہو سکے۔'
+                    : 'Set location access to "Allow all the time" in Settings so rides can be tracked.'
+                  : isUrdu
+                    ? 'ترتیبات میں ایپ کی اجازتوں سے لوکیشن چالو کریں، پھر سفر شروع کریں۔'
+                    : 'Enable Location in Settings (App → Permissions) before starting a ride.'}
+              </AppText>
+              <Pressable onPress={() => Linking.openSettings()} className="mt-2 self-start">
+                <AppText className="text-[13px] font-semibold text-amber-950">
+                  {isUrdu ? 'ترتیبات کھولیں' : 'Open Settings'}
+                </AppText>
+              </Pressable>
+            </View>
+          )}
           <View className="h-[60px] w-full rounded-xl bg-[#EDEDEB]" />
         </View>
       </SafeAreaView>
@@ -489,11 +569,32 @@ export default function Return() {
         </View> */}
       </ScrollView>
 
-      <View className="absolute bottom-16 left-5 right-5 pointer-events-auto">
+      <View className="absolute bottom-16 left-5 right-5 pointer-events-auto gap-2">
+        {locationPermissionWarning && (
+          <View className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2">
+            <AppText className="text-[13px] text-amber-900 leading-[18px]">
+              {locationPermissionWarning === 'background'
+                ? isUrdu
+                  ? 'ترتیبات میں لوکیشن کو "ہمیشہ اجازت" پر سیٹ کریں تاکہ سفر کے دوران ٹریکنگ ہو سکے۔'
+                  : 'Set location access to "Allow all the time" in Settings so rides can be tracked.'
+                : isUrdu
+                  ? 'ترتیبات میں ایپ کی اجازتوں سے لوکیشن چالو کریں، پھر سفر شروع کریں۔'
+                  : 'Enable Location in Settings (App → Permissions) before starting a ride.'}
+            </AppText>
+            <Pressable onPress={() => Linking.openSettings()} className="mt-2 self-start">
+              <AppText className="text-[13px] font-semibold text-amber-950">
+                {isUrdu ? 'ترتیبات کھولیں' : 'Open Settings'}
+              </AppText>
+            </Pressable>
+          </View>
+        )}
         <Pressable
           onPress={handleSlideReturnTrip}
-          disabled={isActionLoading}
-          className="bg-[#FF5A00] flex-row items-center justify-center py-4 rounded-xl active:opacity-90 disabled:opacity-70"
+          disabled={isActionLoading || (!returnTripStarted && locationPermissionWarning !== null)}
+          className="bg-[#FF5A00] flex-row items-center justify-center py-4 rounded-xl active:opacity-90"
+          style={{
+            opacity: isActionLoading ? 0.7 : (!returnTripStarted && locationPermissionWarning !== null) ? 0.5 : 1,
+          }}
         >
           {isActionLoading && (
             <ActivityIndicator size="small" color="#FFFFFF" style={{ marginRight: 8 }} />
