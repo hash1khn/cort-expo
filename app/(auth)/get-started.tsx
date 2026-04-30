@@ -7,12 +7,8 @@ export default function GetStartedRoute() {
 
   return (
     <GetStartedScreen
-      onGetStarted={(role) => {
-        if (role === 'driver') {
-          router.push('/(auth)/otp-login');
-        } else {
-          router.push('/(auth)/login');
-        }
+      onGetStarted={() => {
+        router.push('/(auth)/login');
       }}
     />
   );

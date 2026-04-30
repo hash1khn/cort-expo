@@ -82,18 +82,27 @@ export function ShuttleDriver() {
     }
   };
 
-  const handleCliftonTowerPress = () => {
-    // Only allow navigation when there is an active trip for today
-    if (!latestTrip) {
+  const handleTripStart = useCallback((trip: ShuttleTrip | null) => {
+    // Only allow navigation when there is an assigned trip for today
+    if (!trip) {
       return;
     }
 
-    if (latestTrip.direction === 'EVENING') {
-      router.push('/shuttle/return');
+    // Prefetch employees so the next screen is instant for any selected trip
+    triggerLoadEmployees(trip.id);
+
+    if (trip.direction === 'EVENING') {
+      router.push({
+        pathname: '/shuttle/return',
+        params: { tripId: String(trip.id) },
+      });
     } else {
-      router.push('/shuttle/ride');
+      router.push({
+        pathname: '/shuttle/ride',
+        params: { tripId: String(trip.id) },
+      });
     }
-  };
+  }, [triggerLoadEmployees]);
 
   const buildRouteDetails = (trip: ShuttleTrip | null) => {
     if (!trip || !trip.routes) {
@@ -166,6 +175,15 @@ export function ShuttleDriver() {
   );
   const labels = ROUTE_DETAILS_LABELS[language];
   const isUrdu = language === 'ur';
+  const todayDateLabel = useMemo(
+    () =>
+      new Date().toLocaleDateString(language === 'ur' ? 'ur-PK' : 'en-US', {
+        month: 'long',
+        day: 'numeric',
+        year: 'numeric',
+      }),
+    [language],
+  );
   const [openAccordionId, setOpenAccordionId] = React.useState<string | null>(null);
 
   const InfoRow = ({
@@ -336,7 +354,7 @@ export function ShuttleDriver() {
         <View className="mb-6">
           <Text className="text-[34px] font-bold text-black">{labels.today}</Text>
           <Text className="text-base font-medium text-[#6B7280]">
-            February 6, 2026
+            {todayDateLabel}
           </Text>
         </View>
 
@@ -435,7 +453,7 @@ export function ShuttleDriver() {
                 </View>
 
                 <Pressable
-                  onPress={handleCliftonTowerPress}
+                  onPress={() => handleTripStart(latestTrip)}
                   className="flex-row items-center justify-center gap-2 py-2 rounded-xl mt-4 bg-[#FF5A00] active:scale-[0.98]"
                 >
                   <Ionicons name="play-sharp" size={20} color="#FFFFFF" />
@@ -564,6 +582,20 @@ export function ShuttleDriver() {
                               isLast
                             />
                           </View>
+
+                          <Pressable
+                            onPress={() => handleTripStart(item.trip)}
+                            className="flex-row items-center justify-center gap-2 py-2 rounded-xl mt-4 bg-[#FF5A00] active:scale-[0.98]"
+                          >
+                            <Ionicons name="play-sharp" size={18} color="#FFFFFF" />
+                            <Text
+                              className="text-base py-2 mt-1 text-white"
+                              style={{ fontFamily: 'NotoNastaliqUrdu', fontWeight: '800' }}
+                            >
+                              {' '}
+                              شروع  کریں
+                            </Text>
+                          </Pressable>
                         </View>
                       )}
                     </View>

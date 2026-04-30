@@ -1,5 +1,6 @@
 import React, { useMemo, useRef, useState, useCallback } from 'react';
-import { StyleSheet, Text as RNText, View, Pressable, Modal, ActivityIndicator, Linking, TextInput, Image, ScrollView, Alert, TouchableWithoutFeedback, Keyboard } from 'react-native';
+import { StyleSheet, Text as RNText, View, Pressable, Modal, ActivityIndicator, Linking, TextInput, Image, ScrollView, Alert, TouchableWithoutFeedback, Keyboard, Platform } from 'react-native';
+import { Image as ExpoImage } from 'expo-image';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import BottomSheet, { BottomSheetView, BottomSheetBackdrop } from '@gorhom/bottom-sheet';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -234,13 +235,27 @@ export function ActiveTripScreen() {
         useCallback(() => {
             let cancelled = false;
             (async () => {
+                // iOS: CLAuthorizationStatus can lag a frame after returning from
+                // Settings, so we wait briefly before reading to avoid a false banner.
+                if (Platform.OS === 'ios') {
+                    await new Promise<void>((r) => setTimeout(r, 300));
+                }
+                if (cancelled) return;
                 const fg = await Location.getForegroundPermissionsAsync();
                 const bg = await Location.getBackgroundPermissionsAsync();
                 if (cancelled) return;
-                if (bg.status === 'denied') {
-                    setLocationPermissionWarning('background');
+                const iosScope = Platform.OS === 'ios'
+                    ? ((fg as any)?.ios?.scope as string | undefined)
+                    : undefined;
+                const fullyGranted =
+                    (fg.status === 'granted' && bg.status === 'granted') ||
+                    (Platform.OS === 'ios' && fg.status === 'granted' && iosScope === 'always');
+                if (fullyGranted) {
+                    setLocationPermissionWarning(null);
                 } else if (fg.status === 'denied') {
                     setLocationPermissionWarning('foreground');
+                } else if (bg.status === 'denied') {
+                    setLocationPermissionWarning('background');
                 } else {
                     setLocationPermissionWarning(null);
                 }
@@ -542,10 +557,10 @@ export function ActiveTripScreen() {
                             layout={LinearTransition.duration(240)}
                             style={styles.illustrationLayer}
                         >
-                            <Image
+                            <ExpoImage
                                 source={illustrationSource}
                                 style={[styles.illustration, language === 'ur' && { height: 180 }]}
-                                resizeMode="contain"
+                                contentFit="contain"
                             />
                         </Animated.View>
                     </View>

@@ -5,8 +5,6 @@ export default function AuthLayout() {
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="get-started" />
       <Stack.Screen name="login" />
-      <Stack.Screen name="otp-login" />
-      <Stack.Screen name="role-select" />
     </Stack>
   );
 }

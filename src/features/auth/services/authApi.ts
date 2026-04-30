@@ -18,6 +18,14 @@ type LoginRequest = {
   password: string;
 };
 
+type ApplyChauffeurRequest = {
+  full_name: string;
+  email: string;
+  phone: string;
+  cnic_number: string;
+  license_number: string;
+};
+
 type LoginResponse = {
   data?: {
     user?: {
@@ -134,7 +142,19 @@ export const authApi = baseApi.injectEndpoints({
         };
       },
     }),
+    applyAsChauffeur: builder.mutation<void, ApplyChauffeurRequest>({
+      query: (payload) => ({
+        url: '/drivers/apply-chauffeur',
+        method: 'POST',
+        body: payload,
+      }),
+    }),
   }),
 });
 
-export const { useLoginMutation, useLogoutMutation, useGetProfileQuery } = authApi;
+export const {
+  useLoginMutation,
+  useLogoutMutation,
+  useGetProfileQuery,
+  useApplyAsChauffeurMutation,
+} = authApi;

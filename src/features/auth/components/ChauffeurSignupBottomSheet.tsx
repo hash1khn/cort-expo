@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, forwardRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -15,14 +15,12 @@ import {
 } from '@gorhom/bottom-sheet';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, typography, radii } from '../../../core/theme';
-import { mockApi } from '../../../services/mockApi';
 import { CortButton } from '../../../components';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useApplyAsChauffeurMutation } from '../services/authApi';
 
-type Props = Record<string, never>;
-
-export const ChauffeurSignupBottomSheet = forwardRef<BottomSheetModal, Props>(
-  (_, ref) => {
+export const ChauffeurSignupBottomSheet = React.forwardRef<BottomSheetModal, {}>(
+  (_props, ref) => {
     const snapPoints = useMemo(() => ['55%', '92%'], []);
     const insets = useSafeAreaInsets();
 
@@ -36,10 +34,16 @@ export const ChauffeurSignupBottomSheet = forwardRef<BottomSheetModal, Props>(
     const [error, setError] = useState<string | null>(null);
     const [submitting, setSubmitting] = useState(false);
     const [submitted, setSubmitted] = useState(false);
+    const [applyAsChauffeur] = useApplyAsChauffeurMutation();
 
     const canSubmit = useMemo(
-      () => name.trim().length > 0 && email.trim().length > 0,
-      [name, email]
+      () =>
+        name.trim().length > 0 &&
+        email.trim().length > 0 &&
+        phone.trim().length > 0 &&
+        cnic.trim().length > 0 &&
+        licenseNumber.trim().length > 0,
+      [name, email, phone, cnic, licenseNumber]
     );
 
     const resetForm = useCallback(() => {
@@ -66,21 +70,27 @@ export const ChauffeurSignupBottomSheet = forwardRef<BottomSheetModal, Props>(
       try {
         setSubmitting(true);
         setError(null);
-        await mockApi.submitChauffeurApplication({
-          name,
+        await applyAsChauffeur({
+          full_name: name,
           email,
-          password: '',
           phone,
-          cnic,
-          licenseNumber,
-        });
+          cnic_number: cnic,
+          license_number: licenseNumber,
+        }).unwrap();
         setSubmitted(true);
       } catch (e) {
-        setError(e instanceof Error ? e.message : 'Submission failed. Please try again.');
+        const err = e as
+          | { data?: { message?: string | string[] } }
+          | Error
+          | undefined;
+        const backendMessage = Array.isArray(err && 'data' in err ? err.data?.message : undefined)
+          ? (err as { data?: { message?: string[] } }).data?.message?.[0]
+          : (err && 'data' in err ? (err as { data?: { message?: string } }).data?.message : undefined);
+        setError(backendMessage || (e instanceof Error ? e.message : 'Submission failed. Please try again.'));
       } finally {
         setSubmitting(false);
       }
-    }, [name, email, phone, cnic, licenseNumber]);
+    }, [applyAsChauffeur, name, email, phone, cnic, licenseNumber]);
 
     // Snap sheet down to confirmation height once submitted
     useEffect(() => {
@@ -107,6 +117,8 @@ export const ChauffeurSignupBottomSheet = forwardRef<BottomSheetModal, Props>(
         index={1}
         snapPoints={snapPoints}
         topInset={insets.top}
+        detached={submitted}
+        bottomInset={submitted ? 40 : 0}
         backdropComponent={renderBackdrop}
         enablePanDownToClose={!submitting}
         handleIndicatorStyle={styles.handle}
@@ -193,7 +205,7 @@ export const ChauffeurSignupBottomSheet = forwardRef<BottomSheetModal, Props>(
               </Field>
 
               {/* Phone */}
-              <Field label="Phone (optional)">
+              <Field label="Phone">
                 <View style={[styles.inputContainer, focusedField === 'phone' && styles.inputFocused]}>
                   <BottomSheetTextInput
                     value={phone}
@@ -210,7 +222,7 @@ export const ChauffeurSignupBottomSheet = forwardRef<BottomSheetModal, Props>(
               </Field>
 
               {/* CNIC */}
-              <Field label="CNIC (optional)">
+              <Field label="CNIC">
                 <View style={[styles.inputContainer, focusedField === 'cnic' && styles.inputFocused]}>
                   <BottomSheetTextInput
                     value={cnic}
@@ -227,7 +239,7 @@ export const ChauffeurSignupBottomSheet = forwardRef<BottomSheetModal, Props>(
               </Field>
 
               {/* License Number */}
-              <Field label="License Number (optional)">
+              <Field label="License Number">
                 <View style={[styles.inputContainer, focusedField === 'license' && styles.inputFocused]}>
                   <BottomSheetTextInput
                     value={licenseNumber}

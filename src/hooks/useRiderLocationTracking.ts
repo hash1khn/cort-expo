@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { Platform, Alert, Linking } from 'react-native';
+import { Platform, Alert, Linking, AppState } from 'react-native';
 import * as Location from 'expo-location';
 import * as TaskManager from 'expo-task-manager';
 import {
@@ -7,6 +7,62 @@ import {
   stopLocationTracking,
 } from '../services/location/riderLocationService';
 import { RIDER_LOCATION_TASK } from '../services/location/backgroundLocationTask';
+
+/**
+ * iOS only.
+ *
+ * On iOS 13+, when the user taps "Change to Always Allow" in the system
+ * background-location upgrade dialog, iOS immediately opens Settings and
+ * `requestBackgroundPermissionsAsync()` resolves with the *old* (denied)
+ * status before the user has had a chance to change anything.
+ *
+ * This helper detects that scenario by checking AppState:
+ * - If the app is still active after the call, the user chose "Keep Only
+ *   While Using" — we return false immediately so the caller can show an
+ *   alert without delay.
+ * - If the app is in the background (user is in Settings), we wait for the
+ *   app to become active again and then re-read the permission.
+ */
+async function iosWaitForAlwaysPermission(): Promise<boolean> {
+  // Short pause so AppState has time to transition if iOS is opening Settings.
+  await new Promise<void>((resolve) => setTimeout(resolve, 200));
+
+  if (AppState.currentState === 'active') {
+    // User is still in the app — they chose "Keep Only While Using" (or denied).
+    // Do one final read in case the OS callback just landed.
+    const fg = await Location.getForegroundPermissionsAsync();
+    const bg = await Location.getBackgroundPermissionsAsync();
+    const scope = (fg as any)?.ios?.scope as string | undefined;
+    return scope === 'always' || bg.status === 'granted';
+  }
+
+  // App is backgrounded — user is in Settings.app. Wait for them to return.
+  return new Promise<boolean>((resolve) => {
+    let settled = false;
+
+    const settle = (granted: boolean) => {
+      if (settled) return;
+      settled = true;
+      sub.remove();
+      clearTimeout(giveUpTimer);
+      resolve(granted);
+    };
+
+    const sub = AppState.addEventListener('change', async (state) => {
+      if (state === 'active' && !settled) {
+        // Small buffer for CLAuthorizationStatus to propagate after app resume.
+        await new Promise<void>((r) => setTimeout(r, 350));
+        const fg = await Location.getForegroundPermissionsAsync();
+        const bg = await Location.getBackgroundPermissionsAsync();
+        const scope = (fg as any)?.ios?.scope as string | undefined;
+        settle(scope === 'always' || bg.status === 'granted');
+      }
+    });
+
+    // Safety valve: user abandoned Settings without changing anything.
+    const giveUpTimer = setTimeout(() => settle(false), 60_000);
+  });
+}
 
 export interface UseRiderLocationTrackingReturn {
   /** True while startLocationUpdatesAsync is active */
@@ -72,16 +128,37 @@ export function useRiderLocationTracking(): UseRiderLocationTrackingReturn {
         await Location.requestBackgroundPermissionsAsync();
 
       if (bgStatus !== 'granted') {
-        console.warn('[RiderLocation] Background permission denied');
-        Alert.alert(
-          'Always Allow Required',
-          "Set location access to 'Allow all the time' in Settings so your location is tracked during rides.",
-          [
-            { text: 'Open Settings', onPress: () => Linking.openSettings() },
-            { text: 'Cancel', style: 'cancel' },
-          ],
-        );
-        return false;
+        if (Platform.OS === 'ios') {
+          // On iOS, tapping "Change to Always Allow" opens Settings and resolves
+          // the call with the OLD (denied) status before the user has changed
+          // anything. Wait for the user to return from Settings and re-check.
+          const nowGranted = await iosWaitForAlwaysPermission();
+          if (!nowGranted) {
+            console.warn('[RiderLocation] iOS Always permission not satisfied');
+            Alert.alert(
+              'Always Allow Required',
+              "Open Settings and set location access to 'Always' so your location is tracked during rides.",
+              [
+                { text: 'Open Settings', onPress: () => Linking.openSettings() },
+                { text: 'Cancel', style: 'cancel' },
+              ],
+            );
+            return false;
+          }
+          // User returned from Settings with Always granted — fall through.
+        } else {
+          // Android: the read after requestBackgroundPermissionsAsync() is reliable.
+          console.warn('[RiderLocation] Background permission denied');
+          Alert.alert(
+            'Always Allow Required',
+            "Set location access to 'Allow all the time' in Settings so your location is tracked during rides.",
+            [
+              { text: 'Open Settings', onPress: () => Linking.openSettings() },
+              { text: 'Cancel', style: 'cancel' },
+            ],
+          );
+          return false;
+        }
       }
 
       await startLocationTracking(tripId, tripType);
@@ -95,12 +172,21 @@ export function useRiderLocationTracking(): UseRiderLocationTrackingReturn {
   const startTracking = useCallback(
     async (tripId: string | number, onReady?: () => void, tripType?: 'shuttle' | 'chauffeur'): Promise<boolean> => {
       // Permissions already granted — start immediately and fire onReady.
-      const { status: fgStatus } =
-        await Location.getForegroundPermissionsAsync();
-      const { status: bgStatus } =
-        await Location.getBackgroundPermissionsAsync();
+      const fg = await Location.getForegroundPermissionsAsync();
+      const bg = await Location.getBackgroundPermissionsAsync();
+      const fgStatus = fg.status;
+      const bgStatus = bg.status;
 
-      if (fgStatus === 'granted' && bgStatus === 'granted') {
+      // On iOS, "Always" is surfaced as ios.scope === 'always' on the foreground
+      // object. Use it as a parallel signal so a stale bgStatus doesn't block us.
+      const iosScope = Platform.OS === 'ios'
+        ? ((fg as any)?.ios?.scope as string | undefined)
+        : undefined;
+      const alreadyFullyGranted =
+        (fgStatus === 'granted' && bgStatus === 'granted') ||
+        (Platform.OS === 'ios' && fgStatus === 'granted' && iosScope === 'always');
+
+      if (alreadyFullyGranted) {
         await startLocationTracking(tripId, tripType);
         setIsTracking(true);
         await Promise.resolve(onReady?.());

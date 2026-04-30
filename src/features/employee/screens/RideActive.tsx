@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Linking, Platform, Pressable, StyleSheet, Text as RNText, View, ActivityIndicator, Image, Dimensions } from 'react-native';
+import { Linking, Platform, Pressable, StyleSheet, Text as RNText, View, ActivityIndicator, Image, Dimensions, Share } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
 import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
 import { Ionicons, MaterialCommunityIcons, Octicons } from '@expo/vector-icons';
@@ -188,6 +188,8 @@ export default function RideActive() {
   const [driverCoord, setDriverCoord] = useState<LatLng | null>(null);
   const [socketStopId, setSocketStopId] = useState<number | null>(null);
   const [socketStopStatus, setSocketStopStatus] = useState<'AT_STOP' | 'EN_ROUTE' | null>(null);
+  const [isCallingDriver, setIsCallingDriver] = useState(false);
+  const [isSharingRide, setIsSharingRide] = useState(false);
   // True when the driver manually marked this employee as present from the attendance sheet
   const [isDriverMarkedPresent, setIsDriverMarkedPresent] = useState(false);
   const currentStopId = socketStopId ?? activeTrip?.current_stop_id ?? null;
@@ -493,11 +495,16 @@ export default function RideActive() {
   }, [captainIsHere, isDataLoading, isChauffeurMode, chauffeurStatus]);
 
   // ── Actions ───────────────────────────────────────────────────────────────
-  const handleContactDriver = useCallback(() => {
+  const handleContactDriver = useCallback(async () => {
     if (!driverPhone) return;
-    Linking.openURL(`tel:${driverPhone}`).catch((err) =>
-      console.warn('Could not open dialer:', err),
-    );
+    setIsCallingDriver(true);
+    try {
+      await Linking.openURL(`tel:${driverPhone}`);
+    } catch (err) {
+      console.warn('Could not open dialer:', err);
+    } finally {
+      setIsCallingDriver(false);
+    }
   }, [driverPhone]);
 
   const handleScanQR = useCallback(async () => {
@@ -537,6 +544,17 @@ export default function RideActive() {
       );
     }
   }, [captainIsHere, activeTripId, userId, scanBoarding, toast]);
+
+  const handleShareRide = useCallback(async () => {
+    setIsSharingRide(true);
+    try {
+      await Share.share({
+        message: `I'm on my way! My ride details - Driver: ${driverName}, Vehicle: ${vehicleDisplay} (${vehiclePlate})`,
+      });
+    } finally {
+      setIsSharingRide(false);
+    }
+  }, [driverName, vehicleDisplay, vehiclePlate]);
 
   const handleDevMarkOutstation = useCallback(() => {
     dispatch(setIsOutstationDev(true));
@@ -731,14 +749,14 @@ export default function RideActive() {
           <View style={[styles.divider, { marginTop: 40, marginBottom: 4 }]} />
 
           <View style={styles.threeActionsRow}>
-            <Pressable style={styles.iconActionBtn} onPress={handleContactDriver}>
+            <Pressable style={styles.iconActionBtn} onPress={handleContactDriver} disabled={isCallingDriver}>
               <Ionicons name="call-outline" size={20} color="#141414" />
-              <Text style={styles.iconActionText}>Call driver</Text>
+              <Text style={styles.iconActionText}>{isCallingDriver ? 'calling...' : 'Call driver'}</Text>
             </Pressable>
 
-            <Pressable style={styles.iconActionBtn}>
+            <Pressable style={styles.iconActionBtn} onPress={handleShareRide} disabled={isSharingRide}>
               <Octicons name="share" size={20} color="black" />
-              <Text style={styles.iconActionText}>Share ride</Text>
+              <Text style={styles.iconActionText}>{isSharingRide ? 'sharing...' : 'Share ride'}</Text>
             </Pressable>
 
             {!isChauffeurMode && !isBoarded && captainIsHere && directionParam !== 'EVENING' && (

@@ -28,6 +28,8 @@ import { logIn } from '../store';
 import { useLoginMutation } from '../services/authApi';
 import { getHomePathForRole } from '../utils/getHomePathForRole';
 import { credentialStorage, BiometricType } from '../utils/credentialStorage';
+import { ChauffeurSignupBottomSheet } from '../components/ChauffeurSignupBottomSheet';
+import { BottomSheetModal } from '@gorhom/bottom-sheet';
 
 export function LoginScreen() {
   const insets = useSafeAreaInsets();
@@ -48,6 +50,7 @@ export function LoginScreen() {
   const router = useRouter();
   const [login, { isLoading: isSubmitting }] = useLoginMutation();
   const forgotPasswordSheetRef = useRef<BottomSheet>(null);
+  const chauffeurSheetRef = useRef<BottomSheetModal>(null);
 
   // On mount: check if biometric login is available and credentials are saved
   useEffect(() => {
@@ -302,6 +305,18 @@ export function LoginScreen() {
               />
             </View>
 
+            <View style={styles.chauffeurApplyRow}>
+              <Text style={styles.chauffeurApplyText}>
+                Want to join our fleet?{' '}
+                <Text
+                  style={styles.chauffeurApplyLink}
+                  onPress={() => chauffeurSheetRef.current?.present()}
+                >
+                  Apply as Chauffeur
+                </Text>
+              </Text>
+            </View>
+
             
             {/* Biometric Option – only rendered when hardware + credentials are ready */}
             {biometricAvailable && (
@@ -365,6 +380,7 @@ export function LoginScreen() {
           </Pressable>
         </BottomSheetView>
       </BottomSheet>
+      <ChauffeurSignupBottomSheet ref={chauffeurSheetRef as any} />
     </SafeAreaView>
   );
 }
@@ -389,6 +405,7 @@ const styles = StyleSheet.create({
   logoImage: {
     width: 280,
     height: 250,
+    marginBottom:-20,
   },
   title: {
     fontFamily: typography.family.regular,
@@ -460,6 +477,21 @@ const styles = StyleSheet.create({
   },
   actionRow: {
     marginTop: 16,
+  },
+  chauffeurApplyRow: {
+    marginTop: 16,
+    alignItems: 'center',
+  },
+  chauffeurApplyText: {
+    fontFamily: typography.family.regular,
+    fontSize: 14,
+    color: '#6B7280',
+    textAlign: 'center',
+  },
+  chauffeurApplyLink: {
+    fontWeight: '700',
+    color: '#FF5A00',
+    textDecorationLine: 'underline',
   },
   debugText: {
     marginTop: 8,

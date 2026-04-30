@@ -29,7 +29,14 @@
       "channel": "production"
     }
   },
-  "submit": {
-    "production": {}
+ "submit": {
+  "production": {
+    "ios": {
+      "appleId": "alimurtazaathar@gmail.com",
+      "companyName": "CORT TECHNOLOGIES (SMC PRIVATE) LIMITED",
+      "ascAppId": "6764604833",
+      "bundleIdentifier": "com.corttechnologies.traflinq"
+    }
   }
+}
 }

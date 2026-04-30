@@ -20,8 +20,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, fontFamily } from '../../../core/theme';
 import { CortButton } from '@/components';
 import { LegalBottomSheet, LegalDocumentType } from '../components/LegalBottomSheet';
-import { RoleSelectBottomSheet } from '../components/RoleSelectBottomSheet';
-import { ChauffeurSignupBottomSheet } from '../components/ChauffeurSignupBottomSheet';
 import { BottomSheetModal } from '@gorhom/bottom-sheet';
 
 const { width, height } = Dimensions.get('window');
@@ -132,11 +130,9 @@ function DotIndicator({ index, scrollX }: { index: number; scrollX: SharedValue<
 // ---------------------------------------------------------------------------
 // Main Screen
 // ---------------------------------------------------------------------------
-export function GetStartedScreen({ onGetStarted }: { onGetStarted?: (role: string) => void }) {
+export function GetStartedScreen({ onGetStarted }: { onGetStarted?: () => void }) {
   const scrollX = useSharedValue(0);
   const bottomSheetRef = React.useRef<BottomSheetModal>(null);
-  const roleSheetRef = React.useRef<BottomSheetModal>(null);
-  const chauffeurSheetRef = React.useRef<BottomSheetModal>(null);
   const [docType, setDocType] = React.useState<LegalDocumentType>('terms');
 
   const openLegalModal = (type: LegalDocumentType) => {
@@ -188,7 +184,7 @@ export function GetStartedScreen({ onGetStarted }: { onGetStarted?: (role: strin
         <View style={styles.footer}>
           <CortButton
             title="Get Started"
-            onPress={() => roleSheetRef.current?.present()}
+            onPress={() => onGetStarted?.()}
             variant="primary"
           />
           <Text style={styles.footerLegalText}>
@@ -204,12 +200,6 @@ export function GetStartedScreen({ onGetStarted }: { onGetStarted?: (role: strin
         </View>
       </SafeAreaView>
       <LegalBottomSheet ref={bottomSheetRef} type={docType} />
-      <RoleSelectBottomSheet
-        ref={roleSheetRef}
-        onSelectRole={(role) => onGetStarted?.(role)}
-        onChauffeurApply={() => chauffeurSheetRef.current?.present()}
-      />
-      <ChauffeurSignupBottomSheet ref={chauffeurSheetRef} />
     </View>
   );
 }

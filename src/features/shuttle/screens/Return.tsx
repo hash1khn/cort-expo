@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Alert, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, View, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather, Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
 import { BottomSheetBackdrop, BottomSheetModal, BottomSheetView } from '@gorhom/bottom-sheet';
 import { SlideToStartTrip } from '../components';
@@ -60,12 +60,15 @@ function getAbsentReasonLabel(reason: AbsentReason, language: 'en' | 'ur'): stri
 }
 
 export default function Return() {
+  const { tripId: tripIdParam } = useLocalSearchParams<{ tripId?: string }>();
+  const preferredTripId = tripIdParam ? Number.parseInt(tripIdParam, 10) : null;
+  const safePreferredTripId = Number.isNaN(preferredTripId ?? NaN) ? null : preferredTripId;
   const { language } = useLanguage();
   const isUrdu = language === 'ur';
   const toast = useToast();
   const absentSheetRef = useRef<BottomSheetModal>(null);
   const absentSnapPoints = useMemo(() => ['40%'], []);
-  const { activeTrip, tripId, stops, isLoading: isTripsLoading } = useActiveTrip();
+  const { activeTrip, tripId, stops, isLoading: isTripsLoading } = useActiveTrip(safePreferredTripId);
   const userId = useAppSelector((s) => s.auth.user?.id ?? '');
 
   // Join the ride socket room as driver so the background location task's
@@ -184,13 +187,19 @@ export default function Return() {
     const coords = validStops.map((s) => `${s.lat},${s.lng}`);
     const origin = coords[0];
     const destination = coords[coords.length - 1];
-    const waypoints =
-      coords.length > 2 ? coords.slice(1, coords.length - 1).join('|') : '';
+    const waypoints = coords.length > 2 ? coords.slice(1, coords.length - 1) : [];
 
-    let url = 'https://www.google.com/maps/dir/?api=1&travelmode=driving';
-    if (origin) url += `&origin=${encodeURIComponent(origin)}`;
-    if (destination) url += `&destination=${encodeURIComponent(destination)}`;
-    if (waypoints) url += `&waypoints=${encodeURIComponent(waypoints)}`;
+    const iosUrl = destination
+      ? `maps://?${origin ? `saddr=${encodeURIComponent(origin)}&` : ''}daddr=${encodeURIComponent(destination)}&dirflg=d`
+      : null;
+
+    let androidUrl = 'https://www.google.com/maps/dir/?api=1&travelmode=driving';
+    if (origin) androidUrl += `&origin=${encodeURIComponent(origin)}`;
+    if (destination) androidUrl += `&destination=${encodeURIComponent(destination)}`;
+    if (waypoints.length > 0) androidUrl += `&waypoints=${encodeURIComponent(waypoints.join('|'))}`;
+
+    const url = Platform.OS === 'ios' ? iosUrl : androidUrl;
+    if (!url) return;
 
     Linking.openURL(url).catch(() => {
       // Swallow error; we don't want to block the UI if maps isn't available
@@ -365,13 +374,27 @@ export default function Return() {
     useCallback(() => {
       let cancelled = false;
       (async () => {
+        // iOS: CLAuthorizationStatus can lag a frame after returning from
+        // Settings, so we wait briefly before reading to avoid a false banner.
+        if (Platform.OS === 'ios') {
+          await new Promise<void>((r) => setTimeout(r, 300));
+        }
+        if (cancelled) return;
         const fg = await Location.getForegroundPermissionsAsync();
         const bg = await Location.getBackgroundPermissionsAsync();
         if (cancelled) return;
-        if (bg.status === 'denied') {
-          setLocationPermissionWarning('background');
+        const iosScope = Platform.OS === 'ios'
+          ? ((fg as any)?.ios?.scope as string | undefined)
+          : undefined;
+        const fullyGranted =
+          (fg.status === 'granted' && bg.status === 'granted') ||
+          (Platform.OS === 'ios' && fg.status === 'granted' && iosScope === 'always');
+        if (fullyGranted) {
+          setLocationPermissionWarning(null);
         } else if (fg.status === 'denied') {
           setLocationPermissionWarning('foreground');
+        } else if (bg.status === 'denied') {
+          setLocationPermissionWarning('background');
         } else {
           setLocationPermissionWarning(null);
         }

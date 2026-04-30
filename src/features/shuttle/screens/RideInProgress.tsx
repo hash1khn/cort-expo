@@ -13,7 +13,7 @@ import {
 import * as Location from 'expo-location';
 import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { colors, fontFamily } from '@/core/theme';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import BottomSheet, {
@@ -110,6 +110,9 @@ function getInitials(name: string) {
 }
 
 export default function RideInProgress() {
+  const { tripId: tripIdParam } = useLocalSearchParams<{ tripId?: string }>();
+  const preferredTripId = tripIdParam ? Number.parseInt(tripIdParam, 10) : null;
+  const safePreferredTripId = Number.isNaN(preferredTripId ?? NaN) ? null : preferredTripId;
   const { language } = useLanguage();
   const isUrdu = language === 'ur';
   const t = LABELS[language];
@@ -126,7 +129,7 @@ export default function RideInProgress() {
     rideStarted,
     isAtStop,
     isLoading: isTripsLoading,
-  } = useActiveTrip();
+  } = useActiveTrip(safePreferredTripId);
 
   const userId = useAppSelector((s) => s.auth.user?.id ?? '');
 
@@ -194,13 +197,27 @@ export default function RideInProgress() {
     useCallback(() => {
       let cancelled = false;
       (async () => {
+        // iOS: CLAuthorizationStatus can lag a frame after returning from
+        // Settings, so we wait briefly before reading to avoid a false banner.
+        if (Platform.OS === 'ios') {
+          await new Promise<void>((r) => setTimeout(r, 300));
+        }
+        if (cancelled) return;
         const fg = await Location.getForegroundPermissionsAsync();
         const bg = await Location.getBackgroundPermissionsAsync();
         if (cancelled) return;
-        if (bg.status === 'denied') {
-          setLocationPermissionWarning('background');
+        const iosScope = Platform.OS === 'ios'
+          ? ((fg as any)?.ios?.scope as string | undefined)
+          : undefined;
+        const fullyGranted =
+          (fg.status === 'granted' && bg.status === 'granted') ||
+          (Platform.OS === 'ios' && fg.status === 'granted' && iosScope === 'always');
+        if (fullyGranted) {
+          setLocationPermissionWarning(null);
         } else if (fg.status === 'denied') {
           setLocationPermissionWarning('foreground');
+        } else if (bg.status === 'denied') {
+          setLocationPermissionWarning('background');
         } else {
           setLocationPermissionWarning(null);
         }
@@ -293,7 +310,7 @@ export default function RideInProgress() {
   }, []);
 
   const openInMaps = useCallback((stop: Stop) => {
-    const appleUrl = `http://maps.google.com/?daddr=${stop.lat},${stop.lng}&dirflg=d`;
+    const appleUrl = `maps://?daddr=${stop.lat},${stop.lng}&dirflg=d`;
     const androidUrl = `geo:0,0?q=${stop.lat},${stop.lng}(${encodeURIComponent(stop.name)})`;
     const url = Platform.OS === 'ios' ? appleUrl : androidUrl;
 

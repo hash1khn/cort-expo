@@ -1,4 +1,5 @@
 import { ConfigContext, ExpoConfig } from "expo/config";
+import { ConfigPlugin, withAndroidManifest } from "expo/config-plugins";
 import { version } from "./package.json";
 
 const EAS_PROJECT_ID = "abf6baa8-ec29-4e5f-ab9c-1a48308f1794";
@@ -10,8 +11,24 @@ const APP_NAME = "Traflinq";
 const BUNDLE_IDENTIFIER = "com.corttechnologies.traflinq";
 const PACKAGE_NAME = "com.corttechnologies.traflinq";
 const ICON = "./assets/app_icon.png";
-const ADAPTIVE_ICON = "./assets/adaptive-icon.png";
 const SCHEME = "traflinq";
+
+const withPhoneOnlyAndroidScreens: ConfigPlugin = (config) =>
+  withAndroidManifest(config, (modConfig) => {
+    const manifest = modConfig.modResults.manifest as Record<string, unknown>;
+    manifest["supports-screens"] = [
+      {
+        $: {
+          "android:smallScreens": "true",
+          "android:normalScreens": "true",
+          "android:largeScreens": "false",
+          "android:xlargeScreens": "false",
+          "android:requiresSmallestWidthDp": "360",
+        },
+      },
+    ];
+    return modConfig;
+  });
 
 export default ({ config }: ConfigContext): ExpoConfig => {
   console.log(" Building app for environment:", process.env.APP_ENV);
@@ -21,7 +38,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
   const IS_DEV = APP_ENV === "development";
   const { name, bundleIdentifier, icon, adaptiveIcon, packageName, scheme } =
     getDynamicAppConfig(APP_ENV);
-  return {
+  const appConfig: ExpoConfig = {
     ...config,
     name: name,
     version,
@@ -37,16 +54,24 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       backgroundColor: "#000000",
     },
     ios: {
-      supportsTablet: true,
+      supportsTablet: false,
       bundleIdentifier: bundleIdentifier,
      
       infoPlist: {
         ITSAppUsesNonExemptEncryption: false,
         UIBackgroundModes: ["fetch", "remote-notification", "location"],
-        // Required by App Store for apps that use Face ID
         NSFaceIDUsageDescription:
           "$(PRODUCT_NAME) uses Face ID to sign you in quickly and securely without entering your password.",
+        NSLocationWhenInUseUsageDescription:
+          "Traflinq uses your location during active rides so your driver and dispatcher can track journey progress and ensure on-time arrivals in real time.",
+        NSLocationAlwaysAndWhenInUseUsageDescription:
+          "Traflinq uses your location during active rides so your driver and dispatcher can track journey progress and ensure on-time arrivals in real time, including when the app is in the background.",
+        NSLocationAlwaysUsageDescription:
+          "Traflinq uses your location during active rides so your driver and dispatcher can track journey progress and ensure on-time arrivals in real time, including when the app is in the background.",
       },
+      config:{
+        usesNonExemptEncryption:false,
+      }
     },
     android: {
       adaptiveIcon: {
@@ -126,7 +151,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       [
         "expo-location",
         {
-          "locationAlwaysAndWhenInUsePermission": "$(PRODUCT_NAME) uses your location during active rides so dispatch can track progress in real time, even when the app is in the background.",
+          "locationAlwaysAndWhenInUsePermission": "Traflinq uses your location during active rides so your driver and dispatcher can track journey progress and ensure on-time arrivals in real time, including when the app is in the background.",
           "isAndroidBackgroundLocationEnabled": true,
           "isAndroidForegroundServiceEnabled": true,
           "isIosBackgroundLocationEnabled": true
@@ -138,6 +163,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
     },
     owner: OWNER,
   };
+  return withPhoneOnlyAndroidScreens(appConfig);
 };
 
 export const getDynamicAppConfig = (
@@ -149,7 +175,7 @@ export const getDynamicAppConfig = (
       bundleIdentifier: BUNDLE_IDENTIFIER,
       packageName: PACKAGE_NAME,
       icon: ICON,
-      adaptiveIcon: ADAPTIVE_ICON,
+      adaptiveIcon: ICON,
       scheme: SCHEME,
     };
   }
@@ -159,7 +185,7 @@ export const getDynamicAppConfig = (
       bundleIdentifier: `${BUNDLE_IDENTIFIER}.preview`,
       packageName: `${PACKAGE_NAME}.preview`,
       icon: ICON,
-      adaptiveIcon: ADAPTIVE_ICON,
+      adaptiveIcon: ICON,
       scheme: `${SCHEME}-preview`,
     };
   }
@@ -168,7 +194,7 @@ export const getDynamicAppConfig = (
     bundleIdentifier: `${BUNDLE_IDENTIFIER}.dev`,
     packageName: `${PACKAGE_NAME}.dev`,
     icon: ICON,
-    adaptiveIcon: ADAPTIVE_ICON,
+    adaptiveIcon: ICON,
     scheme: `${SCHEME}-dev`,
   };
 };

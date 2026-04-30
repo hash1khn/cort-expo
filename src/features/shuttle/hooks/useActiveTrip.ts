@@ -41,9 +41,15 @@ function buildStops(activeTrip: ShuttleTrip | null): Stop[] {
   }));
 }
 
-export function useActiveTrip() {
+export function useActiveTrip(preferredTripId?: number | null) {
   const { data: todayTrips = [], isLoading } = useGetTodayTripQuery();
-  const activeTrip: ShuttleTrip | null = todayTrips.length > 0 ? todayTrips[0] : null;
+  const activeTrip: ShuttleTrip | null = (() => {
+    if (preferredTripId != null) {
+      const matched = todayTrips.find((trip) => trip.id === preferredTripId);
+      if (matched) return matched;
+    }
+    return todayTrips.length > 0 ? todayTrips[0] : null;
+  })();
   const tripId = activeTrip?.id;
 
   const { stops, currentStop, nextStopAfterCurrent, nextStopIndex, isLastStop, rideStarted, isAtStop } = useMemo(() => {
