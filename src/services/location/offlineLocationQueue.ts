@@ -290,6 +290,27 @@ export async function clearOfflineLocationQueue(): Promise<void> {
   backoffUntilTs = 0;
 }
 
+/**
+ * Removes all queued points whose tripId does not match `currentTripId`.
+ * Called at ride start to prevent stale-trip points from being sent under
+ * the new trip's session (e.g. if a previous ride ended without properly
+ * clearing AsyncStorage).
+ *
+ * Returns the number of dropped points.
+ */
+export async function dropQueuePointsForOtherTrips(currentTripId: string): Promise<number> {
+  const queue = await readQueue();
+  const filtered = queue.filter((p) => p.tripId === currentTripId);
+  const dropped = queue.length - filtered.length;
+  if (dropped > 0) {
+    await writeQueue(filtered);
+    console.warn(
+      `[LocationSync] Dropped ${dropped} queued point(s) belonging to stale trip(s) (active tripId=${currentTripId})`,
+    );
+  }
+  return dropped;
+}
+
 export async function getOfflineLocationSyncMetrics(): Promise<SyncMetrics> {
   return readMetrics();
 }

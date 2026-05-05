@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
 import * as TaskManager from 'expo-task-manager';
 import { ACTIVE_RIDE_KEY, ACTIVE_RIDE_TYPE_KEY, RIDER_LOCATION_TASK } from './backgroundLocationTask';
-import { flushOfflineLocationQueue } from './offlineLocationQueue';
+import { flushOfflineLocationQueue, dropQueuePointsForOtherTrips } from './offlineLocationQueue';
 
 /**
  * Saves the ride ID to AsyncStorage and starts the background location task.
@@ -15,13 +15,28 @@ import { flushOfflineLocationQueue } from './offlineLocationQueue';
  *                  pass it to the server for geofence routing.
  */
 export async function startLocationTracking(tripId: string | number, tripType?: 'shuttle' | 'chauffeur'): Promise<void> {
-  // Best-effort flush in case we have backlog from a prior temporary outage.
-  flushOfflineLocationQueue().catch(() => null);
+  const newTripId = String(tripId);
 
-  await AsyncStorage.setItem(ACTIVE_RIDE_KEY, String(tripId));
+  // Log tripId transitions — helps trace stale-context bugs in production.
+  const previousTripId = await AsyncStorage.getItem(ACTIVE_RIDE_KEY);
+  if (previousTripId && previousTripId !== newTripId) {
+    console.warn(`[RiderLocation] Trip context transition: ${previousTripId} → ${newTripId}`);
+  }
+
+  // Write new trip context FIRST so any subsequent queue writes are stamped correctly.
+  await AsyncStorage.setItem(ACTIVE_RIDE_KEY, newTripId);
   if (tripType) {
     await AsyncStorage.setItem(ACTIVE_RIDE_TYPE_KEY, tripType);
+  } else {
+    await AsyncStorage.removeItem(ACTIVE_RIDE_TYPE_KEY);
   }
+
+  // Drop any queued points that belong to a previous trip before flushing,
+  // so we don't send stale-trip data to the server under the new ride session.
+  await dropQueuePointsForOtherTrips(newTripId);
+
+  // Flush now — queue only contains points for the current trip.
+  flushOfflineLocationQueue().catch(() => null);
 
   const alreadyRunning = await TaskManager.isTaskRegisteredAsync(RIDER_LOCATION_TASK);
   if (alreadyRunning) return;
