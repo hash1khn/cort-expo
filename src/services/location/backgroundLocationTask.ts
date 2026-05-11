@@ -2,7 +2,8 @@ import * as TaskManager from 'expo-task-manager';
 import * as Location from 'expo-location';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { socketService } from '../socket.service';
-import { enqueueLocationPoint, flushOfflineLocationQueue } from './offlineLocationQueue';
+import { tokenStorage } from '../../features/auth/utils/tokenStorage';
+import { enqueueLocationPoint, flushOfflineLocationQueue, resetFlushBackoff } from './offlineLocationQueue';
 
 /**
  * AsyncStorage key that holds the active ride / booking ID while a ride is
@@ -62,24 +63,35 @@ TaskManager.defineTask(
       if (!tripId) return;
       const tripType = (await AsyncStorage.getItem(ACTIVE_RIDE_TYPE_KEY)) as 'shuttle' | 'chauffeur' | null;
 
-      await enqueueLocationPoint({
-        tripId,
-        tripType: tripType ?? undefined,
-        lat: coords.lat,
-        lng: coords.lng,
-        speed: coords.speed,
-        heading: coords.heading,
-        clientTs: coords.clientTs,
-      });
-
-      // Prefer the shared socket instance when it is still connected
-      // (Android foreground service keeps the JS process alive so the socket
-      // normally stays up; useSocketConnection skips disconnecting when a
-      // ride is active).
-      if (socketService.isConnected()) {
-        socketService.sendLocationUpdate(tripId, coords);
+      // If socket dropped, attempt to reconnect before deciding which path to use.
+      if (!socketService.isConnected()) {
+        try {
+          const token = await tokenStorage.getAccessToken();
+          if (token) socketService.connect(token);
+        } catch { /* non-fatal */ }
       }
-      await flushOfflineLocationQueue();
+
+      if (socketService.isConnected()) {
+        // Live path: send immediately via WebSocket.
+        // Do NOT also enqueue — that would double-send every point (once via
+        // socket to ride.gateway.ts, once via HTTP flush to rides.controller.ts).
+        socketService.sendLocationUpdate(tripId, coords);
+
+        // Drain any points that were buffered while the socket was down.
+        resetFlushBackoff();
+        flushOfflineLocationQueue().catch(() => null);
+      } else {
+        // Offline path: buffer for HTTP flush once connectivity returns.
+        await enqueueLocationPoint({
+          tripId,
+          tripType: tripType ?? undefined,
+          lat: coords.lat,
+          lng: coords.lng,
+          speed: coords.speed,
+          heading: coords.heading,
+          clientTs: coords.clientTs,
+        });
+      }
     } catch (e) {
       console.warn('[RiderLocation] Failed to send location update:', e);
     }

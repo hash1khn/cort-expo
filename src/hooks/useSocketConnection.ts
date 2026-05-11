@@ -4,7 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import NetInfo from '@react-native-community/netinfo';
 import { socketService } from '../services/socket.service';
 import { ACTIVE_RIDE_KEY } from '../services/location/backgroundLocationTask';
-import { flushOfflineLocationQueue } from '../services/location/offlineLocationQueue';
+import { flushOfflineLocationQueue, resetFlushBackoff } from '../services/location/offlineLocationQueue';
 
 /**
  * Manages the socket connection lifecycle.
@@ -38,15 +38,30 @@ export function useSocketConnection(token: string | null | undefined) {
                 if (token && !socketService.isConnected()) {
                     socketService.connect(token);
                 }
+                // Clear any backoff that built up during a background network
+                // outage so the queue flushes immediately on foreground.
+                resetFlushBackoff();
                 flushOfflineLocationQueue().catch(() => null);
             } else if (nextState === 'background') {
                 // Keep the socket alive while a ride is in progress so that
                 // the background location task can continue emitting via it.
+                //
+                // ⚠️  Race guard: requesting background location permission causes
+                // a brief AppState → 'background' transition before ACTIVE_RIDE_KEY
+                // is written. Reading immediately can return null even though a ride
+                // is starting. We do a first check then recheck after 1.5 s to close
+                // the window before deciding to disconnect.
                 AsyncStorage.getItem(ACTIVE_RIDE_KEY).then((activeRideId) => {
-                    if (!activeRideId) {
-                        socketService.disconnect();
-                        setIsConnected(false);
-                    }
+                    if (activeRideId) return; // ride already active — keep socket alive
+                    // Not set yet — wait and recheck before disconnecting
+                    setTimeout(() => {
+                        AsyncStorage.getItem(ACTIVE_RIDE_KEY).then((recheckId) => {
+                            if (!recheckId) {
+                                socketService.disconnect();
+                                setIsConnected(false);
+                            }
+                        });
+                    }, 1500);
                 });
             }
         });

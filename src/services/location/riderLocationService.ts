@@ -49,6 +49,10 @@ export async function startLocationTracking(tripId: string | number, tripType?: 
     // Fire every 5 s OR every 10 m — whichever comes first.
     timeInterval: 5000,
     distanceInterval: 10,
+    // Android: disable OS-level deferral of GPS callbacks (Doze / power-save
+    // modes can batch updates even with a foreground service running).
+    deferredUpdatesInterval: 0,
+    deferredUpdatesDistance: 0,
     // iOS: show the blue status-bar indicator while tracking is active.
     showsBackgroundLocationIndicator: true,
     // Disable iOS automatic pause (pauses on no movement).

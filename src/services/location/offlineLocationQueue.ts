@@ -54,6 +54,16 @@ let flushPromise: Promise<{ flushed: number; remaining: number }> | null = null;
 let consecutiveFailures = 0;
 let backoffUntilTs = 0;
 
+/**
+ * Reset the exponential backoff so the next flushOfflineLocationQueue() call
+ * hits the network immediately. Call this whenever the app comes to foreground
+ * or the background task detects the network has recovered.
+ */
+export function resetFlushBackoff(): void {
+  consecutiveFailures = 0;
+  backoffUntilTs = 0;
+}
+
 const DEFAULT_METRICS: SyncMetrics = {
   enqueued: 0,
   droppedOverflow: 0,

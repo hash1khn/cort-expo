@@ -220,7 +220,7 @@ export function LoginScreen() {
             </View>
 
             {/* Heading */}
-            <Text style={styles.title}>Login to your account</Text>
+            <Text style={styles.title}>Login to your account!</Text>
 
             {/* Email Input */}
             <View style={styles.field}>
