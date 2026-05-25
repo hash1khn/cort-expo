@@ -2,12 +2,14 @@ import { baseApi } from '../../../core/api/baseApi';
 
 type SubmitProblemReportRequest = {
   message: string;
+  issue_type: 'app_issue' | 'ride_issue' | 'other';
 };
 
 type SubmitProblemReportResponse = {
   data: {
     id: number;
     message: string;
+    issue_type: 'app_issue' | 'ride_issue' | 'other' | null;
     reported_by_user_id: string;
     company_id: number | null;
     created_at: string | null;

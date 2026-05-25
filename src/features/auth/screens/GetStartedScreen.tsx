@@ -16,11 +16,13 @@ import Animated, {
 } from 'react-native-reanimated';
 import type { SharedValue } from 'react-native-reanimated';
 import { Image } from 'expo-image';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, fontFamily } from '../../../core/theme';
 import { CortButton } from '@/components';
 import { LegalBottomSheet, LegalDocumentType } from '../components/LegalBottomSheet';
 import { BottomSheetModal } from '@gorhom/bottom-sheet';
+import { LanguageSwitcher } from '../../../components/LanguageSwitcher';
+import { useLanguage } from '../../../context/LanguageContext';
 
 const { width, height } = Dimensions.get('window');
 
@@ -134,6 +136,8 @@ export function GetStartedScreen({ onGetStarted }: { onGetStarted?: () => void }
   const scrollX = useSharedValue(0);
   const bottomSheetRef = React.useRef<BottomSheetModal>(null);
   const [docType, setDocType] = React.useState<LegalDocumentType>('terms');
+  const { t, isRTL } = useLanguage();
+  const insets = useSafeAreaInsets();
 
   const openLegalModal = (type: LegalDocumentType) => {
     setDocType(type);
@@ -146,13 +150,22 @@ export function GetStartedScreen({ onGetStarted }: { onGetStarted?: () => void }
     },
   });
 
+  // RTL text alignment helper
+  const rtlText = isRTL ? { textAlign: 'right' as const, writingDirection: 'rtl' as const } : {};
+  const rtlRow = isRTL ? { flexDirection: 'row-reverse' as const } : {};
+
   return (
     <View style={styles.root}>
       <SafeAreaView style={styles.safeArea}>
-        {/* Header */}
+        {/* Language switcher — absolute top-right, respects safe area */}
+        <View style={[styles.switcherWrap, { top: insets.top + 8 }]}>
+          <LanguageSwitcher />
+        </View>
+
+        {/* Header: centered logo */}
         <View style={styles.header}>
           <Image
-            source={require('../../../../assets/traflinq-logo-big.svg')}
+            source={require('../../../../assets/traflinq_logo_with_tagline.svg')}
             style={styles.logoImage}
             contentFit="contain"
           />
@@ -183,18 +196,18 @@ export function GetStartedScreen({ onGetStarted }: { onGetStarted?: () => void }
         {/* Footer */}
         <View style={styles.footer}>
           <CortButton
-            title="Get Started"
+            title={t('getStarted')}
             onPress={() => onGetStarted?.()}
             variant="primary"
           />
           <Text style={styles.footerLegalText}>
-            By clicking Get Started, you agree to our{' '}
-            <Text style={styles.legalLink} onPress={() => openLegalModal('terms')}>
-              Terms of Use
+            {t('byClickingGetStarted')}{' '}
+            <Text suppressHighlighting={true} style={styles.legalLink} onPress={() => openLegalModal('terms')}>
+              {t('termsOfUse')}
             </Text>
-            {' '}and{' '}
-            <Text style={styles.legalLink} onPress={() => openLegalModal('privacy')}>
-              Privacy Policy
+            {' '}{t('and')}{' '}
+            <Text suppressHighlighting={true} style={styles.legalLink} onPress={() => openLegalModal('privacy')}>
+              {t('privacyPolicy')}
             </Text>
           </Text>
         </View>
@@ -216,12 +229,18 @@ const styles = StyleSheet.create({
     height: 50,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 45,
-    marginRight:18,
+    marginTop: 80,
+    marginRight: 18,
   },
   logoImage: {
-    width: 280,
-    height: 250,
+    width: 240,
+    height: 280,
+  },
+  switcherWrap: {
+    position: 'absolute',
+    top: 12,
+    right: 18,
+    zIndex: 10,
   },
   flatListContent: {
     alignItems: 'center',
@@ -235,7 +254,7 @@ const styles = StyleSheet.create({
   illustrationWrapper: {
     width: width  * 0.8,
     height: height * 0.32,
-    marginBottom: 32, 
+    marginBottom: 10, 
     marginTop:5,// Tighter spacing to connect image/text
   },
   illustration: {
@@ -245,7 +264,7 @@ const styles = StyleSheet.create({
   textContainer: {
     alignItems: 'center',
     width: '100%',
-    minHeight: 120, // Prevents layout jump if text wraps
+    minHeight: 80, // Prevents layout jump if text wraps
   },
   heading: {
     fontSize: 30,
@@ -283,11 +302,12 @@ const styles = StyleSheet.create({
   },
   footerLegalText: {
     fontSize: 13,
-    marginHorizontal:2,
+    marginHorizontal: 2,
     color: colors.text,
     textAlign: 'center',
     marginTop: 20,
-    lineHeight: 20,
+    lineHeight: 24,
+    paddingVertical: 4,
     opacity: 0.5,
   },
   legalLink: {

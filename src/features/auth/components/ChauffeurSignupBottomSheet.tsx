@@ -1,10 +1,14 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
   ActivityIndicator,
+  Modal,
+  Pressable,
+  Image,
+  Alert,
 } from 'react-native';
 import {
   BottomSheetModal,
@@ -14,37 +18,93 @@ import {
   BottomSheetTextInput,
 } from '@gorhom/bottom-sheet';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, typography, radii } from '../../../core/theme';
+import { CameraView, useCameraPermissions } from 'expo-camera';
+import { colors, typography } from '../../../core/theme';
 import { CortButton } from '../../../components';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useApplyAsChauffeurMutation } from '../services/authApi';
+import { useLanguage } from '../../../context/LanguageContext';
+
+const MIN_CAR_YEAR = 2018;
+
+const EMPTY_PHOTOS = {
+  profile_picture: null as string | null,
+  license_front: null as string | null,
+  license_back: null as string | null,
+  cnic_front: null as string | null,
+  cnic_back: null as string | null,
+  car_photo: null as string | null,
+  car_registration_doc: null as string | null,
+};
+
+type ChauffeurPhotoKey = keyof typeof EMPTY_PHOTOS;
+
+const PHOTO_LABELS: Record<ChauffeurPhotoKey, string> = {
+  profile_picture: 'Profile picture',
+  license_front: 'Driving license (front)',
+  license_back: 'Driving license (back)',
+  cnic_front: 'CNIC (front)',
+  cnic_back: 'CNIC (back)',
+  car_photo: 'Car photo',
+  car_registration_doc: 'Car registration paper (photo)',
+};
 
 export const ChauffeurSignupBottomSheet = React.forwardRef<BottomSheetModal, {}>(
   (_props, ref) => {
     const snapPoints = useMemo(() => ['55%', '92%'], []);
     const insets = useSafeAreaInsets();
+    const maxCarYear = useMemo(() => new Date().getFullYear() + 1, []);
+    const { t, isRTL } = useLanguage();
+    const rtlText = isRTL
+      ? ({ textAlign: 'right', writingDirection: 'rtl', fontFamily: 'NotoNastaliqUrdu', fontSize: 18 } as const)
+      : {};
+    const rtlTitle = isRTL
+      ? ({ textAlign: 'right', writingDirection: 'rtl', fontFamily: 'NotoNastaliqUrdu', fontSize: 24 } as const)
+      : {};
+    const rtlSubtitle = isRTL
+      ? ({ textAlign: 'right', writingDirection: 'rtl', fontFamily: 'NotoNastaliqUrdu', fontSize: 16 } as const)
+      : {};
 
-    // Form state
+    const [permission, requestPermission] = useCameraPermissions();
+    const cameraRef = useRef<CameraView>(null);
+    const [activePhotoCapture, setActivePhotoCapture] = useState<ChauffeurPhotoKey | null>(null);
+    const [isCapturing, setIsCapturing] = useState(false);
+
     const [name, setName] = useState('');
     const [email, setEmail] = useState('');
     const [phone, setPhone] = useState('');
     const [cnic, setCnic] = useState('');
     const [licenseNumber, setLicenseNumber] = useState('');
+    const [carMake, setCarMake] = useState('');
+    const [carModel, setCarModel] = useState('');
+    const [carYearText, setCarYearText] = useState('');
+    const [photos, setPhotos] = useState({ ...EMPTY_PHOTOS });
+
     const [focusedField, setFocusedField] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [submitting, setSubmitting] = useState(false);
     const [submitted, setSubmitted] = useState(false);
     const [applyAsChauffeur] = useApplyAsChauffeurMutation();
 
-    const canSubmit = useMemo(
-      () =>
+    const parsedCarYear = useMemo(() => {
+      const n = parseInt(carYearText.trim(), 10);
+      return Number.isFinite(n) ? n : NaN;
+    }, [carYearText]);
+
+    const canSubmit = useMemo(() => {
+      const photosOk = (Object.keys(EMPTY_PHOTOS) as ChauffeurPhotoKey[]).every((k) => !!photos[k]);
+      return (
         name.trim().length > 0 &&
-        email.trim().length > 0 &&
         phone.trim().length > 0 &&
         cnic.trim().length > 0 &&
-        licenseNumber.trim().length > 0,
-      [name, email, phone, cnic, licenseNumber]
-    );
+        licenseNumber.trim().length > 0 &&
+        carMake.trim().length > 0 &&
+        carModel.trim().length > 0 &&
+        parsedCarYear >= MIN_CAR_YEAR &&
+        parsedCarYear <= maxCarYear &&
+        photosOk
+      );
+    }, [name, phone, cnic, licenseNumber, carMake, carModel, parsedCarYear, maxCarYear, photos]);
 
     const resetForm = useCallback(() => {
       setName('');
@@ -52,30 +112,77 @@ export const ChauffeurSignupBottomSheet = React.forwardRef<BottomSheetModal, {}>
       setPhone('');
       setCnic('');
       setLicenseNumber('');
+      setCarMake('');
+      setCarModel('');
+      setCarYearText('');
+      setPhotos({ ...EMPTY_PHOTOS });
       setFocusedField(null);
       setError(null);
       setSubmitting(false);
       setSubmitted(false);
+      setActivePhotoCapture(null);
     }, []);
 
     const handleClose = useCallback(() => {
+      setActivePhotoCapture(null);
       if (ref && typeof ref !== 'function' && ref.current) {
         ref.current.dismiss();
       }
-      // Reset after animation
       setTimeout(resetForm, 400);
     }, [ref, resetForm]);
 
+    const handleOpenCamera = useCallback(
+      async (key: ChauffeurPhotoKey) => {
+        if (!permission?.granted) {
+          const { granted } = await requestPermission();
+          if (!granted) {
+            Alert.alert('Camera required', 'Please allow camera access to capture this photo.');
+            return;
+          }
+        }
+        setActivePhotoCapture(key);
+      },
+      [permission?.granted, requestPermission]
+    );
+
+    const handleCapture = useCallback(async () => {
+      if (!cameraRef.current || isCapturing || !activePhotoCapture) return;
+      setIsCapturing(true);
+      try {
+        const result = await cameraRef.current.takePictureAsync({ quality: 0.8 });
+        if (result?.uri) {
+          setPhotos((prev) => ({ ...prev, [activePhotoCapture]: result.uri }));
+          setActivePhotoCapture(null);
+        }
+      } catch (e) {
+        console.warn('Chauffeur apply capture error', e);
+      } finally {
+        setIsCapturing(false);
+      }
+    }, [activePhotoCapture, isCapturing]);
+
     const handleSubmit = useCallback(async () => {
+      if (!canSubmit) return;
+      const pk = photos;
       try {
         setSubmitting(true);
         setError(null);
         await applyAsChauffeur({
           full_name: name,
-          email,
+          email: email.trim() || undefined,
           phone,
           cnic_number: cnic,
           license_number: licenseNumber,
+          car_make: carMake,
+          car_model: carModel,
+          car_year: parsedCarYear,
+          profile_picture_uri: pk.profile_picture!,
+          license_front_uri: pk.license_front!,
+          license_back_uri: pk.license_back!,
+          cnic_front_uri: pk.cnic_front!,
+          cnic_back_uri: pk.cnic_back!,
+          car_photo_uri: pk.car_photo!,
+          car_registration_doc_uri: pk.car_registration_doc!,
         }).unwrap();
         setSubmitted(true);
       } catch (e) {
@@ -90,9 +197,20 @@ export const ChauffeurSignupBottomSheet = React.forwardRef<BottomSheetModal, {}>
       } finally {
         setSubmitting(false);
       }
-    }, [applyAsChauffeur, name, email, phone, cnic, licenseNumber]);
+    }, [
+      applyAsChauffeur,
+      canSubmit,
+      name,
+      email,
+      phone,
+      cnic,
+      licenseNumber,
+      carMake,
+      carModel,
+      parsedCarYear,
+      photos,
+    ]);
 
-    // Snap sheet down to confirmation height once submitted
     useEffect(() => {
       if (submitted && ref && typeof ref !== 'function' && ref.current) {
         ref.current.snapToIndex(0);
@@ -112,188 +230,365 @@ export const ChauffeurSignupBottomSheet = React.forwardRef<BottomSheetModal, {}>
     );
 
     return (
-      <BottomSheetModal
-        ref={ref}
-        index={1}
-        snapPoints={snapPoints}
-        topInset={insets.top}
-        detached={submitted}
-        bottomInset={submitted ? 40 : 0}
-        backdropComponent={renderBackdrop}
-        enablePanDownToClose={!submitting}
-        handleIndicatorStyle={styles.handle}
-        backgroundStyle={styles.sheetBg}
-        enableDynamicSizing={false}
-        keyboardBehavior="interactive"
-        keyboardBlurBehavior="restore"
-        android_keyboardInputMode="adjustResize"
-        onDismiss={resetForm}
-      >
-        {submitted ? (
-          // ── Confirmation State ──────────────────────────────────────────
-          <BottomSheetView style={styles.confirmationContainer}>
-            <View style={styles.confirmIconWrap}>
-              <Ionicons name="checkmark-circle" size={56} color="#FF5A00" />
-            </View>
-            <Text style={styles.confirmTitle}>Application Submitted!</Text>
-            <Text style={styles.confirmBody}>
-              Our team will review your application and contact you shortly.
-            </Text>
-
-            <View style={styles.confirmContactCard}>
-              <Ionicons name="mail-outline" size={18} color="#FF5A00" style={styles.confirmContactIcon} />
-              <Text style={styles.confirmContactText}>
-                For any queries, contact{' '}
-                <Text style={styles.confirmContactEmail}>contact@cort.com.pk</Text>
-              </Text>
-            </View>
-
-            <CortButton title="Done" variant="primary" onPress={handleClose} />
-          </BottomSheetView>
-        ) : (
-          // ── Form State ──────────────────────────────────────────────────
-          <View style={styles.container}>
-            {/* Header */}
-            <View style={styles.header}>
-              <View>
-                <Text style={styles.title}>Chauffeur Application</Text>
-                <Text style={styles.subtitle}>Submit your details for admin approval</Text>
+      <>
+        <BottomSheetModal
+          ref={ref}
+          index={1}
+          snapPoints={snapPoints}
+          topInset={insets.top}
+          detached={submitted}
+          bottomInset={submitted ? 40 : 0}
+          backdropComponent={renderBackdrop}
+          enablePanDownToClose={!submitting}
+          handleIndicatorStyle={styles.handle}
+          backgroundStyle={styles.sheetBg}
+          enableDynamicSizing={false}
+          keyboardBehavior="interactive"
+          keyboardBlurBehavior="restore"
+          android_keyboardInputMode="adjustResize"
+          onDismiss={resetForm}
+        >
+          {submitted ? (
+            <BottomSheetView style={styles.confirmationContainer}>
+              <View style={styles.confirmIconWrap}>
+                <Ionicons name="checkmark-circle" size={56} color="#FF5A00" />
               </View>
-              <TouchableOpacity style={styles.closeBtn} onPress={handleClose}>
-                <Ionicons name="close" size={20} color="#6B7280" />
-              </TouchableOpacity>
-            </View>
+              <Text style={[styles.confirmTitle, rtlText, isRTL && { textAlign: 'center' }]}>{t('applicationSubmitted')}</Text>
+              <Text style={[styles.confirmBody, rtlText, isRTL && { textAlign: 'center' }]}>
+                {t('ourTeamWillReview')}
+              </Text>
 
-            <BottomSheetScrollView
-              contentContainerStyle={styles.scrollContent}
-              showsVerticalScrollIndicator={false}
-              keyboardShouldPersistTaps="handled"
-            >
-              {/* Full Name */}
-              <Field label="Full Name">
-                <View style={[styles.inputContainer, focusedField === 'name' && styles.inputFocused]}>
-                  <BottomSheetTextInput
-                    value={name}
-                    onChangeText={(t) => { setName(t); setError(null); }}
-                    onFocus={() => setFocusedField('name')}
-                    onBlur={() => setFocusedField(null)}
-                    placeholder="Ali Khan"
-                    placeholderTextColor={colors.muted}
-                    style={styles.input}
-                    cursorColor="#FF5A00"
-                  />
+              <View style={[styles.confirmContactCard, isRTL && { flexDirection: 'row-reverse' }]}>
+                <Ionicons name="mail-outline" size={18} color="#FF5A00" style={[styles.confirmContactIcon, isRTL && { marginRight: 0, marginLeft: 10 }]} />
+                <Text style={[styles.confirmContactText, rtlText, isRTL && { textAlign: 'right' }]}>
+                  {t('forAnyQueries')}
+                  <Text style={styles.confirmContactEmail}>contact@cort.com.pk</Text>
+                </Text>
+              </View>
+
+              <CortButton title={t('done')} variant="primary" onPress={handleClose} />
+            </BottomSheetView>
+          ) : (
+            <View style={styles.container}>
+              <View style={[styles.header, isRTL && { flexDirection: 'row-reverse' }]}>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.title, rtlTitle]}>{t('chauffeurApplication')}</Text>
+                  <Text style={[styles.subtitle, rtlSubtitle]}>{t('submitDetails')}</Text>
                 </View>
-              </Field>
+                <TouchableOpacity style={styles.closeBtn} onPress={handleClose}>
+                  <Ionicons name="close" size={20} color="#6B7280" />
+                </TouchableOpacity>
+              </View>
 
-              {/* Email */}
-              <Field label="Email">
-                <View style={[styles.inputContainer, focusedField === 'email' && styles.inputFocused]}>
-                  <BottomSheetTextInput
-                    value={email}
-                    onChangeText={(t) => { setEmail(t); setError(null); }}
-                    onFocus={() => setFocusedField('email')}
-                    onBlur={() => setFocusedField(null)}
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    keyboardType="email-address"
-                    placeholder="driver@company.com"
-                    placeholderTextColor={colors.muted}
-                    style={styles.input}
-                    cursorColor="#FF5A00"
-                  />
-                </View>
-              </Field>
-
-              {/* Phone */}
-              <Field label="Phone">
-                <View style={[styles.inputContainer, focusedField === 'phone' && styles.inputFocused]}>
-                  <BottomSheetTextInput
-                    value={phone}
-                    onChangeText={setPhone}
-                    onFocus={() => setFocusedField('phone')}
-                    onBlur={() => setFocusedField(null)}
-                    keyboardType="phone-pad"
-                    placeholder="+92 300 1234567"
-                    placeholderTextColor={colors.muted}
-                    style={styles.input}
-                    cursorColor="#FF5A00"
-                  />
-                </View>
-              </Field>
-
-              {/* CNIC */}
-              <Field label="CNIC">
-                <View style={[styles.inputContainer, focusedField === 'cnic' && styles.inputFocused]}>
-                  <BottomSheetTextInput
-                    value={cnic}
-                    onChangeText={setCnic}
-                    onFocus={() => setFocusedField('cnic')}
-                    onBlur={() => setFocusedField(null)}
-                    keyboardType="number-pad"
-                    placeholder="35202-1234567-1"
-                    placeholderTextColor={colors.muted}
-                    style={styles.input}
-                    cursorColor="#FF5A00"
-                  />
-                </View>
-              </Field>
-
-              {/* License Number */}
-              <Field label="License Number">
-                <View style={[styles.inputContainer, focusedField === 'license' && styles.inputFocused]}>
-                  <BottomSheetTextInput
-                    value={licenseNumber}
-                    onChangeText={setLicenseNumber}
-                    onFocus={() => setFocusedField('license')}
-                    onBlur={() => setFocusedField(null)}
-                    placeholder="DL-123456"
-                    placeholderTextColor={colors.muted}
-                    style={styles.input}
-                    cursorColor="#FF5A00"
-                  />
-                </View>
-              </Field>
-
-              {error && (
-                <View style={styles.errorContainer}>
-                  <Text style={styles.errorText}>{error}</Text>
-                </View>
-              )}
-
-              {/* Submit Button */}
-              <TouchableOpacity
-                style={[styles.primaryBtn, (!canSubmit || submitting) && styles.primaryBtnDisabled]}
-                onPress={handleSubmit}
-                disabled={!canSubmit || submitting}
-                activeOpacity={0.85}
+              <BottomSheetScrollView
+                contentContainerStyle={styles.scrollContent}
+                showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
               >
-                {submitting ? (
-                  <ActivityIndicator color="#FFFFFF" size="small" />
-                ) : (
-                  <Text style={styles.primaryBtnText}>Confirm Application</Text>
-                )}
-              </TouchableOpacity>
+                <Field label={t('fullName')} required isRTL={isRTL}>
+                  <View style={[styles.inputContainer, focusedField === 'name' && styles.inputFocused]}>
+                    <BottomSheetTextInput
+                      value={name}
+                      onChangeText={(t) => {
+                        setName(t);
+                        setError(null);
+                      }}
+                      onFocus={() => setFocusedField('name')}
+                      onBlur={() => setFocusedField(null)}
+                      placeholder="Ali Khan"
+                      placeholderTextColor={colors.muted}
+                      style={[styles.input, rtlText]}
+                      cursorColor="#FF5A00"
+                    />
+                  </View>
+                </Field>
 
-              <View style={{ height: 20 }} />
-            </BottomSheetScrollView>
+                <Field label={t('emailOptional')} required={false} isRTL={isRTL}>
+                  <View style={[styles.inputContainer, focusedField === 'email' && styles.inputFocused]}>
+                    <BottomSheetTextInput
+                      value={email}
+                      onChangeText={(t) => {
+                        setEmail(t);
+                        setError(null);
+                      }}
+                      onFocus={() => setFocusedField('email')}
+                      onBlur={() => setFocusedField(null)}
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                      keyboardType="email-address"
+                      placeholder={t('optional')}
+                      placeholderTextColor={colors.muted}
+                      style={[styles.input, rtlText]}
+                      cursorColor="#FF5A00"
+                    />
+                  </View>
+                </Field>
+
+                <Field label={t('phone')} required isRTL={isRTL}>
+                  <View style={[styles.inputContainer, focusedField === 'phone' && styles.inputFocused]}>
+                    <BottomSheetTextInput
+                      value={phone}
+                      onChangeText={(t) => {
+                        setPhone(t);
+                        setError(null);
+                      }}
+                      onFocus={() => setFocusedField('phone')}
+                      onBlur={() => setFocusedField(null)}
+                      keyboardType="phone-pad"
+                      placeholder="+92 300 1234567"
+                      placeholderTextColor={colors.muted}
+                      style={[styles.input, rtlText]}
+                      cursorColor="#FF5A00"
+                    />
+                  </View>
+                </Field>
+
+                <Field label={t('cnic')} required isRTL={isRTL}>
+                  <View style={[styles.inputContainer, focusedField === 'cnic' && styles.inputFocused]}>
+                    <BottomSheetTextInput
+                      value={cnic}
+                      onChangeText={(t) => {
+                        setCnic(t);
+                        setError(null);
+                      }}
+                      onFocus={() => setFocusedField('cnic')}
+                      onBlur={() => setFocusedField(null)}
+                      keyboardType="number-pad"
+                      placeholder="35202-1234567-1"
+                      placeholderTextColor={colors.muted}
+                      style={[styles.input, rtlText]}
+                      cursorColor="#FF5A00"
+                    />
+                  </View>
+                </Field>
+
+                <Field label={t('licenseNumber')} required isRTL={isRTL}>
+                  <View style={[styles.inputContainer, focusedField === 'license' && styles.inputFocused]}>
+                    <BottomSheetTextInput
+                      value={licenseNumber}
+                      onChangeText={(t) => {
+                        setLicenseNumber(t);
+                        setError(null);
+                      }}
+                      onFocus={() => setFocusedField('license')}
+                      onBlur={() => setFocusedField(null)}
+                      placeholder="DL-123456"
+                      placeholderTextColor={colors.muted}
+                      style={[styles.input, rtlText]}
+                      cursorColor="#FF5A00"
+                    />
+                  </View>
+                </Field>
+
+                {(Object.keys(EMPTY_PHOTOS) as ChauffeurPhotoKey[]).map((key) => {
+                  const labelKey = key === 'profile_picture' ? 'profilePicture' :
+                                   key === 'license_front' ? 'drivingLicenseFront' :
+                                   key === 'license_back' ? 'drivingLicenseBack' :
+                                   key === 'cnic_front' ? 'cnicFront' :
+                                   key === 'cnic_back' ? 'cnicBack' :
+                                   key === 'car_photo' ? 'carPhoto' : 'carRegistrationDoc';
+                  return (
+                    <PhotoField
+                      key={key}
+                      label={t(labelKey)}
+                      required
+                      uri={photos[key]}
+                      onPress={() => handleOpenCamera(key)}
+                      isRTL={isRTL}
+                      t={t}
+                    />
+                  );
+                })}
+
+                <Field label={t('carMake')} required isRTL={isRTL}>
+                  <View style={[styles.inputContainer, focusedField === 'car_make' && styles.inputFocused]}>
+                    <BottomSheetTextInput
+                      value={carMake}
+                      onChangeText={(t) => {
+                        setCarMake(t);
+                        setError(null);
+                      }}
+                      onFocus={() => setFocusedField('car_make')}
+                      onBlur={() => setFocusedField(null)}
+                      placeholder="e.g. Toyota"
+                      placeholderTextColor={colors.muted}
+                      style={[styles.input, rtlText]}
+                      cursorColor="#FF5A00"
+                    />
+                  </View>
+                </Field>
+
+                <Field label={t('carModel')} required isRTL={isRTL}>
+                  <View style={[styles.inputContainer, focusedField === 'car_model' && styles.inputFocused]}>
+                    <BottomSheetTextInput
+                      value={carModel}
+                      onChangeText={(t) => {
+                        setCarModel(t);
+                        setError(null);
+                      }}
+                      onFocus={() => setFocusedField('car_model')}
+                      onBlur={() => setFocusedField(null)}
+                      placeholder="e.g. Corolla"
+                      placeholderTextColor={colors.muted}
+                      style={[styles.input, rtlText]}
+                      cursorColor="#FF5A00"
+                    />
+                  </View>
+                </Field>
+
+                <Field label={`${t('modelYear')} (${MIN_CAR_YEAR}–${maxCarYear})`} required isRTL={isRTL}>
+                  <View style={[styles.inputContainer, focusedField === 'car_year' && styles.inputFocused]}>
+                    <BottomSheetTextInput
+                      value={carYearText}
+                      onChangeText={(t) => {
+                        setCarYearText(t.replace(/\D/g, '').slice(0, 4));
+                        setError(null);
+                      }}
+                      onFocus={() => setFocusedField('car_year')}
+                      onBlur={() => setFocusedField(null)}
+                      keyboardType="number-pad"
+                      placeholder={String(MIN_CAR_YEAR)}
+                      placeholderTextColor={colors.muted}
+                      style={[styles.input, rtlText]}
+                      cursorColor="#FF5A00"
+                      maxLength={4}
+                    />
+                  </View>
+                </Field>
+
+                {error && (
+                  <View style={styles.errorContainer}>
+                    <Text style={[styles.errorText, rtlText]}>{error}</Text>
+                  </View>
+                )}
+
+                <TouchableOpacity
+                  style={[styles.primaryBtn, (!canSubmit || submitting) && styles.primaryBtnDisabled]}
+                  onPress={handleSubmit}
+                  disabled={!canSubmit || submitting}
+                  activeOpacity={0.85}
+                >
+                  {submitting ? (
+                    <ActivityIndicator color="#FFFFFF" size="small" />
+                  ) : (
+                    <Text style={styles.primaryBtnText}>{t('confirmApplication')}</Text>
+                  )}
+                </TouchableOpacity>
+
+                <View style={{ height: 20 }} />
+              </BottomSheetScrollView>
+            </View>
+          )}
+        </BottomSheetModal>
+
+        <Modal visible={activePhotoCapture !== null} animationType="slide">
+          <View style={styles.cameraRoot}>
+            <CameraView ref={cameraRef} style={StyleSheet.absoluteFill} />
+            <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
+              <Pressable
+                onPress={() => setActivePhotoCapture(null)}
+                style={[styles.cameraClose, { top: Math.max(insets.top, 12) + 8 }]}
+              >
+                <Ionicons name="close" size={28} color="#fff" />
+              </Pressable>
+              <View style={[styles.cameraBottom, { paddingBottom: Math.max(insets.bottom, 24) }]}>
+                <Pressable
+                  onPress={handleCapture}
+                  disabled={isCapturing}
+                  style={styles.captureBtnOuter}
+                >
+                  {isCapturing ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <View style={styles.captureBtnInner} />
+                  )}
+                </Pressable>
+                <Text style={styles.captureHint}>
+                  {isCapturing ? t('saving') : activePhotoCapture ? (
+                    activePhotoCapture === 'profile_picture' ? t('profilePicture') :
+                    activePhotoCapture === 'license_front' ? t('drivingLicenseFront') :
+                    activePhotoCapture === 'license_back' ? t('drivingLicenseBack') :
+                    activePhotoCapture === 'cnic_front' ? t('cnicFront') :
+                    activePhotoCapture === 'cnic_back' ? t('cnicBack') :
+                    activePhotoCapture === 'car_photo' ? t('carPhoto') : t('carRegistrationDoc')
+                  ) : ''}
+                </Text>
+              </View>
+            </View>
           </View>
-        )}
-      </BottomSheetModal>
+        </Modal>
+      </>
     );
   }
 );
 
-// ── Helper ──────────────────────────────────────────────────────────────────
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({
+  label,
+  required,
+  children,
+  isRTL,
+}: {
+  label: string;
+  required?: boolean;
+  children: React.ReactNode;
+  isRTL?: boolean;
+}) {
+  const rtlLabelStyle = isRTL
+    ? ({ textAlign: 'right', writingDirection: 'rtl', fontFamily: 'NotoNastaliqUrdu', fontSize: 18 } as const)
+    : {};
   return (
     <View style={styles.field}>
-      <Text style={styles.label}>{label}</Text>
+      <Text style={[styles.label, rtlLabelStyle]}>
+        {label}
+        {required ? <Text style={styles.requiredStar}> *</Text> : null}
+      </Text>
       {children}
     </View>
   );
 }
 
-// ── Styles ───────────────────────────────────────────────────────────────────
+function PhotoField({
+  label,
+  required,
+  uri,
+  onPress,
+  isRTL,
+  t,
+}: {
+  label: string;
+  required?: boolean;
+  uri: string | null;
+  onPress: () => void;
+  isRTL?: boolean;
+  t: (key: any) => string;
+}) {
+  const rtlLabelStyle = isRTL
+    ? ({ textAlign: 'right', writingDirection: 'rtl', fontFamily: 'NotoNastaliqUrdu', fontSize: 18 } as const)
+    : {};
+  return (
+    <View style={styles.field}>
+      <Text style={[styles.label, rtlLabelStyle]}>
+        {label}
+        {required ? <Text style={styles.requiredStar}> *</Text> : null}
+      </Text>
+      {uri ? (
+        <Pressable onPress={onPress} style={styles.photoPreviewWrap}>
+          <Image source={{ uri }} style={styles.photoPreview} resizeMode="cover" />
+          <View style={styles.retakeBadge}>
+            <Ionicons name="camera-outline" size={14} color="#fff" />
+            <Text style={styles.retakeText}>{t('tapToRetake')}</Text>
+          </View>
+        </Pressable>
+      ) : (
+        <Pressable onPress={onPress} style={styles.photoPlaceholder}>
+          <Ionicons name="camera-outline" size={32} color="#9CA3AF" />
+          <Text style={styles.photoPlaceholderText}>{t('tapToCapture')}</Text>
+        </Pressable>
+      )}
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   sheetBg: {
     backgroundColor: '#FFFFFF',
@@ -353,7 +648,13 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     fontSize: 14,
     color: '#1A1A1A',
-    marginBottom: 8,
+    marginBottom: 4,
+    paddingTop: 4,
+    paddingBottom: 10,
+  },
+  requiredStar: {
+    color: colors.red,
+    fontWeight: '700',
   },
   inputContainer: {
     flexDirection: 'row',
@@ -376,9 +677,50 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: '#1A1A1A',
   },
-  iconButton: {
-    padding: 4,
-    marginLeft: 8,
+  photoPlaceholder: {
+    height: 120,
+    borderRadius: 12,
+    backgroundColor: '#F9FAFB',
+    borderWidth: 1,
+    borderColor: '#FF5A00',
+    borderStyle: 'dashed',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  photoPlaceholderText: {
+    color: '#9CA3AF',
+    fontSize: 13,
+    marginTop: 8,
+    fontWeight: '500',
+    fontFamily: typography.family.regular,
+  },
+  photoPreviewWrap: {
+    width: '100%',
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  photoPreview: {
+    width: '100%',
+    height: 120,
+    borderRadius: 12,
+  },
+  retakeBadge: {
+    position: 'absolute',
+    bottom: 6,
+    right: 6,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  retakeText: {
+    color: '#fff',
+    fontSize: 11,
+    fontWeight: '600',
+    fontFamily: typography.family.regular,
   },
   errorContainer: {
     backgroundColor: 'rgba(211, 47, 47, 0.05)',
@@ -411,7 +753,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#FFFFFF',
   },
-  // ── Confirmation ──────────────────────────────────────────────────────────
   confirmationContainer: {
     flex: 1,
     alignItems: 'center',
@@ -472,5 +813,52 @@ const styles = StyleSheet.create({
   confirmContactEmail: {
     fontWeight: '600',
     color: '#FF5A00',
+  },
+  cameraRoot: {
+    flex: 1,
+    backgroundColor: '#000',
+  },
+  cameraClose: {
+    position: 'absolute',
+    left: 20,
+    zIndex: 10,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cameraBottom: {
+    position: 'absolute',
+    bottom: 40,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+  },
+  captureBtnOuter: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: 'rgba(255,255,255,0.3)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 4,
+    borderColor: '#fff',
+  },
+  captureBtnInner: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#fff',
+  },
+  captureHint: {
+    color: '#fff',
+    marginTop: 8,
+    fontSize: 14,
+    fontWeight: '500',
+    fontFamily: typography.family.regular,
+    textAlign: 'center',
+    paddingHorizontal: 24,
   },
 });

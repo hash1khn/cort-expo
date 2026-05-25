@@ -44,6 +44,7 @@ interface UseRideSocketOptions {
     onRideProceeding?: (data: RideProceedingPayload) => void;
     onAttendanceMarked?: (data: AttendanceMarkedPayload) => void;
     onRideEnded?: (data: RideEndedPayload) => void;
+    onPolylineUpdated?: () => void;
 }
 
 /**
@@ -60,6 +61,7 @@ export function useRideSocket({
     onRideProceeding,
     onAttendanceMarked,
     onRideEnded,
+    onPolylineUpdated,
 }: UseRideSocketOptions) {
     // Refs hold the latest callbacks so handlers registered once on mount
     // always call the current version without causing the effect to re-run.
@@ -68,11 +70,13 @@ export function useRideSocket({
     const onRideProceedingRef = useRef(onRideProceeding);
     const onAttendanceMarkedRef = useRef(onAttendanceMarked);
     const onRideEndedRef = useRef(onRideEnded);
+    const onPolylineUpdatedRef = useRef(onPolylineUpdated);
     onLocationUpdateRef.current = onLocationUpdate;
     onStopArrivedRef.current = onStopArrived;
     onRideProceedingRef.current = onRideProceeding;
     onAttendanceMarkedRef.current = onAttendanceMarked;
     onRideEndedRef.current = onRideEnded;
+    onPolylineUpdatedRef.current = onPolylineUpdated;
 
     useEffect(() => {
         if (!tripId || !userId) return;
@@ -84,12 +88,14 @@ export function useRideSocket({
         const handleRideProceeding = (data: RideProceedingPayload) => onRideProceedingRef.current?.(data);
         const handleAttendanceMarked = (data: AttendanceMarkedPayload) => onAttendanceMarkedRef.current?.(data);
         const handleRideEnded = (data: RideEndedPayload) => onRideEndedRef.current?.(data);
+        const handlePolylineUpdated = () => onPolylineUpdatedRef.current?.();
 
         socketService.on('driver:location', handleLocation);
         socketService.on('stop:arrived', handleStopArrived);
         socketService.on('ride:proceeding', handleRideProceeding);
         socketService.on('attendance:marked', handleAttendanceMarked);
         socketService.on('RIDE_ENDED', handleRideEnded);
+        socketService.on('shuttle:polyline_updated', handlePolylineUpdated);
 
         return () => {
             socketService.off('driver:location', handleLocation);
@@ -97,6 +103,7 @@ export function useRideSocket({
             socketService.off('ride:proceeding', handleRideProceeding);
             socketService.off('attendance:marked', handleAttendanceMarked);
             socketService.off('RIDE_ENDED', handleRideEnded);
+            socketService.off('shuttle:polyline_updated', handlePolylineUpdated);
             socketService.leaveRide();
         };
     }, [tripId, userId, role, tripType]);

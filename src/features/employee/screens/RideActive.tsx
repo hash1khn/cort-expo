@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState, } from 'react';
 import { Linking, Platform, Pressable, StyleSheet, Text as RNText, View, ActivityIndicator, Image, Dimensions, Share } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
 import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
@@ -10,8 +10,8 @@ import { useAppDispatch, useAppSelector } from '../../../store/hooks';
 import { setIsOutstationDev } from '../store';
 import { useRideSocket } from '../../../hooks/useRideSocket';
 import { useChauffeurSocket } from '../../../hooks/useChauffeurSocket';
-import { useGetShuttlePolylineQuery, useGetShuttleTripsForEmployeeQuery } from '../services/employeeShuttleApi';
-import { useGetEmployeeActiveChauffeurBookingQuery, useGetChauffeurRoutePolylineQuery } from '../services/bookingsApi';
+import { employeeShuttleApi, useGetShuttlePolylineQuery, useGetShuttleTripsForEmployeeQuery } from '../services/employeeShuttleApi';
+import { bookingsApi, useGetEmployeeActiveChauffeurBookingQuery, useGetChauffeurRoutePolylineQuery } from '../services/bookingsApi';
 import { fontFamily } from '@/core/theme';
 import { useScanBoardingMutation } from '../services/boardingApi';
 import { useToast } from '@/shared/ui/molecules/Toast';
@@ -64,6 +64,40 @@ function calculateHeading(current: LatLng, next: LatLng) {
   brng = (brng + 360) % 360;
   return brng;
 }
+
+// Flat-earth distance in metres between two lat/lng points (accurate under ~5 km).
+function flatEarthMeters(a: LatLng, b: LatLng): number {
+  const dLat = (a.latitude - b.latitude) * 111_320;
+  const dLng = (a.longitude - b.longitude) * 111_320 * Math.cos((a.latitude * Math.PI) / 180);
+  return Math.sqrt(dLat * dLat + dLng * dLng);
+}
+
+// Minimum distance in metres from `driver` to the closest point on any segment of `polyline`.
+function getDistanceToPolylineMeters(driver: LatLng, polyline: LatLng[]): number {
+  if (polyline.length === 0) return Infinity;
+  if (polyline.length === 1) return flatEarthMeters(driver, polyline[0]!);
+
+  let minDist = Infinity;
+  for (let i = 0; i < polyline.length - 1; i++) {
+    const a = polyline[i]!;
+    const b = polyline[i + 1]!;
+    // Project driver onto segment ab, clamped to [0,1].
+    const abLat = b.latitude - a.latitude;
+    const abLng = b.longitude - a.longitude;
+    const abLenSq = abLat * abLat + abLng * abLng;
+    let t = 0;
+    if (abLenSq > 0) {
+      t = ((driver.latitude - a.latitude) * abLat + (driver.longitude - a.longitude) * abLng) / abLenSq;
+      t = Math.max(0, Math.min(1, t));
+    }
+    const closest: LatLng = { latitude: a.latitude + t * abLat, longitude: a.longitude + t * abLng };
+    minDist = Math.min(minDist, flatEarthMeters(driver, closest));
+  }
+  return minDist;
+}
+
+const OFF_ROUTE_THRESHOLD_M = 200;
+const CLIENT_COOLDOWN_MS = 65_000;
 
 // ── Screen height for animatedPosition thresholds ────────────────────────────
 const SCREEN_HEIGHT = Dimensions.get('window').height;
@@ -190,6 +224,10 @@ export default function RideActive() {
   const [socketStopStatus, setSocketStopStatus] = useState<'AT_STOP' | 'EN_ROUTE' | null>(null);
   const [isCallingDriver, setIsCallingDriver] = useState(false);
   const [isSharingRide, setIsSharingRide] = useState(false);
+
+  // ── Off-route / recalculation state ──────────────────────────────────────
+  const [recalcParams, setRecalcParams] = useState<{ driverLat: number; driverLng: number } | undefined>(undefined);
+  const lastRecalcTimeRef = useRef<number>(0);
   // True when the driver manually marked this employee as present from the attendance sheet
   const [isDriverMarkedPresent, setIsDriverMarkedPresent] = useState(false);
   const currentStopId = socketStopId ?? activeTrip?.current_stop_id ?? null;
@@ -215,14 +253,23 @@ export default function RideActive() {
 
   // ── Polyline query ────────────────────────────────────────────────────────
   const { data: polylineData } = useGetShuttlePolylineQuery(
-    { tripId: activeTripId },
+    { tripId: activeTripId, ...recalcParams },
     { skip: activeTripId === 0 || isChauffeurMode },
   );
 
   const { data: chauffeurPolylineData } = useGetChauffeurRoutePolylineQuery(
-    { companyId: companyId as number, bookingId: activeChauffeurBookingId },
-    { skip: !isChauffeurMode || !activeChauffeurBookingId || !companyId },
+    { companyId: companyId as number, bookingId: activeChauffeurBookingId, ...recalcParams },
+    { skip: !isChauffeurMode || !activeChauffeurBookingId || !companyId || chauffeurStatus !== 'OTW' },
   );
+
+  // ── Polyline invalidation callbacks (triggered by socket events) ─────────
+  const handleShuttlePolylineUpdated = useCallback(() => {
+    dispatch(employeeShuttleApi.util.invalidateTags([{ type: 'ShuttlePolyline', id: activeTripId }]));
+  }, [dispatch, activeTripId]);
+
+  const handleChauffeurPolylineUpdated = useCallback(() => {
+    dispatch(bookingsApi.util.invalidateTags([{ type: 'ChauffeurPolyline', id: activeChauffeurBookingId }]));
+  }, [dispatch, activeChauffeurBookingId]);
 
   // ── Socket callbacks ──────────────────────────────────────────────────────
   const handleLocationUpdate = useCallback(
@@ -298,6 +345,7 @@ export default function RideActive() {
     onRideProceeding: isChauffeurMode ? undefined : handleRideProceeding,
     onAttendanceMarked: isChauffeurMode ? undefined : handleAttendanceMarked,
     onRideEnded: isChauffeurMode ? undefined : handleRideEnded,
+    onPolylineUpdated: isChauffeurMode ? undefined : handleShuttlePolylineUpdated,
   });
 
   useChauffeurSocket({
@@ -313,6 +361,7 @@ export default function RideActive() {
         }
       : undefined,
     onRideEnded: isChauffeurMode ? handleRideEnded : undefined,
+    onPolylineUpdated: isChauffeurMode ? handleChauffeurPolylineUpdated : undefined,
   });
 
   // ── Bottom Sheet refs ─────────────────────────────────────────────────────
@@ -480,6 +529,19 @@ export default function RideActive() {
       isBoardedRef.current = true;
     }
   }, [isBoardingSuccess, isDriverMarkedPresent]);
+
+  // ── Off-route detection ───────────────────────────────────────────────────
+  useEffect(() => {
+    if (!driverCoord || allRoutePoints.length < 2) return;
+    const dist = getDistanceToPolylineMeters(driverCoord, allRoutePoints);
+    const now = Date.now();
+    if (dist > OFF_ROUTE_THRESHOLD_M && now - lastRecalcTimeRef.current > CLIENT_COOLDOWN_MS) {
+      lastRecalcTimeRef.current = now;
+      setRecalcParams({ driverLat: driverCoord.latitude, driverLng: driverCoord.longitude });
+    } else if (dist <= OFF_ROUTE_THRESHOLD_M / 2) {
+      setRecalcParams(undefined);
+    }
+  }, [driverCoord, allRoutePoints]);
 
   // ── Bottom Sheet snap logic ───────────────────────────────────────────────
   useEffect(() => {

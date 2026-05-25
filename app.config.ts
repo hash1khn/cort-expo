@@ -12,7 +12,7 @@ const BUNDLE_IDENTIFIER = "com.corttechnologies.traflinq";
 const PACKAGE_NAME = "com.corttechnologies.traflinq";
 const ICON = "./assets/app_icon.png";
 const SCHEME = "traflinq";
-
+const ADAPTIVE_ICON = "./assets/adaptive_icon.png";
 const withPhoneOnlyAndroidScreens: ConfigPlugin = (config) =>
   withAndroidManifest(config, (modConfig) => {
     const manifest = modConfig.modResults.manifest as Record<string, unknown>;
@@ -175,7 +175,7 @@ export const getDynamicAppConfig = (
       bundleIdentifier: BUNDLE_IDENTIFIER,
       packageName: PACKAGE_NAME,
       icon: ICON,
-      adaptiveIcon: ICON,
+      adaptiveIcon: ADAPTIVE_ICON,
       scheme: SCHEME,
     };
   }
@@ -185,7 +185,7 @@ export const getDynamicAppConfig = (
       bundleIdentifier: `${BUNDLE_IDENTIFIER}.preview`,
       packageName: `${PACKAGE_NAME}.preview`,
       icon: ICON,
-      adaptiveIcon: ICON,
+      adaptiveIcon: ADAPTIVE_ICON,
       scheme: `${SCHEME}-preview`,
     };
   }
@@ -194,7 +194,7 @@ export const getDynamicAppConfig = (
     bundleIdentifier: `${BUNDLE_IDENTIFIER}.dev`,
     packageName: `${PACKAGE_NAME}.dev`,
     icon: ICON,
-    adaptiveIcon: ICON,
+    adaptiveIcon: ADAPTIVE_ICON,
     scheme: `${SCHEME}-dev`,
   };
 };

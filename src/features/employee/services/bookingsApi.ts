@@ -224,10 +224,15 @@ export const bookingsApi = baseApi.injectEndpoints({
 
     getChauffeurRoutePolyline: builder.query<
       { booking_id: number; encoded_polyline: string | null; points: { lat: number; lng: number }[] | null },
-      { companyId: number; bookingId: number }
+      { companyId: number; bookingId: number; driverLat?: number; driverLng?: number }
     >({
-      query: ({ companyId, bookingId }) =>
-        `/employee/companies/${companyId}/chauffeur-bookings/${bookingId}/route-polyline`,
+      query: ({ companyId, bookingId, driverLat, driverLng }) => ({
+        url: `/employee/companies/${companyId}/chauffeur-bookings/${bookingId}/route-polyline`,
+        params: {
+          ...(driverLat !== undefined ? { driverLat } : {}),
+          ...(driverLng !== undefined ? { driverLng } : {}),
+        },
+      }),
       transformResponse: (response: {
         data: {
           booking_id: number;
@@ -235,6 +240,7 @@ export const bookingsApi = baseApi.injectEndpoints({
           points: { lat: number; lng: number }[] | null;
         };
       }) => response.data,
+      providesTags: (_result, _error, { bookingId }) => [{ type: 'ChauffeurPolyline', id: bookingId }],
     }),
 
     submitChauffeurReview: builder.mutation<

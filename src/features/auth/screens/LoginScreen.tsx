@@ -30,10 +30,16 @@ import { getHomePathForRole } from '../utils/getHomePathForRole';
 import { credentialStorage, BiometricType } from '../utils/credentialStorage';
 import { ChauffeurSignupBottomSheet } from '../components/ChauffeurSignupBottomSheet';
 import { BottomSheetModal } from '@gorhom/bottom-sheet';
+import { useLanguage } from '../../../context/LanguageContext';
 
 export function LoginScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
+  const { t, isRTL } = useLanguage();
+
+  // RTL helpers
+  const rtlText = isRTL ? ({ textAlign: 'right', writingDirection: 'rtl' } as const) : {};
+  const rtlRow = isRTL ? ({ flexDirection: 'row-reverse' } as const) : {};
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -213,18 +219,18 @@ export function LoginScreen() {
             {/* Centered Logo */}
             <View style={styles.logoContainer}>
               <Image
-                source={require('../../../../assets/traflinq-logo-big.svg')}
+                source={require('../../../../assets/traflinq_logo_with_tagline.svg')}
                 style={styles.logoImage}
                 resizeMode="contain"
               />
             </View>
 
             {/* Heading */}
-            <Text style={styles.title}>Login to your account!</Text>
+            <Text style={[styles.title, rtlText]}>{t('loginToYourAccount')}</Text>
 
             {/* Email Input */}
             <View style={styles.field}>
-              <Text style={styles.label}>Email address</Text>
+              <Text style={[styles.label, rtlText]}>{t('emailAddress')}</Text>
               <View style={[
                 styles.inputContainer,
                 focusedField === 'email' && styles.inputFocused,
@@ -254,7 +260,7 @@ export function LoginScreen() {
 
             {/* Password Input */}
             <View style={styles.field}>
-              <Text style={styles.label}>Password</Text>
+              <Text style={[styles.label, rtlText]}>{t('password')}</Text>
               <View style={[
                 styles.inputContainer,
                 focusedField === 'password' && styles.inputFocused,
@@ -284,7 +290,7 @@ export function LoginScreen() {
               
               {/* Forgot Password Link - Right Aligned below input */}
               <Pressable onPress={openForgotPassword}>
-                <Text style={styles.forgotPass}>Forgot password?</Text>
+                <Text style={[styles.forgotPass, isRTL && { alignSelf: 'flex-start' }]}>{t('forgotPassword')}</Text>
               </Pressable>
             </View>
 
@@ -297,7 +303,7 @@ export function LoginScreen() {
             {/* Primary Action Button */}
             <View style={styles.actionRow}>
               <CortButton
-                title="Log in"
+                title={t('logIn')}
                 variant="primary"
                 disabled={isSubmitting}
                 loading={isSubmitting}
@@ -307,12 +313,13 @@ export function LoginScreen() {
 
             <View style={styles.chauffeurApplyRow}>
               <Text style={styles.chauffeurApplyText}>
-                Want to join our fleet?{' '}
+                {t('wantToJoinFleet')}{' '}
                 <Text
+                  suppressHighlighting={true}
                   style={styles.chauffeurApplyLink}
                   onPress={() => chauffeurSheetRef.current?.present()}
                 >
-                  Apply as Chauffeur
+                  {t('applyAsChauffeur')}
                 </Text>
               </Text>
             </View>
@@ -403,9 +410,9 @@ const styles = StyleSheet.create({
   },
 
   logoImage: {
-    width: 280,
-    height: 250,
-    marginBottom:-20,
+    width: 240,
+    height: 230,
+    marginBottom:-10,
   },
   title: {
     fontFamily: typography.family.regular,
@@ -487,6 +494,8 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#6B7280',
     textAlign: 'center',
+    lineHeight: 24,
+    paddingVertical: 4,
   },
   chauffeurApplyLink: {
     fontWeight: '700',

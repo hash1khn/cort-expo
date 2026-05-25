@@ -23,6 +23,7 @@ export default function ChauffeurHomeLayout() {
           <Drawer.Screen name="index" options={hideDrawerItem} />
           <Drawer.Screen name="active-trip" options={hideDrawerItem} />
           <Drawer.Screen name="end-ride" options={hideDrawerItem} />
+          <Drawer.Screen name="incoming-ride-request" options={hideDrawerItem} />
         </Drawer>
       </View>
     </LanguageProvider>

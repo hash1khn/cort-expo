@@ -22,6 +22,7 @@ interface UseChauffeurSocketOptions {
     onLocationUpdate?: (data: LocationPayload) => void;
     onStatusChange?: (data: ChauffeurStatusPayload) => void;
     onRideEnded?: () => void;
+    onPolylineUpdated?: () => void;
 }
 
 /**
@@ -46,15 +47,18 @@ export function useChauffeurSocket({
     onLocationUpdate,
     onStatusChange,
     onRideEnded,
+    onPolylineUpdated,
 }: UseChauffeurSocketOptions) {
     // Keep refs to the latest callbacks so handlers registered once on mount
     // always call the current version without causing the effect to re-run.
     const onLocationUpdateRef = useRef(onLocationUpdate);
     const onStatusChangeRef = useRef(onStatusChange);
     const onRideEndedRef = useRef(onRideEnded);
+    const onPolylineUpdatedRef = useRef(onPolylineUpdated);
     onLocationUpdateRef.current = onLocationUpdate;
     onStatusChangeRef.current = onStatusChange;
     onRideEndedRef.current = onRideEnded;
+    onPolylineUpdatedRef.current = onPolylineUpdated;
 
     useEffect(() => {
         if (!bookingId || !userId) return;
@@ -73,12 +77,16 @@ export function useChauffeurSocket({
             }
         };
 
+        const handlePolylineUpdated = () => onPolylineUpdatedRef.current?.();
+
         socketService.on('driver:location', handleLocation);
         socketService.on('chauffeur:status', handleStatus);
+        socketService.on('chauffeur:polyline_updated', handlePolylineUpdated);
 
         return () => {
             socketService.off('driver:location', handleLocation);
             socketService.off('chauffeur:status', handleStatus);
+            socketService.off('chauffeur:polyline_updated', handlePolylineUpdated);
             socketService.leaveRide();
         };
     }, [bookingId, userId]);

@@ -108,6 +108,7 @@ export const employeeShuttleApi = baseApi.injectEndpoints({
           ...(driverLng !== undefined ? { driverLng } : {}),
         },
       }),
+      providesTags: (_result, _error, { tripId }) => [{ type: 'ShuttlePolyline', id: tripId }],
     }),
   }),
 });

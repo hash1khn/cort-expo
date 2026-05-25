@@ -10,6 +10,7 @@ import * as TaskManager from 'expo-task-manager';
 // component mounts (and before the OS can deliver a background location event).
 import '../src/services/location/backgroundLocationTask';
 import { NotificationProvider } from '../src/context/NotificationContext';
+import { LanguageProvider } from '../src/context/LanguageContext';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { useFonts } from 'expo-font';
@@ -82,6 +83,7 @@ function RootLayoutContent() {
     Montserrat_300Light,
     Montserrat_400Regular,
     Geist: require('../fonts/Geist-VariableFont_wght.ttf'),
+    NotoNastaliqUrdu: require('../fonts/NotoNastaliqUrdu-VariableFont_wght.ttf'),
   });
 
   const role = useAppSelector((s) => s.auth.role);
@@ -218,9 +220,11 @@ export default function RootLayout() {
   return (
     <Provider store={store}>
       <PersistGate loading={null} persistor={persistor}>
-        <NotificationProvider>
-          <RootLayoutContent />
-        </NotificationProvider>
+        <LanguageProvider>
+          <NotificationProvider>
+            <RootLayoutContent />
+          </NotificationProvider>
+        </LanguageProvider>
       </PersistGate>
     </Provider>
   );

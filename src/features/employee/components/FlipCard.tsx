@@ -261,7 +261,9 @@ const BackContent = ({ booking, shuttleTrip, onClose, onRequestCaptain }: BackCo
                                 <Text style={styles.avatarInitials}>{initials}</Text>
                             )}
                         </View>
-                        <Text style={styles.captainRole}>Your Captain</Text>
+                        <Text style={styles.captainRole}>
+                            {isChauffeurMode ? 'Your Chauffeur' : 'Your Captain'}
+                        </Text>
                         <Text style={styles.captainName}>{driverName}</Text>
                     </View>
 
@@ -328,7 +330,9 @@ const BackContent = ({ booking, shuttleTrip, onClose, onRequestCaptain }: BackCo
                 <Pressable onPress={handleAction} disabled={isAssigning}>
                     <View style={[styles.actionButton, isAssigning && { opacity: 0.7 }]}>
                         <Text style={styles.buttonText}>
-                            {showRequestCaptain ? "Request Captain" : "Call Captain"}
+                            {showRequestCaptain
+                                ? (isChauffeurMode ? 'Request Chauffeur' : 'Request Captain')
+                                : (isChauffeurMode ? 'Call Chauffeur' : 'Call Captain')}
                         </Text>
                     </View>
                 </Pressable>

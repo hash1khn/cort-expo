@@ -23,8 +23,8 @@ export function AppHeader() {
             </Pressable>
             <View className="flex-row items-center">
                 <Image
-                    source={require('../../../../assets/traflinq-logo-no-tagline.svg')}
-                    style={{ width: 135, height: 50 ,marginRight:5}}
+                    source={require('../../../../assets/traflinq_logo_no_tagline.svg')}
+                    style={{ width: 135, height: 38 ,marginRight:5}}
                     contentFit="contain"
                 />
             </View>

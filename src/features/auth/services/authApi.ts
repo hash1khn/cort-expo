@@ -18,12 +18,22 @@ type LoginRequest = {
   password: string;
 };
 
-type ApplyChauffeurRequest = {
+export type ApplyChauffeurPayload = {
   full_name: string;
-  email: string;
+  email?: string;
   phone: string;
   cnic_number: string;
   license_number: string;
+  car_make: string;
+  car_model: string;
+  car_year: number;
+  profile_picture_uri: string;
+  license_front_uri: string;
+  license_back_uri: string;
+  cnic_front_uri: string;
+  cnic_back_uri: string;
+  car_photo_uri: string;
+  car_registration_doc_uri: string;
 };
 
 type LoginResponse = {
@@ -142,12 +152,43 @@ export const authApi = baseApi.injectEndpoints({
         };
       },
     }),
-    applyAsChauffeur: builder.mutation<void, ApplyChauffeurRequest>({
-      query: (payload) => ({
-        url: '/drivers/apply-chauffeur',
-        method: 'POST',
-        body: payload,
-      }),
+    applyAsChauffeur: builder.mutation<void, ApplyChauffeurPayload>({
+      query: (payload) => {
+        const formData = new FormData();
+        formData.append('full_name', payload.full_name.trim());
+        const emailTrim = payload.email?.trim();
+        if (emailTrim) {
+          formData.append('email', emailTrim);
+        }
+        formData.append('phone', payload.phone.trim());
+        formData.append('cnic_number', payload.cnic_number.trim());
+        formData.append('license_number', payload.license_number.trim());
+        formData.append('car_make', payload.car_make.trim());
+        formData.append('car_model', payload.car_model.trim());
+        formData.append('car_year', String(payload.car_year));
+
+        const appendImage = (field: string, uri: string) => {
+          formData.append(field, {
+            uri,
+            type: 'image/jpeg',
+            name: `${field}.jpg`,
+          } as any);
+        };
+
+        appendImage('profile_picture', payload.profile_picture_uri);
+        appendImage('license_front', payload.license_front_uri);
+        appendImage('license_back', payload.license_back_uri);
+        appendImage('cnic_front', payload.cnic_front_uri);
+        appendImage('cnic_back', payload.cnic_back_uri);
+        appendImage('car_photo', payload.car_photo_uri);
+        appendImage('car_registration_doc', payload.car_registration_doc_uri);
+
+        return {
+          url: '/drivers/apply-chauffeur',
+          method: 'POST',
+          body: formData,
+        };
+      },
     }),
   }),
 });
