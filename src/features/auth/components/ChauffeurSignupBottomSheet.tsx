@@ -24,6 +24,11 @@ import { CortButton } from '../../../components';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useApplyAsChauffeurMutation } from '../services/authApi';
 import { useLanguage } from '../../../context/LanguageContext';
+import {
+  getPhoneValidationError,
+  PHONE_MAX_LENGTH,
+  sanitizePhoneInput,
+} from '../../../utils/phone';
 
 const MIN_CAR_YEAR = 2018;
 
@@ -95,7 +100,7 @@ export const ChauffeurSignupBottomSheet = React.forwardRef<BottomSheetModal, {}>
       const photosOk = (Object.keys(EMPTY_PHOTOS) as ChauffeurPhotoKey[]).every((k) => !!photos[k]);
       return (
         name.trim().length > 0 &&
-        phone.trim().length > 0 &&
+        phone.replace(/\D/g, '').length === 11 &&
         cnic.trim().length > 0 &&
         licenseNumber.trim().length > 0 &&
         carMake.trim().length > 0 &&
@@ -163,6 +168,11 @@ export const ChauffeurSignupBottomSheet = React.forwardRef<BottomSheetModal, {}>
 
     const handleSubmit = useCallback(async () => {
       if (!canSubmit) return;
+      const phoneError = getPhoneValidationError(phone, { required: true });
+      if (phoneError) {
+        setError(phoneError);
+        return;
+      }
       const pk = photos;
       try {
         setSubmitting(true);
@@ -170,7 +180,7 @@ export const ChauffeurSignupBottomSheet = React.forwardRef<BottomSheetModal, {}>
         await applyAsChauffeur({
           full_name: name,
           email: email.trim() || undefined,
-          phone,
+          phone: phone.replace(/\D/g, ''),
           cnic_number: cnic,
           license_number: licenseNumber,
           car_make: carMake,
@@ -329,13 +339,14 @@ export const ChauffeurSignupBottomSheet = React.forwardRef<BottomSheetModal, {}>
                     <BottomSheetTextInput
                       value={phone}
                       onChangeText={(t) => {
-                        setPhone(t);
+                        setPhone(sanitizePhoneInput(t));
                         setError(null);
                       }}
                       onFocus={() => setFocusedField('phone')}
                       onBlur={() => setFocusedField(null)}
                       keyboardType="phone-pad"
-                      placeholder="+92 300 1234567"
+                      maxLength={PHONE_MAX_LENGTH}
+                      placeholder="03001234567"
                       placeholderTextColor={colors.muted}
                       style={[styles.input, rtlText]}
                       cursorColor="#FF5A00"
