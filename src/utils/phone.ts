@@ -7,10 +7,10 @@ export function sanitizePhoneInput(value: string): string {
 }
 
 export function getPhoneValidationError(
-  value: string,
+  value: string | null | undefined,
   options: { required?: boolean } = {},
 ): string | null {
-  const digits = value.replace(/\D/g, '');
+  const digits = (value ?? '').replace(/\D/g, '');
   if (!digits) {
     return options.required ? 'Phone number is required' : null;
   }
