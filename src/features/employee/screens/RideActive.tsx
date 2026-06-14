@@ -8,8 +8,9 @@ import Animated, { useSharedValue, useAnimatedStyle, interpolate, useDerivedValu
 import { router, useLocalSearchParams } from 'expo-router';
 import { useAppDispatch, useAppSelector } from '../../../store/hooks';
 import { setIsOutstationDev } from '../store';
-import { useRideSocket } from '../../../hooks/useRideSocket';
+import { useRideSocket, EtaUpdatePayload } from '../../../hooks/useRideSocket';
 import { useChauffeurSocket } from '../../../hooks/useChauffeurSocket';
+import { useEtaCountdown } from '../../../hooks/useEtaCountdown';
 import { employeeShuttleApi, useGetShuttlePolylineQuery, useGetShuttleTripsForEmployeeQuery } from '../services/employeeShuttleApi';
 import { bookingsApi, useGetEmployeeActiveChauffeurBookingQuery, useGetChauffeurRoutePolylineQuery } from '../services/bookingsApi';
 import { fontFamily } from '@/core/theme';
@@ -225,6 +226,10 @@ export default function RideActive() {
   const [isCallingDriver, setIsCallingDriver] = useState(false);
   const [isSharingRide, setIsSharingRide] = useState(false);
 
+  // ── ETA state ─────────────────────────────────────────────────────────────
+  const [etaSnapshot, setEtaSnapshot] = useState<{ etaMinutes: number; calculatedAt: string } | null>(null);
+  const displayEtaMinutes = useEtaCountdown(etaSnapshot);
+
   // ── Off-route / recalculation state ──────────────────────────────────────
   const [recalcParams, setRecalcParams] = useState<{ driverLat: number; driverLng: number } | undefined>(undefined);
   const lastRecalcTimeRef = useRef<number>(0);
@@ -335,6 +340,10 @@ export default function RideActive() {
     return () => clearTimeout(timer);
   }, []);
 
+  const handleEtaUpdate = useCallback((data: EtaUpdatePayload) => {
+    setEtaSnapshot({ etaMinutes: data.etaMinutes, calculatedAt: data.calculatedAt });
+  }, []);
+
   useRideSocket({
     tripId: activeTripId,
     userId,
@@ -346,6 +355,7 @@ export default function RideActive() {
     onAttendanceMarked: isChauffeurMode ? undefined : handleAttendanceMarked,
     onRideEnded: isChauffeurMode ? undefined : handleRideEnded,
     onPolylineUpdated: isChauffeurMode ? undefined : handleShuttlePolylineUpdated,
+    onEtaUpdate: isChauffeurMode ? undefined : handleEtaUpdate,
   });
 
   useChauffeurSocket({
@@ -362,6 +372,7 @@ export default function RideActive() {
       : undefined,
     onRideEnded: isChauffeurMode ? handleRideEnded : undefined,
     onPolylineUpdated: isChauffeurMode ? handleChauffeurPolylineUpdated : undefined,
+    onEtaUpdate: isChauffeurMode ? handleEtaUpdate : undefined,
   });
 
   // ── Bottom Sheet refs ─────────────────────────────────────────────────────
@@ -530,6 +541,15 @@ export default function RideActive() {
     }
   }, [isBoardingSuccess, isDriverMarkedPresent]);
 
+  // Clear ETA once the passenger has been picked up — no more "arriving" needed.
+  useEffect(() => {
+    const shuttlePickedUp = !isChauffeurMode && (isBoardingSuccess || isDriverMarkedPresent);
+    const chauffeurPickedUp = isChauffeurMode && chauffeurStatus === 'IN_PROGRESS';
+    if (shuttlePickedUp || chauffeurPickedUp) {
+      setEtaSnapshot(null);
+    }
+  }, [isChauffeurMode, isBoardingSuccess, isDriverMarkedPresent, chauffeurStatus]);
+
   // ── Off-route detection ───────────────────────────────────────────────────
   useEffect(() => {
     if (!driverCoord || allRoutePoints.length < 2) return;
@@ -637,8 +657,14 @@ export default function RideActive() {
   // Employee is considered boarded if they self-scanned or the driver marked them present
   const isBoarded = isBoardingSuccess || isDriverMarkedPresent;
 
+  const etaText = (() => {
+    if (displayEtaMinutes === null) return null;
+    if (displayEtaMinutes <= 1) return 'Arriving shortly';
+    return `Arriving in ${displayEtaMinutes} min`;
+  })();
+
   const statusText = isChauffeurMode
-    ? chauffeurStatusText
+    ? (chauffeurStatus === 'OTW' && etaText ? etaText : chauffeurStatusText)
     : directionParam === 'EVENING'
       ? 'Ride in progress'
       : isBoarded
@@ -647,7 +673,7 @@ export default function RideActive() {
           ? 'Captain is here, please board the shuttle'
           : isWaitingForDriverResponse
             ? 'Waiting for driver...'
-            : 'Arriving in 15 min';
+            : (etaText ?? 'On the way');
 
   const statusColor = captainIsHere ? '#000' : '#000';
   const qrButtonLabel = isBoardingLoading ? 'Boarding...' : 'Board';

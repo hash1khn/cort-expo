@@ -33,6 +33,15 @@ interface RideEndedPayload {
     endedAt: string;
 }
 
+export interface EtaUpdatePayload {
+    tripId: number;
+    stopId: number | string;
+    etaMinutes: number;
+    expectedArrivalAt: string;
+    calculatedAt: string;
+    rideType: 'shuttle' | 'chauffeur';
+}
+
 interface UseRideSocketOptions {
     tripId: number | string;
     userId: string;
@@ -45,6 +54,7 @@ interface UseRideSocketOptions {
     onAttendanceMarked?: (data: AttendanceMarkedPayload) => void;
     onRideEnded?: (data: RideEndedPayload) => void;
     onPolylineUpdated?: () => void;
+    onEtaUpdate?: (data: EtaUpdatePayload) => void;
 }
 
 /**
@@ -62,6 +72,7 @@ export function useRideSocket({
     onAttendanceMarked,
     onRideEnded,
     onPolylineUpdated,
+    onEtaUpdate,
 }: UseRideSocketOptions) {
     // Refs hold the latest callbacks so handlers registered once on mount
     // always call the current version without causing the effect to re-run.
@@ -71,12 +82,14 @@ export function useRideSocket({
     const onAttendanceMarkedRef = useRef(onAttendanceMarked);
     const onRideEndedRef = useRef(onRideEnded);
     const onPolylineUpdatedRef = useRef(onPolylineUpdated);
+    const onEtaUpdateRef = useRef(onEtaUpdate);
     onLocationUpdateRef.current = onLocationUpdate;
     onStopArrivedRef.current = onStopArrived;
     onRideProceedingRef.current = onRideProceeding;
     onAttendanceMarkedRef.current = onAttendanceMarked;
     onRideEndedRef.current = onRideEnded;
     onPolylineUpdatedRef.current = onPolylineUpdated;
+    onEtaUpdateRef.current = onEtaUpdate;
 
     useEffect(() => {
         if (!tripId || !userId) return;
@@ -89,6 +102,7 @@ export function useRideSocket({
         const handleAttendanceMarked = (data: AttendanceMarkedPayload) => onAttendanceMarkedRef.current?.(data);
         const handleRideEnded = (data: RideEndedPayload) => onRideEndedRef.current?.(data);
         const handlePolylineUpdated = () => onPolylineUpdatedRef.current?.();
+        const handleEtaUpdate = (data: EtaUpdatePayload) => onEtaUpdateRef.current?.(data);
 
         socketService.on('driver:location', handleLocation);
         socketService.on('stop:arrived', handleStopArrived);
@@ -96,6 +110,7 @@ export function useRideSocket({
         socketService.on('attendance:marked', handleAttendanceMarked);
         socketService.on('RIDE_ENDED', handleRideEnded);
         socketService.on('shuttle:polyline_updated', handlePolylineUpdated);
+        socketService.on('eta:update', handleEtaUpdate);
 
         return () => {
             socketService.off('driver:location', handleLocation);
@@ -104,6 +119,7 @@ export function useRideSocket({
             socketService.off('attendance:marked', handleAttendanceMarked);
             socketService.off('RIDE_ENDED', handleRideEnded);
             socketService.off('shuttle:polyline_updated', handlePolylineUpdated);
+            socketService.off('eta:update', handleEtaUpdate);
             socketService.leaveRide();
         };
     }, [tripId, userId, role, tripType]);

@@ -24,6 +24,8 @@ type RideStatusBarProps = {
   upcomingShuttle?: UpcomingShuttleInfo | null;
   /** When true, show skeleton loaders instead of content (e.g. while shuttle data is fetching). */
   isLoading?: boolean;
+  /** Live ETA in minutes from the backend eta:update event. */
+  etaMinutes?: number | null;
 };
 
 const DEFAULT_ROUTE_LABEL = 'Nazimabad ↔ Tower';
@@ -38,6 +40,7 @@ export function RideStatusBar({
   enableDevToggle = true,
   upcomingShuttle,
   isLoading = false,
+  etaMinutes,
 }: RideStatusBarProps) {
   const [internalStatus, setInternalStatus] = useState<RideStatus>('idle');
   const status = controlledStatus ?? internalStatus;
@@ -102,7 +105,11 @@ export function RideStatusBar({
               </View>
             </View>
             <Text className="text-white/90 text-sm mb-1">ETA:</Text>
-            <Text className="text-white text-3xl font-bold mb-4">5 mins</Text>
+            <Text className="text-white text-3xl font-bold mb-4">
+              {etaMinutes != null
+                ? etaMinutes <= 1 ? 'Arriving shortly' : `${etaMinutes} min`
+                : '—'}
+            </Text>
             <View>
               <View className="h-1.5 bg-white/40 rounded-full overflow-hidden mb-1">
                 <View

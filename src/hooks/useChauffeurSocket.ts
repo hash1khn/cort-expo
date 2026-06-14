@@ -1,5 +1,6 @@
 import { useEffect, useCallback, useRef } from 'react';
 import { socketService } from '../services/socket.service';
+import type { EtaUpdatePayload } from './useRideSocket';
 
 interface LocationPayload {
     tripId: string;
@@ -23,6 +24,7 @@ interface UseChauffeurSocketOptions {
     onStatusChange?: (data: ChauffeurStatusPayload) => void;
     onRideEnded?: () => void;
     onPolylineUpdated?: () => void;
+    onEtaUpdate?: (data: EtaUpdatePayload) => void;
 }
 
 /**
@@ -48,6 +50,7 @@ export function useChauffeurSocket({
     onStatusChange,
     onRideEnded,
     onPolylineUpdated,
+    onEtaUpdate,
 }: UseChauffeurSocketOptions) {
     // Keep refs to the latest callbacks so handlers registered once on mount
     // always call the current version without causing the effect to re-run.
@@ -55,10 +58,12 @@ export function useChauffeurSocket({
     const onStatusChangeRef = useRef(onStatusChange);
     const onRideEndedRef = useRef(onRideEnded);
     const onPolylineUpdatedRef = useRef(onPolylineUpdated);
+    const onEtaUpdateRef = useRef(onEtaUpdate);
     onLocationUpdateRef.current = onLocationUpdate;
     onStatusChangeRef.current = onStatusChange;
     onRideEndedRef.current = onRideEnded;
     onPolylineUpdatedRef.current = onPolylineUpdated;
+    onEtaUpdateRef.current = onEtaUpdate;
 
     useEffect(() => {
         if (!bookingId || !userId) return;
@@ -78,15 +83,18 @@ export function useChauffeurSocket({
         };
 
         const handlePolylineUpdated = () => onPolylineUpdatedRef.current?.();
+        const handleEtaUpdate = (data: EtaUpdatePayload) => onEtaUpdateRef.current?.(data);
 
         socketService.on('driver:location', handleLocation);
         socketService.on('chauffeur:status', handleStatus);
         socketService.on('chauffeur:polyline_updated', handlePolylineUpdated);
+        socketService.on('eta:update', handleEtaUpdate);
 
         return () => {
             socketService.off('driver:location', handleLocation);
             socketService.off('chauffeur:status', handleStatus);
             socketService.off('chauffeur:polyline_updated', handlePolylineUpdated);
+            socketService.off('eta:update', handleEtaUpdate);
             socketService.leaveRide();
         };
     }, [bookingId, userId]);
