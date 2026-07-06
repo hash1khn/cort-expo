@@ -43,6 +43,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
     name: name,
     version,
     slug: PROJECT_SLUG,
+    platforms: ["ios", "android"],
     orientation: "portrait",
     userInterfaceStyle: "light",
     newArchEnabled: true,
@@ -104,11 +105,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
         projectId: EAS_PROJECT_ID,
       },
     },
-    web: {
-      bundler: "metro",
-      output: "static",
-      favicon: "./assets/favicon.png",
-    },
+   
     plugins: [
       "expo-router",
       "expo-font",

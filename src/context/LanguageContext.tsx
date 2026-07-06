@@ -11,7 +11,7 @@ const translations = {
     termsOfUse: 'Terms of Use',
     and: 'and',
     privacyPolicy: 'Privacy Policy',
-    loginToYourAccount: 'Login to your account!',
+    loginToYourAccount: 'Login to your account',
     emailAddress: 'Email address',
     password: 'Password',
     forgotPassword: 'Forgot password?',

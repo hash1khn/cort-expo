@@ -7,7 +7,7 @@ import { DrawerScreenWrapper } from '@/features/shared/components/DrawerScreenWr
 export default function ChauffeurHomeRoute() {
   return (
     <DrawerScreenWrapper>
-      <IncomingRideRequestScreen />
+      <ChauffeurHomeScreen />
     </DrawerScreenWrapper>
   );
 }
