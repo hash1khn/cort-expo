@@ -9,6 +9,13 @@ import { useChauffeurSocket } from '@/hooks/useChauffeurSocket';
 import { useAppSelector } from '@/store/hooks';
 import * as Linking from 'expo-linking';
 import { useNotification } from '@/context/NotificationContext';
+import { useLanguage } from '@/i18n/useLanguage';
+import {
+  buildRtlHeroSubtitleStyle,
+  buildRtlHeroTitleStyle,
+  buildRtlPrimaryButtonContainerStyle,
+  buildRtlPrimaryButtonTextStyle,
+} from '@/i18n/types';
 
 const Text = (props: React.ComponentProps<typeof RNText>) => {
     return <RNText {...props} style={[{ fontFamily }, props.style]} />;
@@ -19,6 +26,9 @@ export default function WaitingScreen() {
     const animation = useRef<LottieView>(null);
     const router = useRouter();
     const user = useAppSelector((state) => state.auth.user);
+    const { t, isRTL, language, rtlRowStyle } = useLanguage();
+    const te = (key: string, options?: Record<string, unknown>) =>
+        t(`employee:${key}`, options);
 
     /**
      * Route params from FlipCard or ShuttleEmployee navigation
@@ -124,7 +134,10 @@ export default function WaitingScreen() {
     return (
         <View className="flex-1 bg-white" style={{ paddingTop: insets.top, paddingBottom: insets.bottom || 24 }}>
             <View className="flex-1 justify-center items-center px-6">
-                <View className="p-8 rounded-[40px] items-center w-full min-h-[420px] justify-center ">
+                <View
+                    className="p-8 rounded-[40px] items-center w-full min-h-[420px] justify-center"
+                    style={isRTL ? { overflow: 'visible' } : undefined}
+                >
                     <View className="mb-6 items-center justify-center shadow-sm">
                         <LottieView
                             ref={animation}
@@ -135,26 +148,50 @@ export default function WaitingScreen() {
                             speed={1.5}
                         />
                     </View>
-                    <View className="mt-4 items-center space-y-2">
-                        <Text className="text-slate-900 text-3xl font-extrabold text-center tracking-tight">
-                            Driver Notified!
+                    <View className="mt-4 items-center space-y-2" style={isRTL ? { overflow: 'visible' } : undefined}>
+                        <Text
+                            className={
+                                isRTL
+                                    ? 'text-slate-900 text-center'
+                                    : 'text-slate-900 text-3xl font-extrabold text-center tracking-tight'
+                            }
+                            style={buildRtlHeroTitleStyle(language)}
+                        >
+                            {te('driverNotified')}
                         </Text>
-                        <Text className="text-slate-500 text-lg font-medium text-center mt-3 leading-6 px-4">
-                            Your captain is getting ready. The ride will commence shortly.
+                        <Text
+                            className={
+                                isRTL
+                                    ? 'text-slate-500 text-center mt-3 px-4'
+                                    : 'text-slate-500 text-lg font-medium text-center mt-3 leading-6 px-4'
+                            }
+                            style={buildRtlHeroSubtitleStyle(language)}
+                        >
+                            {isChauffeurMode
+                                ? te('chauffeurGettingReadySubtitle')
+                                : te('captainGettingReadySubtitle')}
                         </Text>
                     </View>
                 </View>
             </View>
 
             <View className="px-6 pb-2 pt-4">
-                <TouchableOpacity 
-                    className="bg-primary flex-row items-center justify-center py-4 rounded-2xl active:opacity-90"
+                <TouchableOpacity
+                    className={`bg-primary flex-row items-center justify-center rounded-2xl active:opacity-90 ${isRTL ? '' : 'py-4'}`}
+                    style={[
+                        rtlRowStyle,
+                        { gap: 10 },
+                        buildRtlPrimaryButtonContainerStyle(language),
+                    ]}
                     onPress={handleCallCaptain}
                     disabled={!driverPhone}
                 >
-                    <Ionicons name="call" size={22} color="white" style={{ marginRight: 10 }} />
-                    <Text className="text-white text-lg font-bold tracking-wide">
-                        Call Captain
+                    <Ionicons name="call" size={22} color="white" />
+                    <Text
+                        className={isRTL ? 'text-white' : 'text-white text-lg font-bold tracking-wide'}
+                        style={buildRtlPrimaryButtonTextStyle(language)}
+                    >
+                        {isChauffeurMode ? te('callChauffeur') : te('callCaptain')}
                     </Text>
                 </TouchableOpacity>
             </View>

@@ -16,6 +16,8 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AntDesign, Entypo, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { fontFamily } from '@/core/theme';
+import { useLanguage } from '@/i18n/useLanguage';
+import { buildRtlLinkTextStyle, buildRtlPromoTextStyle } from '@/i18n/types';
 import { useToast } from '@/shared/ui/molecules/Toast';
 import { useRefetchOnReconnect } from '@/hooks/useRefetchOnReconnect';
 
@@ -486,6 +488,8 @@ export default function NewHome() {
     }, [router]),
   );
 
+  const { t, isRTL, rtlRowStyle, language } = useLanguage();
+
   const insets = useSafeAreaInsets();
   const scrollViewRef = useRef<ScrollView>(null);
 
@@ -721,20 +725,27 @@ export default function NewHome() {
         {/* Recent Rides section - only show if loading or has completed rides */}
         {isChauffeurBookingsLoading || completedChauffeurRides.length > 0 ? (
           <View className="mt-5">
-            <Pressable 
-              onPress={() => { router.push('/employee/rides') }} 
+            <Pressable
+              onPress={() => { router.push('/employee/rides') }}
               hitSlop={8}
               disabled={isChauffeurBookingsLoading}
             >
-              <View className="flex-row items-center justify-between gap-0 mb-3">
-                <Text className="text-black text-2xl font-bold">Recent Rides</Text>
-                <Text className={`text-sm font-bold ${isChauffeurBookingsLoading ? 'text-gray-400' : 'text-[#FF5A00]'}`}>
-                  View all
+              <View className="items-center justify-between gap-0 mb-3" style={[{ flexDirection: 'row' }, rtlRowStyle]}>
+                <Text
+                  className="text-black text-2xl font-bold"
+                  style={isRTL ? { lineHeight: language === 'ur' ? 40 : 32, paddingTop: language === 'ur' ? 2 : 1 } : undefined}
+                >
+                  {t('employee:recentRides')}
+                </Text>
+                <Text
+                  className={`text-sm font-bold ${isChauffeurBookingsLoading ? 'text-gray-400' : 'text-[#FF5A00]'}`}
+                  style={buildRtlLinkTextStyle(language)}
+                >
+                  {t('employee:viewAll')}
                 </Text>
               </View>
             </Pressable>
             <View className="gap-4">
-              {/* Show skeleton loaders while loading */}
               {isChauffeurBookingsLoading ? (
                 <>
                   <CompactRideHistoryCardSkeleton />
@@ -753,7 +764,9 @@ export default function NewHome() {
                           day: 'numeric',
                         })
                       : '—';
-                    const rideType = booking.trip_type === 'OUT_STATION' ? 'Outstation' : 'In-city';
+                    const rideType = booking.trip_type === 'OUT_STATION'
+                      ? t('employee:outstation')
+                      : t('employee:inCity');
                     const dropoffTime = booking.scheduled_for
                       ? new Date(booking.scheduled_for).toLocaleTimeString('en-US', {
                           hour: '2-digit',
@@ -768,6 +781,7 @@ export default function NewHome() {
                         destination={destination}
                         date={dateStr}
                         rideType={rideType}
+                        vehicleType="chauffeur"
                         timeOfDropoff={dropoffTime}
                         onPress={() =>
                           router.push({
@@ -793,13 +807,19 @@ export default function NewHome() {
             imageStyle={styles.bentoLargeImage}
 
           >
-            <View className="flex-1 justify-between p-4 bg-black/30">
-              <Pressable >
-                <Text className="text-white text-xs font-semibold uppercase tracking-wide">
-                  Instation & Outstation
+            <View className={`flex-1 justify-between p-4 bg-black/30 ${isRTL ? 'items-end' : ''}`}>
+              <Pressable>
+                <Text
+                  className={`text-white text-xs font-semibold tracking-wide ${isRTL ? '' : 'uppercase'}`}
+                  style={buildRtlPromoTextStyle(language, 'tag')}
+                >
+                  {t('employee:inCity')} & {t('employee:outstation')}
                 </Text>
-                <Text className="text-white text-2xl font-bold mt-1">
-                  Your chauffeur, your schedule
+                <Text
+                  className="text-white text-2xl font-bold mt-1"
+                  style={buildRtlPromoTextStyle(language, 'title')}
+                >
+                  {t('employee:promoChauffeurSchedule')}
                 </Text>
               </Pressable>
               <View className="flex-row items-center mt-3">
@@ -809,15 +829,18 @@ export default function NewHome() {
           </ImageBackground>
 
           {/* Two small square containers below with images */}
-          <View className="flex-row mt-3 gap-3">
+          <View className="flex-row mt-3 gap-3" style={rtlRowStyle}>
             <ImageBackground
               source={require('@/../assets/happy_blackgirl.jpg')}
               style={styles.bentoSmall}
               imageStyle={styles.bentoSmallImage}
             >
-              <View className="flex-1  items-start justify-end p-3">
-                <Text className="text-white text-lg font-semibold">
-                  Enjoy the ride while we handle the rest.
+              <View className={`flex-1 justify-end p-3 bg-black/45 ${isRTL ? 'items-end' : 'items-start'}`}>
+                <Text
+                  className="text-white text-lg font-semibold"
+                  style={buildRtlPromoTextStyle(language, 'caption')}
+                >
+                  {t('employee:promoEnjoyRide')}
                 </Text>
               </View>
             </ImageBackground>
@@ -826,9 +849,12 @@ export default function NewHome() {
               style={styles.bentoSmall}
               imageStyle={styles.bentoSmallImage}
             >
-              <View className="flex-1  items-start justify-end p-3">
-                <Text className="text-white text-lg font-semibold">
-                  Chauffeur at your door, right on time.
+              <View className={`flex-1 justify-end p-3 bg-black/45 ${isRTL ? 'items-end' : 'items-start'}`}>
+                <Text
+                  className="text-white text-lg font-semibold"
+                  style={buildRtlPromoTextStyle(language, 'caption')}
+                >
+                  {t('employee:promoDoorOnTime')}
                 </Text>
               </View>
             </ImageBackground>
@@ -891,6 +917,8 @@ const styles = StyleSheet.create({
   bentoSmall: {
     flex: 1,
     height: 120,
+    borderRadius: 16,
+    overflow: 'hidden',
   },
   bentoSmallImage: {
     borderRadius: 16,

@@ -5,7 +5,14 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { CompactRideHistoryCard } from '../components/CompactRideHistoryCard';
 import { CompactRideHistoryCardSkeleton } from '../components/CompactRideHistoryCardSkeleton';
+import { BackButton } from '@/components/BackButton';
 import { colors, fontFamily } from '@/core/theme';
+import { useLanguage } from '@/i18n/useLanguage';
+import {
+  buildRtlHeaderTitleStyle,
+  buildRtlTabContainerStyle,
+  buildRtlTabTextStyle,
+} from '@/i18n/types';
 import { useAppSelector } from '../../../store/hooks';
 import { useGetChauffeurBookingsQuery } from '../services/bookingsApi';
 import { useGetShuttleTripsForEmployeeQuery } from '../services/employeeShuttleApi';
@@ -29,6 +36,7 @@ type RideCard = {
 
 export default function EmployeeRides() {
   const router = useRouter();
+  const { t, isRTL, rtlRowStyle, language } = useLanguage();
   const [activeFilter, setActiveFilter] = useState<FilterType>('all');
 
   const user = useAppSelector((state) => state.auth.user);
@@ -119,38 +127,48 @@ export default function EmployeeRides() {
     return [...cards].sort((a, b) => b.sortKey - a.sortKey);
   }, [activeFilter, chauffeurCards, shuttleCards]);
 
+  const filterLabels: Record<FilterType, string> = {
+    all: t('employee:filterAll'),
+    shuttle: t('employee:filterShuttle'),
+    chauffeur: t('employee:filterChauffeur'),
+  };
+
   return (
     <SafeAreaView className="flex-1 bg-white" edges={['top']}>
       {/* Header */}
       <View className="flex-row items-center justify-center px-4 py-3 relative">
-        <Pressable
+        <BackButton
+          label={t('employee:home')}
           onPress={() => router.back()}
-          className="rounded-full flex-row items-center justify-center absolute left-4"
+        />
+        <Text
+          className="text-black text-xl font-bold text-center"
+          style={buildRtlHeaderTitleStyle(language)}
         >
-          <Ionicons name="chevron-back" size={26} color="black" />
-          <Text className="text-black text-lg font-medium">Home</Text>
-        </Pressable>
-        <Text className="text-black text-xl font-bold text-center">Ride History</Text>
+          {t('employee:ridesHistory')}
+        </Text>
       </View>
 
       {/* Filter - segmented control */}
       <View className="px-6 pb-6 mt-5">
-        <View className="flex-row bg-gray-100 p-1 rounded-xl">
+        <View className="bg-gray-100 p-1 rounded-xl" style={[{ flexDirection: 'row' }, rtlRowStyle]}>
           {(['all', 'shuttle', 'chauffeur'] as FilterType[]).map((filter) => (
             <Pressable
               key={filter}
               onPress={() => setActiveFilter(filter)}
               hitSlop={20}
-              className={`flex-1 py-2 rounded-lg items-center justify-center ${
+              className={`flex-1 rounded-lg items-center justify-center ${
                 activeFilter === filter ? 'bg-white' : ''
               }`}
+              style={isRTL ? buildRtlTabContainerStyle(language) : { paddingVertical: 8 }}
             >
               <Text
                 className={`text-base font-semibold ${
                   activeFilter === filter ? 'text-black' : 'text-gray-500'
                 }`}
+                style={buildRtlTabTextStyle(language)}
               >
-                {filter.charAt(0).toUpperCase() + filter.slice(1)}
+                {filterLabels[filter]}
               </Text>
             </Pressable>
           ))}
@@ -173,8 +191,8 @@ export default function EmployeeRides() {
           ) : filteredCards.length === 0 ? (
             <View className="items-center justify-center mt-20 gap-3">
               <Ionicons name="time-outline" size={48} color="#d1d5db" />
-              <Text className="text-gray-400 text-base text-center">
-                No ride history yet.
+              <Text className={`text-gray-400 text-base ${isRTL ? 'text-right' : 'text-center'}`}>
+                {t('employee:noRideHistory')}
               </Text>
             </View>
           ) : (
@@ -184,7 +202,8 @@ export default function EmployeeRides() {
                 destination={card.destination}
                 date={card.date}
                 timeOfDropoff={card.time}
-                rideType={card.rideType === 'shuttle' ? 'Shuttle' : 'Chauffeur'}
+                vehicleType={card.rideType}
+                rideType={card.rideType === 'shuttle' ? t('employee:filterShuttle') : t('employee:filterChauffeur')}
                 onPress={() =>
                   router.push({
                     pathname: '/employee/ride-details',

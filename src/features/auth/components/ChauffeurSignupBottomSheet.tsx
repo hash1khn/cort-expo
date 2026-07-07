@@ -23,7 +23,7 @@ import { colors, typography } from '../../../core/theme';
 import { CortButton } from '../../../components';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useApplyAsChauffeurMutation } from '../services/authApi';
-import { useLanguage } from '../../../context/LanguageContext';
+import { useLanguage } from '@/i18n/useLanguage';
 import {
   getPhoneValidationError,
   PHONE_MAX_LENGTH,
@@ -44,14 +44,14 @@ const EMPTY_PHOTOS = {
 
 type ChauffeurPhotoKey = keyof typeof EMPTY_PHOTOS;
 
-const PHOTO_LABELS: Record<ChauffeurPhotoKey, string> = {
-  profile_picture: 'Profile picture',
-  license_front: 'Driving license (front)',
-  license_back: 'Driving license (back)',
-  cnic_front: 'CNIC (front)',
-  cnic_back: 'CNIC (back)',
-  car_photo: 'Car photo',
-  car_registration_doc: 'Car registration paper (photo)',
+const PHOTO_LABEL_KEYS: Record<ChauffeurPhotoKey, string> = {
+  profile_picture: 'profilePicture',
+  license_front: 'drivingLicenseFront',
+  license_back: 'drivingLicenseBack',
+  cnic_front: 'cnicFront',
+  cnic_back: 'cnicBack',
+  car_photo: 'carPhoto',
+  car_registration_doc: 'carRegistrationDoc',
 };
 
 export const ChauffeurSignupBottomSheet = React.forwardRef<BottomSheetModal, {}>(
@@ -59,15 +59,15 @@ export const ChauffeurSignupBottomSheet = React.forwardRef<BottomSheetModal, {}>
     const snapPoints = useMemo(() => ['55%', '92%'], []);
     const insets = useSafeAreaInsets();
     const maxCarYear = useMemo(() => new Date().getFullYear() + 1, []);
-    const { t, isRTL } = useLanguage();
+    const { tAuth: t, isRTL, rtlTextStyle, rtlFont } = useLanguage();
     const rtlText = isRTL
-      ? ({ textAlign: 'right', writingDirection: 'rtl', fontFamily: 'NotoNastaliqUrdu', fontSize: 18 } as const)
+      ? ({ ...rtlTextStyle, fontSize: 18 } as const)
       : {};
     const rtlTitle = isRTL
-      ? ({ textAlign: 'right', writingDirection: 'rtl', fontFamily: 'NotoNastaliqUrdu', fontSize: 24 } as const)
+      ? ({ ...rtlTextStyle, fontSize: 24 } as const)
       : {};
     const rtlSubtitle = isRTL
-      ? ({ textAlign: 'right', writingDirection: 'rtl', fontFamily: 'NotoNastaliqUrdu', fontSize: 16 } as const)
+      ? ({ ...rtlTextStyle, fontSize: 16 } as const)
       : {};
 
     const [permission, requestPermission] = useCameraPermissions();
@@ -544,9 +544,8 @@ function Field({
   children: React.ReactNode;
   isRTL?: boolean;
 }) {
-  const rtlLabelStyle = isRTL
-    ? ({ textAlign: 'right', writingDirection: 'rtl', fontFamily: 'NotoNastaliqUrdu', fontSize: 18 } as const)
-    : {};
+  const { rtlTextStyle } = useLanguage();
+  const rtlLabelStyle = isRTL ? { ...rtlTextStyle, fontSize: 18 } : {};
   return (
     <View style={styles.field}>
       <Text style={[styles.label, rtlLabelStyle]}>
@@ -573,9 +572,8 @@ function PhotoField({
   isRTL?: boolean;
   t: (key: any) => string;
 }) {
-  const rtlLabelStyle = isRTL
-    ? ({ textAlign: 'right', writingDirection: 'rtl', fontFamily: 'NotoNastaliqUrdu', fontSize: 18 } as const)
-    : {};
+  const { rtlTextStyle } = useLanguage();
+  const rtlLabelStyle = isRTL ? { ...rtlTextStyle, fontSize: 18 } : {};
   return (
     <View style={styles.field}>
       <Text style={[styles.label, rtlLabelStyle]}>

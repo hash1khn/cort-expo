@@ -13,6 +13,7 @@ import Animated, {
 import { scheduleOnUI } from 'react-native-worklets';
 import { colors } from '@/core/theme';
 import { scheduleOnRN } from 'react-native-worklets';
+import { useLanguage } from '@/i18n/useLanguage';
 
 const THUMB_SIZE = 65;
 const TRACK_HEIGHT = 65;
@@ -26,7 +27,9 @@ type Props = {
   onComplete: () => void;
 };
 
-export function SlideToStartTrip({ label = 'Slide to start trip', onComplete }: Props) {
+export function SlideToStartTrip({ label, onComplete }: Props) {
+  const { t } = useLanguage();
+  const displayLabel = label ?? t('shuttle:slide.slideToStartTrip');
   const translateX = useSharedValue(0);
   const progressWidth = useSharedValue(0);
   const isComplete = useSharedValue(false);
@@ -89,7 +92,7 @@ export function SlideToStartTrip({ label = 'Slide to start trip', onComplete }: 
         <View style={styles.track} className='bg-surface-light'>
           <Animated.View style={[styles.progressFill, progressStyle]} />
           <Text style={styles.label} pointerEvents="none">
-            {label}
+            {displayLabel}
           </Text>
           <Animated.View style={[styles.thumb, thumbStyle]}>
             <Ionicons name="chevron-forward" size={26} color={colors.navy} />

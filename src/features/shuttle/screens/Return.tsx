@@ -18,10 +18,12 @@ import { useActiveTrip, type Stop } from '../hooks/useActiveTrip';
 import { fontFamily } from '@/core/theme';
 import { useToast } from '@/shared/ui/molecules/Toast';
 import { CustomToast } from '@/features/shared/components/CustomToast';
-import { useLanguage } from '@/features/shared/context/LanguageContext';
+import { useLanguage } from '@/i18n/useLanguage';
+import { buildRtlSectionTitleStyle, buildRtlSmallSubtitleTextStyle } from '@/i18n/types';
 import * as Location from 'expo-location';
 import { useRiderLocationTracking } from '@/hooks/useRiderLocationTracking';
 import { LocationDisclosureModal } from '@/components/LocationDisclosureModal';
+import { BackButton } from '@/components/BackButton';
 import { useAppSelector } from '@/store/hooks';
 import { socketService } from '@/services/socket.service';
 
@@ -40,11 +42,7 @@ type ReturnEmployee = {
   absentReason?: AbsentReason;
 };
 
-const ABSENT_REASONS: { value: AbsentReason; label: { en: string; ur: string } }[] = [
-  { value: 'SELF_COMMUTE', label: { en: 'Self commute', ur: 'خود آنا جانا' } },
-  { value: 'LATE', label: { en: 'Late', ur: 'دیر' } },
-  { value: 'SICK', label: { en: 'Sick', ur: 'بیمار' } },
-];
+const ABSENT_REASON_VALUES: AbsentReason[] = ['SELF_COMMUTE', 'LATE', 'SICK'];
 
 function getInitials(name: string) {
   return name
@@ -55,16 +53,16 @@ function getInitials(name: string) {
     .toUpperCase();
 }
 
-function getAbsentReasonLabel(reason: AbsentReason, language: 'en' | 'ur'): string {
-  return ABSENT_REASONS.find((r) => r.value === reason)?.label[language] ?? reason;
+function getAbsentReasonLabel(reason: AbsentReason, translate: (key: string) => string): string {
+  return translate(`shuttle:return.absentReasons.${reason}`);
 }
 
 export default function Return() {
   const { tripId: tripIdParam } = useLocalSearchParams<{ tripId?: string }>();
   const preferredTripId = tripIdParam ? Number.parseInt(tripIdParam, 10) : null;
   const safePreferredTripId = Number.isNaN(preferredTripId ?? NaN) ? null : preferredTripId;
-  const { language } = useLanguage();
-  const isUrdu = language === 'ur';
+  const { t, isRTL, language } = useLanguage();
+  const tr = (key: string) => t(`shuttle:return.${key}`);
   const toast = useToast();
   const absentSheetRef = useRef<BottomSheetModal>(null);
   const absentSnapPoints = useMemo(() => ['40%'], []);
@@ -219,13 +217,11 @@ export default function Return() {
       const { status: bgGuard } = await Location.getBackgroundPermissionsAsync();
       if (fgGuard === 'denied' || bgGuard === 'denied') {
         Alert.alert(
-          isUrdu ? 'لوکیشن درکار ہے' : 'Location required',
-          isUrdu
-            ? 'لوکیشن کی اجازت نہیں ملی۔ ترتیبات میں جا کر لوکیشن چالو کریں تاکہ آپ سفر شروع کر سکیں۔'
-            : 'Location permission was denied. Open Settings to allow location access so you can start this ride.',
+          t('common:locationRequired'),
+          t('common:locationDeniedMessage'),
           [
-            { text: isUrdu ? 'منسوخ' : 'Cancel', style: 'cancel' },
-            { text: isUrdu ? 'ترتیبات کھولیں' : 'Open Settings', onPress: () => Linking.openSettings() },
+            { text: t('common:cancel'), style: 'cancel' },
+            { text: t('common:openSettings'), onPress: () => Linking.openSettings() },
           ],
         );
         return;
@@ -242,7 +238,7 @@ export default function Return() {
         toast.show(
           <CustomToast
             type="error"
-            message={isUrdu ? 'شروع کرنے سے پہلے تمام حاضری درج کریں' : 'Mark all attendance to start ride'}
+            message={tr('markAllAttendance')}
           />,
           { duration: 3500, position: 'top', backgroundColor: '#ff4545' },
         );
@@ -298,7 +294,7 @@ export default function Return() {
       } catch {
         // On error, remount slider so user can retry; stay on screen
         toast.show(
-          <CustomToast type="error" message={isUrdu ? 'شروع نہ ہو سکی' : 'Could not start ride'} />,
+          <CustomToast type="error" message={tr('couldNotStartRide')} />,
           { duration: 4000, position: 'top', backgroundColor: '#ff4545' }
         );
         setSliderKey((k) => k + 1);
@@ -332,7 +328,7 @@ export default function Return() {
     openStopsInMaps,
     stops,
     toast,
-    isUrdu,
+    t,
   ]);
 
   React.useEffect(() => {
@@ -452,16 +448,12 @@ export default function Return() {
             <View className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2">
               <AppText className="text-[13px] text-amber-900 leading-[18px]">
                 {locationPermissionWarning === 'background'
-                  ? isUrdu
-                    ? 'ترتیبات میں لوکیشن کو "ہمیشہ اجازت" پر سیٹ کریں تاکہ سفر کے دوران ٹریکنگ ہو سکے۔'
-                    : 'Set location access to "Allow all the time" in Settings so rides can be tracked.'
-                  : isUrdu
-                    ? 'ترتیبات میں ایپ کی اجازتوں سے لوکیشن چالو کریں، پھر سفر شروع کریں۔'
-                    : 'Enable Location in Settings (App → Permissions) before starting a ride.'}
+                  ? t('common:locationBackgroundHint')
+                  : t('common:locationForegroundHint')}
               </AppText>
               <Pressable onPress={() => Linking.openSettings()} className="mt-2 self-start">
                 <AppText className="text-[13px] font-semibold text-amber-950">
-                  {isUrdu ? 'ترتیبات کھولیں' : 'Open Settings'}
+                  {t('common:openSettings')}
                 </AppText>
               </Pressable>
             </View>
@@ -480,12 +472,11 @@ export default function Return() {
         onDecline={onDisclosureDecline}
       />
       {!returnTripStarted && (
-        <Pressable onPress={() => router.back()}>
-          <View className="flex-row items-center gap-2 ml-[-4px] px-6 mb-3">
-            <Feather name="chevron-left" size={24} color="black" />
-            {/* <Text className="text-black font-bold">Home</Text> */}
-          </View>
-        </Pressable>
+        <BackButton
+          onPress={() => router.back()}
+          anchored={false}
+          className={`mb-3 mt-3 px-6 ${isRTL ? 'self-end' : 'self-start ml-[-4px]'}`}
+        />
       )}
       <ScrollView
         className="flex-1 px-6"
@@ -495,18 +486,27 @@ export default function Return() {
         {/* Title */}
 
         <View className="mb-3">
-          <AppText className={`text-[34px] font-bold text-black ${isUrdu ? 'ml-auto' : ''}`}>
-            {isUrdu ? 'واپسی کا سفر' : 'Return trip'}
+          <AppText className={`text-[34px] font-bold text-black ${isRTL ? 'ml-auto' : ''}`}>
+            {tr('title')}
           </AppText>
         </View>
 
         {/* Attendance section */}
-        <View className="mb-6">
-          <AppText className={`text-xl font-bold mb-1 text-black ${isUrdu ? 'ml-auto' : ''}`}>
-            {isUrdu ? 'حاضری' : 'Mark attendance'}
+        <View
+          className={`mb-6 ${isRTL ? 'items-end' : ''}`}
+          style={isRTL ? { overflow: 'visible' } : undefined}
+        >
+          <AppText
+            className={`mb-1 text-black ${isRTL ? 'font-bold' : 'text-xl font-bold'}`}
+            style={buildRtlSectionTitleStyle(language)}
+          >
+            {tr('markAttendance')}
           </AppText>
-          <AppText className={`text-sm mb-4 text-[#6B7280] ${isUrdu ? 'ml-auto' : ''}`}>
-            {isUrdu ? 'افراد کی حاضری یا غیر حاضری مقرر کریں' : 'Mark employees as present or absent for the return trip'}
+          <AppText
+            className={`mb-4 text-[#6B7280] ${isRTL ? '' : 'text-sm'}`}
+            style={buildRtlSmallSubtitleTextStyle(language)}
+          >
+            {tr('markAttendanceSubtitle')}
           </AppText>
 
           <View className="overflow-hidden">
@@ -538,7 +538,7 @@ export default function Return() {
                   <View className="flex-row items-center mt-1">
                     <AppText className="text-[#8E8E93] text-[15px] mr-2" numberOfLines={1}>
                       {emp.status === 'absent' && emp.absentReason
-                        ? getAbsentReasonLabel(emp.absentReason, language)
+                        ? getAbsentReasonLabel(emp.absentReason, t)
                         : (emp.number || 'No number')}
                     </AppText>
                   </View>
@@ -597,16 +597,12 @@ export default function Return() {
           <View className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2">
             <AppText className="text-[13px] text-amber-900 leading-[18px]">
               {locationPermissionWarning === 'background'
-                ? isUrdu
-                  ? 'ترتیبات میں لوکیشن کو "ہمیشہ اجازت" پر سیٹ کریں تاکہ سفر کے دوران ٹریکنگ ہو سکے۔'
-                  : 'Set location access to "Allow all the time" in Settings so rides can be tracked.'
-                : isUrdu
-                  ? 'ترتیبات میں ایپ کی اجازتوں سے لوکیشن چالو کریں، پھر سفر شروع کریں۔'
-                  : 'Enable Location in Settings (App → Permissions) before starting a ride.'}
+                ? t('common:locationBackgroundHint')
+                : t('common:locationForegroundHint')}
             </AppText>
             <Pressable onPress={() => Linking.openSettings()} className="mt-2 self-start">
               <AppText className="text-[13px] font-semibold text-amber-950">
-                {isUrdu ? 'ترتیبات کھولیں' : 'Open Settings'}
+                {t('common:openSettings')}
               </AppText>
             </Pressable>
           </View>
@@ -624,8 +620,8 @@ export default function Return() {
           )}
           <AppText className="text-white text-[17px] font-bold mr-1">
             {isActionLoading
-              ? (returnTripStarted ? (isUrdu ? 'مکمل ہو رہا ہے...' : 'Completing...') : (isUrdu ? 'شروع ہو رہی' : 'Beginning...'))
-              : (returnTripStarted ? (isUrdu ? 'سفر مکمل کریں' : 'Complete Trip') : (isUrdu ? 'شروع کریں' : 'Begin ride'))}
+              ? (returnTripStarted ? tr('completing') : tr('beginning'))
+              : (returnTripStarted ? tr('completeTrip') : tr('beginRide'))}
           </AppText>
           {/* <Ionicons name="chevron-forward" size={22} color="#FFF" /> */}
         </Pressable>
@@ -647,16 +643,16 @@ export default function Return() {
           <View className="px-5 pb-8 ">
             <AppText
               className="text-lg font-bold mb-4 text-black"
-              style={isUrdu ? { paddingVertical: 6 } : undefined}
+              style={isRTL ? { paddingVertical: 6 } : undefined}
             >
-              {isUrdu ? 'یہ شخص غیر حاضر کیوں ہے؟' : 'Why is this person absent?'}
+              {tr('whyAbsent')}
             </AppText>
 
 
-            {ABSENT_REASONS.map((reason) => (
+            {ABSENT_REASON_VALUES.map((reason) => (
               <Pressable
-                key={reason.value}
-                onPress={() => handleSelectAbsentReason(reason.value)}
+                key={reason}
+                onPress={() => handleSelectAbsentReason(reason)}
                 className="py-3 rounded-xl items-center justify-center active:opacity-90 mb-3"
                 style={{
                   backgroundColor: '#F5F5F2',
@@ -666,9 +662,9 @@ export default function Return() {
               >
                 <AppText
                   className="text-base font-semibold text-black"
-                  style={isUrdu ? { paddingVertical: 6 } : undefined}
+                  style={isRTL ? { paddingVertical: 6 } : undefined}
                 >
-                  {reason.label[language]}
+                  {getAbsentReasonLabel(reason, t)}
                 </AppText>
               </Pressable>
             ))}

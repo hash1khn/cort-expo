@@ -6,6 +6,8 @@ import { BottomSheetBackdrop, BottomSheetModal, BottomSheetScrollView, BottomShe
 import { fontFamily, colors } from '@/core/theme';
 import { useSubmitProblemReportMutation } from '../services/problemReportsApi';
 import { Toast } from '@/shared/ui/molecules/Toast';
+import { useLanguage } from '@/i18n/useLanguage';
+import { buildRtlLinkTextStyle } from '@/i18n/types';
 
 const Text = (props: React.ComponentProps<typeof RNText>) => (
   <RNText {...props} style={[{ fontFamily }, props.style]} />
@@ -13,15 +15,14 @@ const Text = (props: React.ComponentProps<typeof RNText>) => (
 
 type IssueType = 'app_issue' | 'ride_issue' | 'other';
 
-const ISSUE_TYPES: Array<{ key: IssueType; label: string }> = [
-  { key: 'app_issue', label: 'App issue' },
-  { key: 'ride_issue', label: 'Ride issue' },
-  { key: 'other', label: 'Other' },
-];
+const ISSUE_TYPE_KEYS: IssueType[] = ['app_issue', 'ride_issue', 'other'];
 
 export const ReportProblemBottomSheet = forwardRef<BottomSheetModal>(
   (_, ref) => {
     const insets = useSafeAreaInsets();
+    const { t, language } = useLanguage();
+    const te = (key: string, options?: Record<string, unknown>) =>
+      t(`employee:${key}`, options);
 
     // Uncontrolled: ref holds the live text, no re-render on every keystroke
     const problemTextRef = useRef('');
@@ -74,7 +75,7 @@ export const ReportProblemBottomSheet = forwardRef<BottomSheetModal>(
       const trimmed = problemTextRef.current.trim();
 
       if (!issueType) {
-        Toast.show('Issue type is mandatory', {
+        Toast.show(te('issueTypeMandatory'), {
           type: 'error',
           duration: 2200,
           position: 'top',
@@ -83,7 +84,7 @@ export const ReportProblemBottomSheet = forwardRef<BottomSheetModal>(
         return;
       }
       if (trimmed.length < 5) {
-        Alert.alert('Report a problem', 'Please provide at least 5 characters.');
+        Alert.alert(te('reportProblemTitle'), te('reportMinChars'));
         return;
       }
 
@@ -92,13 +93,13 @@ export const ReportProblemBottomSheet = forwardRef<BottomSheetModal>(
         problemTextRef.current = '';
         setProblemLength(0);
         setIssueType(null);
-        Alert.alert('Thanks for reporting', 'Your issue has been submitted to our team.');
+        Alert.alert(te('thanksReporting'), te('reportSubmitted'));
         handleClose();
       } catch (error) {
         const message = error && typeof error === 'object' && 'data' in error
           ? ((error as { data?: { message?: string } }).data?.message || 'Failed to submit your report. Please try again.')
           : 'Failed to submit your report. Please try again.';
-        Alert.alert('Unable to submit', message);
+        Alert.alert(te('unableToSubmit'), message);
       }
     }, [issueType, submitProblemReport, handleClose]);
 
@@ -124,27 +125,25 @@ export const ReportProblemBottomSheet = forwardRef<BottomSheetModal>(
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.headerRow}>
-            <Text style={styles.title}>Report a problem</Text>
+            <Text style={styles.title}>{te('reportProblemTitle')}</Text>
             <Pressable onPress={handleClose} hitSlop={10}>
               <Ionicons name="close" size={20} color="#6B7280" />
             </Pressable>
           </View>
 
-          <Text style={styles.subtitle}>
-            Tell us what went wrong? Your report helps us investigate and improve your experience.
-          </Text>
+          <Text style={[styles.subtitle, buildRtlLinkTextStyle(language)]}>{te('reportSubtitle')}</Text>
 
           <View style={styles.badgesRow}>
-            {ISSUE_TYPES.map((type) => {
-              const selected = issueType === type.key;
+            {ISSUE_TYPE_KEYS.map((key) => {
+              const selected = issueType === key;
               return (
                 <Pressable
-                  key={type.key}
-                  onPress={() => setIssueType(type.key)}
+                  key={key}
+                  onPress={() => setIssueType(key)}
                   style={[styles.badge, selected && styles.badgeSelected]}
                 >
                   <Text style={[styles.badgeText, selected && styles.badgeTextSelected]}>
-                    {type.label}
+                    {te(`issueTypes.${key}`)}
                   </Text>
                 </Pressable>
               );
@@ -157,7 +156,7 @@ export const ReportProblemBottomSheet = forwardRef<BottomSheetModal>(
               problemTextRef.current = text;
               setProblemLength(text.trim().length);
             }}
-            placeholder="Write your issue here..."
+            placeholder={te('describeProblem')}
             placeholderTextColor="#9CA3AF"
             multiline
             numberOfLines={6}
@@ -176,7 +175,7 @@ export const ReportProblemBottomSheet = forwardRef<BottomSheetModal>(
             {isLoading ? (
               <ActivityIndicator size="small" color="#FFFFFF" />
             ) : (
-              <Text style={styles.submitButtonText}>Submit Report</Text>
+              <Text style={styles.submitButtonText}>{isLoading ? te('submitting') : te('submitReport')}</Text>
             )}
           </Pressable>
         </BottomSheetScrollView>

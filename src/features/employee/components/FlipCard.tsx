@@ -15,6 +15,7 @@ import { ShuttleTripForEmployee } from "../services/employeeShuttleApi";
 import * as Linking from 'expo-linking';
 import { useToast } from '@/shared/ui/molecules/Toast';
 import { CustomToast } from '@/features/shared/components/CustomToast';
+import { useLanguage } from '@/i18n/useLanguage';
 import Animated, {
     useSharedValue,
     useAnimatedStyle,
@@ -75,6 +76,9 @@ const SkeletonItem = ({ style, color = 'rgba(255,255,255,0.4)' }: { style: any, 
 };
 
 const FrontContent = ({ booking, shuttleTrip, isLoading, isChauffeurEnabled, isShuttleEnabled }: FrontContentProps) => {
+    const { t } = useLanguage();
+    const te = (key: string, options?: Record<string, unknown>) =>
+        t(`employee:${key}`, options);
     const isChauffeurMode = !!booking || isChauffeurEnabled;
     const hasTrip = !!booking || !!shuttleTrip;
 
@@ -93,7 +97,7 @@ const FrontContent = ({ booking, shuttleTrip, isLoading, isChauffeurEnabled, isS
         ? (shuttleTrip?.my_pickup_stop?.evening_eta ?? null)
         : (shuttleTrip?.my_pickup_stop?.morning_eta ?? null);
     const shuttlePickupTime = formatEta(shuttlePickupEta);
-    const routeName = shuttleTrip?.routes?.name ?? 'Daily Shuttle';
+    const routeName = shuttleTrip?.routes?.name ?? te('dailyShuttle');
 
     const isShuttleMode = !!isShuttleEnabled && !booking;
     // During loading, trip data isn't available yet — derive illustration from enabled-service flags.
@@ -137,16 +141,16 @@ const FrontContent = ({ booking, shuttleTrip, isLoading, isChauffeurEnabled, isS
     const isEmptyState = !hasTrip;
 
     const timeDisplay = booking
-        ? (isChauffeurActive ? 'In Progress' : (booking.scheduled_for ? new Date(booking.scheduled_for).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'))
+        ? (isChauffeurActive ? te('inProgress') : (booking.scheduled_for ? new Date(booking.scheduled_for).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'))
         : shuttleTrip
-            ? (isShuttleActive ? 'In Progress' : shuttlePickupTime)
+            ? (isShuttleActive ? te('inProgress') : shuttlePickupTime)
             : '—';
 
     return (
         <View style={styles.frontContainer}>
             {/* Top brand row */}
             <View style={styles.brandRow}>
-                <Text style={styles.brandName}>{isShuttleMode ? 'Daily Shuttle' : 'Your Chauffeur'}</Text>
+                <Text style={styles.brandName}>{isShuttleMode ? te('dailyShuttle') : te('yourChauffeur')}</Text>
             </View>
 
             {/* Center illustration */}
@@ -176,7 +180,7 @@ const FrontContent = ({ booking, shuttleTrip, isLoading, isChauffeurEnabled, isS
                             <Text style={styles.statNumber}>{timeDisplay}</Text>
                         </View>
                         <View style={styles.arrowContainer}>
-                            <Text style={styles.flipHintText}>Tap for details</Text>
+                            <Text style={styles.flipHintText}>{te('tapForDetails')}</Text>
                             <MaterialCommunityIcons name="rotate-3d-variant" size={20} color="black" />
                         </View>
                     </View>
@@ -194,6 +198,9 @@ interface BackContentProps {
 }
 
 const BackContent = ({ booking, shuttleTrip, onClose, onRequestCaptain }: BackContentProps) => {
+    const { t } = useLanguage();
+    const te = (key: string, options?: Record<string, unknown>) =>
+        t(`employee:${key}`, options);
     const isChauffeurMode = !!booking;
     const driver = booking?.users_chauffeur_bookings_driver_idTousers;
     const chauffeurVehicle = booking?.vehicles;
@@ -205,8 +212,8 @@ const BackContent = ({ booking, shuttleTrip, onClose, onRequestCaptain }: BackCo
     const shuttleDriver = shuttleTrip?.users;
 
     const driverName = isChauffeurMode
-        ? (driver?.full_name ?? 'Assigning...')
-        : (shuttleDriver?.full_name ?? 'Assigning...');
+        ? (driver?.full_name ?? te('assigning'))
+        : (shuttleDriver?.full_name ?? te('assigning'));
     const driverPhone = isChauffeurMode ? driver?.phone : shuttleDriver?.phone;
     const driverPictureUrl = isChauffeurMode
         ? (driver?.profile_picture_url ?? null)
@@ -262,7 +269,7 @@ const BackContent = ({ booking, shuttleTrip, onClose, onRequestCaptain }: BackCo
                             )}
                         </View>
                         <Text style={styles.captainRole}>
-                            {isChauffeurMode ? 'Your Chauffeur' : 'Your Captain'}
+                            {isChauffeurMode ? te('yourChauffeur') : te('yourCaptain')}
                         </Text>
                         <Text style={styles.captainName}>{driverName}</Text>
                     </View>
@@ -331,8 +338,8 @@ const BackContent = ({ booking, shuttleTrip, onClose, onRequestCaptain }: BackCo
                     <View style={[styles.actionButton, isAssigning && { opacity: 0.7 }]}>
                         <Text style={styles.buttonText}>
                             {showRequestCaptain
-                                ? (isChauffeurMode ? 'Request Chauffeur' : 'Request Captain')
-                                : (isChauffeurMode ? 'Call Chauffeur' : 'Call Captain')}
+                                ? (isChauffeurMode ? te('requestChauffeur') : te('requestCaptain'))
+                                : (isChauffeurMode ? te('callChauffeur') : te('callCaptain'))}
                         </Text>
                     </View>
                 </Pressable>
@@ -360,7 +367,8 @@ interface PickupSheetProps {
 }
 
 // Height for the compact 2-option view (without bottom insets — added dynamically)
-const SHEET_COMPACT_HEIGHT = 330;
+const SHEET_COMPACT_HEIGHT_LTR = 360;
+const SHEET_COMPACT_HEIGHT_RTL = 430;
 
 const GOOGLE_PLACES_API_KEY = Platform.OS === 'ios'
     ? (process.env.EXPO_PUBLIC_IOS_GOOGLE_API_KEY ?? '')
@@ -426,10 +434,13 @@ const PickupSheet = ({ visible, screenHeight, booking, onClose, onDone }: Pickup
     const insets = useSafeAreaInsets();
     const toast = useToast();
     const router = useRouter();
+    const { t, isRTL } = useLanguage();
+    const te = (key: string, options?: Record<string, unknown>) => t(`employee:${key}`, options);
     const [requestNextDayPickup, { isLoading: isRequesting }] = useRequestNextDayPickupMutation();
 
     const [mode, setMode] = useState<SheetMode>('compact');
     const [resolvedCurrentAddress, setResolvedCurrentAddress] = useState<string | null>(null);
+    const [isLocationPermissionDenied, setIsLocationPermissionDenied] = useState(false);
     const [isResolvingLocation, setIsResolvingLocation] = useState(false);
 
     // Shared map state (used in searchmap mode)
@@ -454,6 +465,7 @@ const PickupSheet = ({ visible, screenHeight, booking, onClose, onDone }: Pickup
             setMounted(true);
             setMode('compact');
             setResolvedCurrentAddress(null);
+            setIsLocationPermissionDenied(false);
             setMapAddress(null);
             setMapRegion(DEFAULT_REGION);
             requestAnimationFrame(() => {
@@ -476,9 +488,11 @@ const PickupSheet = ({ visible, screenHeight, booking, onClose, onDone }: Pickup
         try {
             const { status } = await Location.requestForegroundPermissionsAsync();
             if (status !== 'granted') {
-                setResolvedCurrentAddress('Location permission denied');
+                setIsLocationPermissionDenied(true);
+                setResolvedCurrentAddress(null);
                 return;
             }
+            setIsLocationPermissionDenied(false);
             const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
             const { latitude, longitude } = loc.coords;
             const region: Region = { latitude, longitude, latitudeDelta: 0.01, longitudeDelta: 0.01 };
@@ -489,7 +503,7 @@ const PickupSheet = ({ visible, screenHeight, booking, onClose, onDone }: Pickup
             setResolvedCurrentAddress(address);
             setMapAddress(address);
         } catch {
-            const fallback = booking.pickup_address ?? 'Current Location';
+            const fallback = booking.pickup_address ?? te('currentLocation');
             setResolvedCurrentAddress(fallback);
             setMapAddress(fallback);
         } finally {
@@ -543,7 +557,7 @@ const PickupSheet = ({ visible, screenHeight, booking, onClose, onDone }: Pickup
         } catch (error) {
             console.error("Failed to request next day pickup", error);
             toast.show(
-                <CustomToast type="error" message="Failed to request captain. Please try again." />,
+                <CustomToast type="error" message={te('requestCaptainFailed')} />,
                 { duration: 3500, position: 'top' }
             );
         }
@@ -558,9 +572,10 @@ const PickupSheet = ({ visible, screenHeight, booking, onClose, onDone }: Pickup
     const isFullScreen = mode === 'searchmap';
     const sheetTop = isFullScreen ? insets.top : undefined;
     // Compact height accounts for Android bottom nav bar via insets.bottom
+    const compactSheetHeight = isRTL ? SHEET_COMPACT_HEIGHT_RTL : SHEET_COMPACT_HEIGHT_LTR;
     const sheetHeight = isFullScreen
         ? undefined
-        : SHEET_COMPACT_HEIGHT + insets.bottom;
+        : compactSheetHeight + insets.bottom;
 
     return (
         <>
@@ -570,18 +585,18 @@ const PickupSheet = ({ visible, screenHeight, booking, onClose, onDone }: Pickup
                 {!isFullScreen && <View style={styles.sheetHandle} />}
 
                 {mode === 'compact' && (
-                    <View style={[styles.sheetBody, { paddingBottom: 28 + insets.bottom }]}>
-                        <Text style={styles.sheetTitle}>Where should we pick you up?</Text>
-                        <Text style={styles.sheetSubtitle}>Choose your pickup location for today's ride</Text>
+                    <View style={[styles.sheetBody, { paddingBottom: 32 + insets.bottom }]}>
+                        <Text style={styles.sheetTitle}>{te('whereShouldWePickYouUp')}</Text>
+                        <Text style={[styles.sheetSubtitle, isRTL && styles.sheetSubtitleRtl]}>{te('choosePickupLocation')}</Text>
 
                         {/* Option A – Current Location */}
                         <Pressable
                             onPress={() => {
-                                if (!isResolvingLocation && resolvedCurrentAddress && resolvedCurrentAddress !== 'Location permission denied') {
+                                if (!isResolvingLocation && resolvedCurrentAddress && !isLocationPermissionDenied) {
                                     submitPickup(resolvedCurrentAddress, mapCoords ?? undefined);
                                 }
                             }}
-                            disabled={isResolvingLocation || isRequesting}
+                            disabled={isResolvingLocation || isRequesting || isLocationPermissionDenied}
                             style={({ pressed }) => pressed && { opacity: 0.75 }}
                         >
                             <View style={styles.locationOption}>
@@ -589,12 +604,14 @@ const PickupSheet = ({ visible, screenHeight, booking, onClose, onDone }: Pickup
                                     <Ionicons name="navigate" size={18} color="#fff" />
                                 </View>
                                 <View style={styles.locationOptionTextBlock}>
-                                    <Text style={styles.locationOptionTitle}>Use current location</Text>
+                                    <Text style={styles.locationOptionTitle}>{te('useCurrentLocation')}</Text>
                                     {isResolvingLocation ? (
                                         <View style={styles.locationOptionDetecting}>
                                             <ActivityIndicator size="small" color="#999" />
-                                            <Text style={styles.locationOptionSub}>Detecting location…</Text>
+                                            <Text style={styles.locationOptionSub}>{te('detectingLocation')}</Text>
                                         </View>
+                                    ) : isLocationPermissionDenied ? (
+                                        <Text style={styles.locationOptionSub}>{te('locationPermissionDenied')}</Text>
                                     ) : (
                                         <Text style={styles.locationOptionSub} numberOfLines={1}>
                                             {resolvedCurrentAddress ?? '—'}
@@ -617,8 +634,8 @@ const PickupSheet = ({ visible, screenHeight, booking, onClose, onDone }: Pickup
                                     <Ionicons name="search" size={18} color="#fff" />
                                 </View>
                                 <View style={styles.locationOptionTextBlock}>
-                                    <Text style={styles.locationOptionTitle}>Enter pickup address</Text>
-                                    <Text style={styles.locationOptionSub}>Search or pin on map</Text>
+                                    <Text style={styles.locationOptionTitle}>{te('enterPickupAddress')}</Text>
+                                    <Text style={styles.locationOptionSub}>{te('searchOrPinOnMap')}</Text>
                                 </View>
                                 <Ionicons name="chevron-forward" size={18} color="#aaa" />
                             </View>
@@ -645,7 +662,7 @@ const PickupSheet = ({ visible, screenHeight, booking, onClose, onDone }: Pickup
                                 <Pressable onPress={() => setMode('compact')} hitSlop={12}>
                                     <Ionicons name="arrow-back" size={22} color="#000" />
                                 </Pressable>
-                                <Text style={styles.searchMapHeaderTitle}>Pick your location</Text>
+                                <Text style={styles.searchMapHeaderTitle}>{te('pickYourLocation')}</Text>
                             </View>
 
                             {/* Map container */}
@@ -673,11 +690,11 @@ const PickupSheet = ({ visible, screenHeight, booking, onClose, onDone }: Pickup
                                     {isGeocodingMap ? (
                                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                                             <ActivityIndicator size="small" color="#999" />
-                                            <Text style={styles.locationOptionSub}>Resolving address…</Text>
+                                            <Text style={styles.locationOptionSub}>{te('resolvingAddress')}</Text>
                                         </View>
                                     ) : (
                                         <Text style={styles.mapAddressText} numberOfLines={2}>
-                                            {mapAddress ?? 'Pan the map to select a location'}
+                                            {mapAddress ?? te('panMapToSelect')}
                                         </Text>
                                     )}
                                 </View>
@@ -689,7 +706,7 @@ const PickupSheet = ({ visible, screenHeight, booking, onClose, onDone }: Pickup
                                     <View style={[styles.mapConfirmButton, (!mapAddress || isGeocodingMap) && { opacity: 0.4 }]}>
                                         {isRequesting
                                             ? <ActivityIndicator size="small" color="#F1F443" />
-                                            : <Text style={styles.mapConfirmButtonText}>Confirm</Text>}
+                                            : <Text style={styles.mapConfirmButtonText}>{te('confirmLocation')}</Text>}
                                     </View>
                                 </Pressable>
                             </View>
@@ -701,7 +718,7 @@ const PickupSheet = ({ visible, screenHeight, booking, onClose, onDone }: Pickup
                              for suggestion row taps. */}
                         <View style={[styles.searchOverlay, { top: headerHeight + 12 }]}>
                             <GooglePlacesAutocomplete
-                                placeholder="Search address or landmark…"
+                                placeholder={te('searchAddressPlaceholder')}
                                 fetchDetails={true}
                                 debounce={400}
                                 minLength={2}
@@ -1371,6 +1388,10 @@ const styles = StyleSheet.create({
         fontFamily,
         marginBottom: 8,
     },
+    sheetSubtitleRtl: {
+        lineHeight: 22,
+        marginBottom: 12,
+    },
     locationOption: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -1378,8 +1399,8 @@ const styles = StyleSheet.create({
         backgroundColor: '#f7f7f7',
         borderRadius: 16,
         paddingHorizontal: 16,
-        paddingVertical: 14,
-        minHeight: 70,
+        paddingVertical: 16,
+        minHeight: 76,
     },
     locationOptionIcon: {
         width: 44,

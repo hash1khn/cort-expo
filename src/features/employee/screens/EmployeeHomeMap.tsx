@@ -8,6 +8,7 @@ import Animated, { useSharedValue, useAnimatedStyle, interpolate } from 'react-n
 import { router } from 'expo-router';
 
 import { fontFamily } from '@/core/theme';
+import { useLanguage } from '@/i18n/useLanguage';
 import { fetchRoutePolyline } from '@/services/googleRoutes';
 
 const Text = (props: React.ComponentProps<typeof RNText>) => {
@@ -62,6 +63,7 @@ function calculateHeading(current: LatLng, next: LatLng) {
  * This will act as the temporary employee home while we refine map behaviour.
  */
 export default function EmployeeHomeMap() {
+  const { isRTL } = useLanguage();
   const bottomSheetRef = useRef<BottomSheet>(null);
   const snapPoints = useMemo(() => ['40%', '55%'], []);
   const animatedIndex = useSharedValue(0);
@@ -387,7 +389,7 @@ export default function EmployeeHomeMap() {
       </MapView>
 
       {/* Floating back button (goes to previous, or auth if none) */}
-      <View style={styles.floatingButtons}>
+      <View style={[styles.floatingButtons, isRTL && styles.floatingButtonsRtl]}>
         <Pressable
           style={styles.floatingBtn}
           onPress={() => {
@@ -398,7 +400,7 @@ export default function EmployeeHomeMap() {
             }
           }}
         >
-          <Ionicons name="arrow-back" size={24} color="#000000" />
+          <Ionicons name={isRTL ? 'arrow-forward' : 'arrow-back'} size={24} color="#000000" />
         </Pressable>
       </View>
 
@@ -558,6 +560,10 @@ const styles = StyleSheet.create({
     top: 60,
     left: 20,
     zIndex: 10,
+  },
+  floatingButtonsRtl: {
+    left: undefined,
+    right: 20,
   },
   floatingBtn: {
     width: 44,

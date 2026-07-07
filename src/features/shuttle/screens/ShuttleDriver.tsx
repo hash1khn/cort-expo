@@ -4,7 +4,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather, Ionicons, FontAwesome5, MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { router } from 'expo-router';
-import { useLanguage } from '@/features/shared/context/LanguageContext';
+import { useLanguage } from '@/i18n/useLanguage';
+import { buildRtlScreenTitleStyle, buildRtlSubtitleTextStyle } from '@/i18n/types';
 import {
   useGetTodayTripQuery,
   useLazyGetTripEmployeesQuery,
@@ -13,38 +14,10 @@ import {
 import { AppHeader } from '../../shared/components/AppHeader';
 import { useRefetchOnReconnect } from '@/hooks/useRefetchOnReconnect';
 
-const ROUTE_DETAILS_LABELS = {
-  en: {
-    sectionTitle: 'Route Details',
-    route: 'Route',
-    stops: 'Stops',
-    employees: 'Employees',
-    start: 'Start',
-    today: 'Today',
-    noRides: 'You have no rides for today.',
-    nextRide: 'Next Ride',
-    morning: 'Morning',
-    evening: 'Evening',
-    blackHiace: 'Black Hiace',
-  },
-  ur: {
-    sectionTitle: 'راستے کی تفصیلات',
-    route: 'روٹ',
-    stops: 'اسٹاپ',
-    employees: 'افراد',
-    start: 'سفر کا آغاز',
-    today: 'آج',
-    noRides: 'آج کوئی سواری مقرر نہیں ہے',
-    nextRide: 'اگلی سواری',
-    morning: 'صبح',
-    evening: 'شام',
-    blackHiace: 'کالی ہائس',
-  },
-} as const;
-
 export function ShuttleDriver() {
   const navigation = useNavigation();
-  const { language } = useLanguage();
+  const { t, isRTL, rtlFont, language, localeCode: locale } = useLanguage();
+  const tr = (key: string) => t(`shuttle:routeDetails.${key}`);
   const { data: todayTrips = [], isLoading: isTodayTripLoading, refetch } = useGetTodayTripQuery();
   useRefetchOnReconnect(refetch);
   const [triggerLoadEmployees] = useLazyGetTripEmployeesQuery();
@@ -173,16 +146,14 @@ export function ShuttleDriver() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [latestTrip, isTodayTripLoading],
   );
-  const labels = ROUTE_DETAILS_LABELS[language];
-  const isUrdu = language === 'ur';
   const todayDateLabel = useMemo(
     () =>
-      new Date().toLocaleDateString(language === 'ur' ? 'ur-PK' : 'en-US', {
+      new Date().toLocaleDateString(locale, {
         month: 'long',
         day: 'numeric',
         year: 'numeric',
       }),
-    [language],
+    [locale],
   );
   const [openAccordionId, setOpenAccordionId] = React.useState<string | null>(null);
 
@@ -201,7 +172,7 @@ export function ShuttleDriver() {
       className={`flex-row justify-between items-center py-3 px-1 ${!isLast ? 'border-b border-black/5' : ''
         }`}
     >
-      {isUrdu ? (
+      {isRTL ? (
         <View className="flex-row items-center w-full justify-between">
           <Text className="text-[#4B5563] text-xl font-semibold">
             {value}
@@ -209,7 +180,7 @@ export function ShuttleDriver() {
           <View className="flex-row items-center gap-3">
             <Text
               className="text-black text-xl font-medium text-right py-1"
-              style={{ fontFamily: 'NotoNastaliqUrdu' }}
+              style={rtlFont ? { fontFamily: rtlFont } : undefined}
             >
               {label}
             </Text>
@@ -238,7 +209,7 @@ export function ShuttleDriver() {
     () =>
       upcomingTrips.map((trip) => {
         const details = buildRouteDetails(trip);
-        const directionLabel = trip.direction === 'MORNING' ? labels.morning : labels.evening;
+        const directionLabel = trip.direction === 'MORNING' ? tr('morning') : tr('evening');
         return {
           id: String(trip.id),
           title: `${details.origin} → ${details.destination} (${directionLabel})`,
@@ -270,7 +241,7 @@ export function ShuttleDriver() {
         >
 
           {/* Title skeleton */}
-          <View className="mb-6 mt-4">
+          <View className={`mb-6 mt-4 ${isRTL ? 'items-end' : ''}`}>
             <View className="h-8 w-40 rounded-full bg-[#EDEDEB] mb-3" />
             <View className="h-4 w-56 rounded-full bg-[#EDEDEB]" />
           </View>
@@ -351,9 +322,17 @@ export function ShuttleDriver() {
       >
 
         {/* Title Section */}
-        <View className="mb-6">
-          <Text className="text-[34px] font-bold text-black">{labels.today}</Text>
-          <Text className="text-base font-medium text-[#6B7280]">
+        <View className={`mb-6 ${isRTL ? 'items-end' : ''}`} style={isRTL ? { overflow: 'visible' } : undefined}>
+          <Text
+            className={isRTL ? 'font-bold text-black' : 'text-[34px] font-bold text-black'}
+            style={buildRtlScreenTitleStyle(language)}
+          >
+            {tr('today')}
+          </Text>
+          <Text
+            className={isRTL ? 'font-medium text-[#6B7280]' : 'text-base font-medium text-[#6B7280]'}
+            style={buildRtlSubtitleTextStyle(language)}
+          >
             {todayDateLabel}
           </Text>
         </View>
@@ -363,8 +342,8 @@ export function ShuttleDriver() {
         {/* No rides message */}
         {!hasTrips && (
           <View className="mt-4 my-auto">
-            <Text className={`py-2 font-medium text-black ${language === 'ur' ? 'ml-auto text-2xl ' : 'text-base '}`}>
-              {language === 'en' ? labels.noRides : labels.noRides}
+            <Text className={`py-2 font-medium text-black ${isRTL ? 'ml-auto text-2xl ' : 'text-base '}`}>
+              {tr('noRides')}
             </Text>
           </View>
         )}
@@ -382,7 +361,7 @@ export function ShuttleDriver() {
                     </View>
                     <View>
                       <Text className="text-xs font-semibold tracking-wider text-[#6B7280]">
-                        {labels.blackHiace}
+                        {tr('blackHiace')}
                       </Text>
                       <Text className="text-lg font-semibold text-black">
                         ABR‑986
@@ -415,21 +394,21 @@ export function ShuttleDriver() {
               <View className="w-full">
                 {/* <Text
               className={`text-base font-semibold text-black mb-3 ${
-                isUrdu ? 'w-full text-right' : ''
+                isRTL ? 'w-full text-right' : ''
               }`}
-              style={isUrdu ? { fontFamily: 'NotoNastaliqUrdu' } : undefined}
+              style={rtlFont ? { fontFamily: rtlFont } : undefined}
             >
-              {labels.sectionTitle}
+              {tr('sectionTitle')}
             </Text> */}
 
                 <View className="rounded-xl  ">
                   <InfoRow
-                    label={labels.route}
+                    label={tr('route')}
                     value={routeDetails.number}
                     icon={<FontAwesome5 name="route" size={18} color="#000000" />}
                   />
                   <InfoRow
-                    label={labels.stops}
+                    label={tr('stops')}
                     value={routeDetails.stops}
                     icon={
                       <MaterialCommunityIcons
@@ -440,12 +419,12 @@ export function ShuttleDriver() {
                     }
                   />
                   <InfoRow
-                    label={labels.employees}
+                    label={tr('employees')}
                     value={routeDetails.employees}
                     icon={<Ionicons name="people-outline" size={18} color="#000000" />}
                   />
                   <InfoRow
-                    label={labels.start}
+                    label={tr('start')}
                     value={routeDetails.start}
                     icon={<Ionicons name="time-outline" size={18} color="#000000" />}
                     isLast
@@ -459,10 +438,9 @@ export function ShuttleDriver() {
                   <Ionicons name="play-sharp" size={20} color="#FFFFFF" />
                   <Text
                     className="text-xl py-3 mt-1 text-white"
-                    style={{ fontFamily: 'NotoNastaliqUrdu', fontWeight: '800' }}
+                    style={rtlFont ? { fontFamily: rtlFont, fontWeight: '800' } : { fontWeight: '800' }}
                   >
-                    {' '}
-                    شروع  کریں
+                    {t('shuttle:rideInProgress.beginRide')}
                   </Text>
                 </Pressable>
               </View>
@@ -472,7 +450,7 @@ export function ShuttleDriver() {
             {accordionItems.length > 0 && (
               <View className="mb-8">
                 <Text className="text-xl px-2 font-bold mb-4 text-black">
-                  {labels.nextRide}
+                  {tr('nextRide')}
                 </Text>
 
                 {accordionItems.map((item) => {
@@ -553,17 +531,17 @@ export function ShuttleDriver() {
 
                           <View className="rounded-xl  py-1">
                             <InfoRow
-                              label={labels.route}
+                              label={tr('route')}
                               value={tripDetails.number}
                               icon={<Feather name="map-pin" size={18} color="#000000" />}
                             />
                             <InfoRow
-                              label={labels.stops}
+                              label={tr('stops')}
                               value={tripDetails.stops}
                               icon={<Feather name="map" size={18} color="#000000" />}
                             />
                             <InfoRow
-                              label={labels.employees}
+                              label={tr('employees')}
                               value={tripDetails.employees}
                               icon={
                                 <Ionicons
@@ -574,7 +552,7 @@ export function ShuttleDriver() {
                               }
                             />
                             <InfoRow
-                              label={labels.start}
+                              label={tr('start')}
                               value={tripDetails.start}
                               icon={
                                 <Ionicons name="time-outline" size={18} color="#000000" />
@@ -590,10 +568,9 @@ export function ShuttleDriver() {
                             <Ionicons name="play-sharp" size={18} color="#FFFFFF" />
                             <Text
                               className="text-base py-2 mt-1 text-white"
-                              style={{ fontFamily: 'NotoNastaliqUrdu', fontWeight: '800' }}
+                              style={rtlFont ? { fontFamily: rtlFont, fontWeight: '800' } : { fontWeight: '800' }}
                             >
-                              {' '}
-                              شروع  کریں
+                              {t('shuttle:rideInProgress.beginRide')}
                             </Text>
                           </Pressable>
                         </View>

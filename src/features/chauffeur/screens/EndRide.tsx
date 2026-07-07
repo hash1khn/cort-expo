@@ -9,84 +9,29 @@ import { useToast } from '@/shared/ui/molecules/Toast';
 import { CustomToast } from '@/features/shared/components/CustomToast';
 import { useEndDriverBookingMutation } from '../services/chauffeur.api';
 import { stopLocationTracking } from '@/services/location/riderLocationService';
-import { useLanguage } from '@/features/shared/context/LanguageContext';
+import { useLanguage } from '@/i18n/useLanguage';
+import {
+  buildRtlFormLabelStyle,
+  buildRtlPrimaryButtonContainerStyle,
+  buildRtlPrimaryButtonTextStyle,
+  buildRtlScreenTitleStyle,
+  buildRtlSmallSubtitleTextStyle,
+  buildRtlStepLabelStyle,
+  buildRtlSubtitleTextStyle,
+  buildRtlTextInputStyle,
+} from '@/i18n/types';
+import { BackButton } from '@/components/BackButton';
 
 const Text = (props: React.ComponentProps<typeof RNText>) => {
     return <RNText {...props} style={[{ fontFamily }, props.style]} />;
 };
 
-// ─── Translations ─────────────────────────────────────────────────────────────
-
-const LABELS = {
-  en: {
-    title: 'End Ride',
-    uploadInstruction: (step: string) => `Please upload `,
-    uploadInstructionBold: (step: string) => step.toLowerCase(),
-    uploadInstructionSuffix: ' photo to end ride.',
-    steps: {
-      Meter: 'Meter',
-      Parking: 'Parking',
-      'Toll receipt': 'Toll receipt',
-    } as Record<string, string>,
-    meterReading: 'Meter Reading',
-    enterMeterReading: 'Enter meter reading',
-    parkingExpense: 'Parking Expense',
-    enterParkingAmount: 'Enter parking amount',
-    tollExpense: 'Toll Expense',
-    enterTollAmount: 'Enter toll amount',
-    tapToUpload: (step: string) => `Tap to upload ${step.toLowerCase()} photo`,
-    retake: 'Retake',
-    add: 'Add',
-    previous: 'Previous',
-    next: 'Next',
-    endRide: 'End Ride',
-    capturing: 'Capturing…',
-    tapToCapture: 'Tap to capture',
-    cameraRequired: 'Camera required',
-    cameraPermissionMsg: 'Please allow camera access to take photos.',
-    successMsg: 'Ride ended successfully',
-    errorMeterMandatory: 'Meter Image is mandatory',
-    errorEndRide: 'Failed to end ride. Please try again.',
-  },
-  ur: {
-    title: 'بکنگ ختم کریں',
-    uploadInstruction: (step: string) => `بکنگ ختم کرنے کے لیے `,
-    uploadInstructionBold: (step: string) => LABELS.ur.steps[step] ?? step,
-    uploadInstructionSuffix: ' کی فوٹو اپلوڈ کریں۔',
-    steps: {
-      Meter: 'میٹر',
-      Parking: 'پارکنگ',
-      'Toll receipt': 'ٹول رسید',
-    } as Record<string, string>,
-    meterReading: 'میٹر ریڈنگ',
-    enterMeterReading: 'میٹر ریڈنگ درج کریں',
-    parkingExpense: 'پارکنگ خرچ',
-    enterParkingAmount: 'پارکنگ رقم درج کریں',
-    tollExpense: 'ٹول خرچ',
-    enterTollAmount: 'ٹول رقم درج کریں',
-    tapToUpload: (step: string) => `${LABELS.ur.steps[step] ?? step} فوٹو اپلوڈ کرنے کے لیے دبائیں`,
-    retake: 'دوبارہ لیں',
-    add: 'شامل کریں',
-    previous: 'پچھلا',
-    next: 'اگلا',
-    endRide: 'بکنگ ختم کریں',
-    capturing: 'فوٹو لی جا رہی ہے…',
-    tapToCapture: 'فوٹو لینے کے لیے دبائیں',
-    cameraRequired: 'کیمرہ درکار ہے',
-    cameraPermissionMsg: 'فوٹو کے لیے کیمرے کی اجازت دیں۔',
-    successMsg: 'بکنگ کامیابی سے ختم ہوئی',
-    errorMeterMandatory: 'میٹر فوٹو لازمی ہے',
-    errorEndRide: 'بکنگ ختم نہ ہو سکی۔ دوبارہ کوشش کریں۔',
-  },
-} as const;
-
-// STEPS will now be determined inside the component based on tripType
-
 export function EndRideScreen() {
     const { tripType, bookingId, forceComplete } = useLocalSearchParams<{ tripType: string; bookingId: string; forceComplete?: string }>();
     const isForceComplete = forceComplete === 'true';
-    const { language } = useLanguage();
-    const t = LABELS[language];
+    const { t, isRTL, language, rtlRowStyle } = useLanguage();
+    const tr = (key: string, options?: Record<string, unknown>) =>
+        t(`chauffeur:endRide.${key}`, options);
     
     const STEPS = React.useMemo(() => {
         if (tripType === 'IN_CITY') {
@@ -96,7 +41,10 @@ export function EndRideScreen() {
     }, [tripType]);
 
     // Translated step labels for display
-    const stepLabels = React.useMemo(() => STEPS.map((s) => t.steps[s] ?? s), [STEPS, t]);
+    const stepLabels = React.useMemo(
+        () => STEPS.map((s) => tr(`steps.${s}`)),
+        [STEPS, t],
+    );
 
     const [currentStep, setCurrentStep] = useState(0);
     const insets = useSafeAreaInsets();
@@ -122,7 +70,7 @@ export function EndRideScreen() {
             toast.show(
                 <CustomToast
                     type="error"
-                    message={t.errorMeterMandatory}
+                    message={tr('errorMeterMandatory')}
                 />,
                 { duration: 3500, position: 'top', backgroundColor: '#ff4545' },
             );
@@ -166,7 +114,7 @@ export function EndRideScreen() {
             toast.show(
                 <CustomToast
                     type="success"
-                    message={t.successMsg}
+                    message={tr('successMsg')}
                 />,
                 { duration: 3000, position: 'top' }
             );
@@ -187,7 +135,7 @@ export function EndRideScreen() {
             toast.show(
                 <CustomToast
                     type="error"
-                    message={t.errorEndRide}
+                    message={tr('errorEndRide')}
                 />,
                 { duration: 3500, position: 'top' }
             );
@@ -204,7 +152,7 @@ export function EndRideScreen() {
         if (!permission?.granted) {
             const { granted } = await requestPermission();
             if (!granted) {
-                Alert.alert(t.cameraRequired, t.cameraPermissionMsg);
+                Alert.alert(tr('cameraRequired'), tr('cameraPermissionMsg'));
                 return;
             }
         }
@@ -235,14 +183,30 @@ export function EndRideScreen() {
         }
     };
 
+    const inputBaseStyle = {
+        width: '100%' as const,
+        backgroundColor: '#F9FAFB',
+        borderWidth: 1,
+        borderColor: '#E5E7EB',
+        borderRadius: 12,
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+        fontSize: 16,
+        color: '#111827',
+    };
+
     const currentPhotos = photos[currentStep];
 
     return (
         <SafeAreaView className="flex-1 bg-[#FFFFFF]" edges={['top']}>
-            <View className="flex-row items-center px-4 py-3 pb-0">
-                <Pressable onPress={() => router.back()} hitSlop={12} className="p-2 -ml-2">
-                    <Feather name="chevron-left" size={28} color="black" />
-                </Pressable>
+            <View className={`flex-row items-center px-4 py-3 pb-0 ${isRTL ? 'justify-end' : ''}`}>
+                <BackButton
+                    onPress={() => router.back()}
+                    anchored={false}
+                    iconSize={28}
+                    hitSlop={12}
+                    className="p-2"
+                />
             </View>
 
             <ScrollView
@@ -250,19 +214,31 @@ export function EndRideScreen() {
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={{ paddingBottom: 100 }} // Reserve space for buttons
             >
-                <View className="mb-4">
-                    <Text className="text-[34px] font-bold text-black">
-                        {t.title}
+                <View
+                    className={`mb-4 ${isRTL ? 'items-end' : ''}`}
+                    style={isRTL ? { overflow: 'visible' } : undefined}
+                >
+                    <Text
+                        className={isRTL ? 'font-bold text-black' : 'text-[34px] font-bold text-black'}
+                        style={buildRtlScreenTitleStyle(language)}
+                    >
+                        {tr('title')}
                     </Text>
                 </View>
 
                 {/* Dynamic instructions based on current step */}
-                <Text className="text-[#6B7280] text-base font-medium mb-8">
-                    {t.uploadInstruction(STEPS[currentStep])}<Text className="text-black font-bold">{t.uploadInstructionBold(STEPS[currentStep])}</Text>{t.uploadInstructionSuffix}
+                <Text
+                    className={isRTL ? 'text-[#6B7280] font-medium mb-8' : 'text-[#6B7280] text-base font-medium mb-8'}
+                    style={buildRtlSubtitleTextStyle(language)}
+                >
+                    {tr('uploadInstruction', { step: tr(`steps.${STEPS[currentStep]}`) })}
                 </Text>
 
                 {/* Step Indicator Container */}
-                <View className="w-full flex-row items-center justify-between mb-10 px-2 relative" style={{ height: 60 }}>
+                <View
+                    className="w-full flex-row items-center justify-between mb-10 px-2 relative"
+                    style={{ height: isRTL ? 78 : 60, overflow: 'visible' }}
+                >
                     {/* Connecting Lines */}
                     <View
                         className="absolute flex-row"
@@ -303,7 +279,7 @@ export function EndRideScreen() {
                         const isFuture = index > currentStep;
 
                         return (
-                            <View key={step} className="items-center" style={{ width: 64, zIndex: 1 }}>
+                            <View key={step} className="items-center" style={{ width: isRTL ? 76 : 64, zIndex: 1, overflow: 'visible' }}>
                                 <View
                                     className="w-8 h-8 rounded-full items-center justify-center mb-2"
                                     style={[
@@ -322,11 +298,12 @@ export function EndRideScreen() {
                                     </Text>
                                 </View>
                                 <Text
-                                    className="text-xs text-center"
+                                    className={isRTL ? 'text-center' : 'text-xs text-center'}
                                     style={[
                                         isCompleted && { color: '#4B5563', fontWeight: '500' },
                                         isCurrent && { color: '#111827', fontWeight: '700' },
                                         isFuture && { color: '#9CA3AF', fontWeight: '500' },
+                                        buildRtlStepLabelStyle(language),
                                     ]}
                                 >
                                     {stepLabels[index]}
@@ -337,42 +314,57 @@ export function EndRideScreen() {
                 </View>
                                  <View className="mt-2 mb-4">
                     {STEPS[currentStep] === 'Meter' && (
-                        <View>
-                            <Text className="text-[#111827] text-base font-bold mb-3">{t.meterReading}</Text>
+                        <View style={isRTL ? { overflow: 'visible' } : undefined}>
+                            <Text
+                                className={isRTL ? 'text-[#111827] font-bold mb-3' : 'text-[#111827] text-base font-bold mb-3'}
+                                style={[buildRtlSubtitleTextStyle(language), { fontWeight: '700' }]}
+                            >
+                                {tr('meterReading')}
+                            </Text>
                             <TextInput
-                                placeholder={t.enterMeterReading}
+                                placeholder={tr('enterMeterReading')}
                                 keyboardType="numeric"
                                 value={meterValue}
                                 onChangeText={setMeterValue}
-                                style={{ width: '100%', backgroundColor: '#F9FAFB', borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12, fontSize: 16, color: '#111827' }}
+                                style={[inputBaseStyle, buildRtlTextInputStyle(language)]}
                                 placeholderTextColor="#9CA3AF"
                                 maxLength={8}
                             />
                         </View>
                     )}
                     {STEPS[currentStep] === 'Parking' && (
-                        <View>
-                            <Text className="text-[#111827] text-sm font-bold mb-2">{t.parkingExpense}</Text>
+                        <View style={isRTL ? { overflow: 'visible' } : undefined}>
+                            <Text
+                                className={isRTL ? 'text-[#111827] font-bold mb-2' : 'text-[#111827] text-sm font-bold mb-2'}
+                                style={buildRtlFormLabelStyle(language)}
+                            >
+                                {tr('parkingExpense')}
+                            </Text>
                             <TextInput
-                                placeholder={t.enterParkingAmount}
+                                placeholder={tr('enterParkingAmount')}
                                 keyboardType="numeric"
                                 value={parkingValue}
                                 onChangeText={setParkingValue}
-                                style={{ width: '100%', backgroundColor: '#F9FAFB', borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12, fontSize: 16, color: '#111827' }}
+                                style={[inputBaseStyle, buildRtlTextInputStyle(language)]}
                                 placeholderTextColor="#9CA3AF"
                                 maxLength={8}
                             />
                         </View>
                     )}
                     {STEPS[currentStep] === 'Toll receipt' && (
-                        <View>
-                            <Text className="text-[#111827] text-sm font-bold mb-2">{t.tollExpense}</Text>
+                        <View style={isRTL ? { overflow: 'visible' } : undefined}>
+                            <Text
+                                className={isRTL ? 'text-[#111827] font-bold mb-2' : 'text-[#111827] text-sm font-bold mb-2'}
+                                style={buildRtlFormLabelStyle(language)}
+                            >
+                                {tr('tollExpense')}
+                            </Text>
                             <TextInput
-                                placeholder={t.enterTollAmount}
+                                placeholder={tr('enterTollAmount')}
                                 keyboardType="numeric"
                                 value={tollValue}
                                 onChangeText={setTollValue}
-                                style={{ width: '100%', backgroundColor: '#F9FAFB', borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12, fontSize: 16, color: '#111827' }}
+                                style={[inputBaseStyle, buildRtlTextInputStyle(language)]}
                                 placeholderTextColor="#9CA3AF"
                                 maxLength={8}
                             />
@@ -387,7 +379,12 @@ export function EndRideScreen() {
                         className="w-full h-64 rounded-2xl bg-[#F9FAFB] border border-[#FF5A00] border-dashed items-center justify-center active:opacity-70"
                     >
                         <Ionicons name="camera-outline" size={48} color="#9CA3AF" />
-                        <Text className="text-[#9CA3AF] text-sm mt-2 font-medium">{t.tapToUpload(STEPS[currentStep])}</Text>
+                        <Text
+                            className={isRTL ? 'text-[#9CA3AF] mt-2 font-medium text-center px-4' : 'text-[#9CA3AF] text-sm mt-2 font-medium'}
+                            style={[buildRtlSmallSubtitleTextStyle(language), { textAlign: 'center' }]}
+                        >
+                            {tr('tapToUpload', { step: tr(`steps.${STEPS[currentStep]}`) })}
+                        </Text>
                     </Pressable>
                 ) : STEPS[currentStep] === 'Meter' ? (
                     <View>
@@ -401,7 +398,7 @@ export function EndRideScreen() {
                             }}
                             className="w-full py-4 rounded-xl items-center justify-center border border-[#D1D5DB] active:opacity-70 bg-white"
                         >
-                            <Text className="text-black font-bold text-base">{t.retake}</Text>
+                            <Text className="text-black font-bold text-base">{tr('retake')}</Text>
                         </Pressable>
                     </View>
                 ) : (
@@ -430,7 +427,7 @@ export function EndRideScreen() {
                             className="w-[30%] aspect-square rounded-2xl bg-[#F9FAFB] border border-[#FF5A00] border-dashed items-center justify-center active:opacity-70"
                         >
                             <Ionicons name="camera-outline" size={28} color="#FF5A00" />
-                            <Text className="text-[#FF5A00] text-xs mt-1 font-bold">{t.add}</Text>
+                            <Text className="text-[#FF5A00] text-xs mt-1 font-bold">{tr('add')}</Text>
                         </Pressable>
                     </View>
                 )}
@@ -441,34 +438,46 @@ export function EndRideScreen() {
             {/* Bottom Navigation Buttons */}
             <View
                 className="absolute left-0 right-0 px-6 py-4 bg-white border-t border-gray-100 flex-row gap-3"
-                style={{ bottom: Math.max(insets.bottom, 0) }}
+                style={[{ bottom: Math.max(insets.bottom, 0) }, rtlRowStyle]}
             >
                 {currentStep > 0 && (
                     <Pressable
                         onPress={handlePrev}
-                        className="flex-1 rounded-2xl py-4 items-center justify-center bg-transparent border-2 border-black active:opacity-60"
-                        style={{ paddingVertical: 14 }}
+                        className="flex-1 rounded-2xl items-center justify-center bg-transparent border-2 border-black active:opacity-60"
+                        style={[
+                            { paddingVertical: 14 },
+                            buildRtlPrimaryButtonContainerStyle(language),
+                        ]}
                     >
-                        <Text className="text-black text-[17px] font-bold">
-                            {t.previous}
+                        <Text
+                            className={isRTL ? 'text-black font-bold' : 'text-black text-[17px] font-bold'}
+                            style={buildRtlPrimaryButtonTextStyle(language)}
+                        >
+                            {tr('previous')}
                         </Text>
                     </Pressable>
                 )}
                 <Pressable
                     onPress={handleNext}
                     disabled={isEnding}
-                    className="flex-1 flex-row rounded-2xl py-4 items-center justify-center bg-[#FF5A00] active:opacity-90 disabled:opacity-70"
-                    style={{ paddingVertical: 14 }}
+                    className="flex-1 flex-row rounded-2xl items-center justify-center bg-[#FF5A00] active:opacity-90 disabled:opacity-70"
+                    style={[
+                        { paddingVertical: 14, gap: 8 },
+                        rtlRowStyle,
+                        buildRtlPrimaryButtonContainerStyle(language),
+                    ]}
                 >
                     {isEnding && (
                         <ActivityIndicator
                             size="small"
                             color="#FFFFFF"
-                            style={{ marginRight: 8 }}
                         />
                     )}
-                    <Text className="text-white text-[17px] font-bold">
-                        {currentStep === STEPS.length - 1 ? t.endRide : t.next}
+                    <Text
+                        className={isRTL ? 'text-white font-bold' : 'text-white text-[17px] font-bold'}
+                        style={buildRtlPrimaryButtonTextStyle(language)}
+                    >
+                        {currentStep === STEPS.length - 1 ? tr('endRide') : tr('next')}
                     </Text>
                 </Pressable>
             </View>
@@ -493,7 +502,7 @@ export function EndRideScreen() {
                                 )}
                             </Pressable>
                             <Text style={styles.captureLabel}>
-                                {isCapturing ? t.capturing : t.tapToCapture}
+                                {isCapturing ? tr('capturing') : tr('tapToCapture')}
                             </Text>
                         </View>
                     </View>

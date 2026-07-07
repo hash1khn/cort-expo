@@ -3,7 +3,7 @@ import { ConfigPlugin, withAndroidManifest } from "expo/config-plugins";
 import { version } from "./package.json";
 
 const EAS_PROJECT_ID = "abf6baa8-ec29-4e5f-ab9c-1a48308f1794";
-const PROJECT_SLUG = "traflinq";  // was "Traflinq"
+const PROJECT_SLUG = "traflinq";  
 const OWNER = "cort-technologies";
 
 // App production config

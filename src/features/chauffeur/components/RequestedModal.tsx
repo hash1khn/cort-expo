@@ -2,6 +2,7 @@ import React from 'react';
 import { Modal, View, Text, Pressable, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { fontFamily } from '@/core/theme';
+import { useLanguage } from '@/i18n/useLanguage';
 
 interface RequestedModalProps {
   visible: boolean;
@@ -18,6 +19,7 @@ export function RequestedModal({
   onStart,
   onClose,
 }: RequestedModalProps) {
+  const { t } = useLanguage();
   return (
     <Modal
       transparent
@@ -28,19 +30,20 @@ export function RequestedModal({
       <View style={styles.modalOverlay}>
         <View style={styles.modalContent}>
           <Ionicons name="notifications" size={36} color="#FF5A00" style={{ marginBottom: 16 }} />
-          <Text style={styles.modalTitle}>Passenger Request</Text>
+          <Text style={styles.modalTitle}>{t('chauffeur:requestedModal.title')}</Text>
           <Text style={styles.modalSubtitle}>
-            <Text style={styles.employeeName}>{employeeName}</Text> has requested your presence
+            <Text style={styles.employeeName}>{employeeName}</Text>{' '}
+            {t('chauffeur:requestedModal.hasRequestedPresence')}
           </Text>
           <View style={styles.pickupSection}>
-            <Text style={styles.pickupLabel}>PICKUP</Text>
+            <Text style={styles.pickupLabel}>{t('chauffeur:requestedModal.pickup')}</Text>
             <Text style={styles.pickupAddress} numberOfLines={2}>{pickupLocation}</Text>
           </View>
           <Pressable
             style={[styles.modalButton, styles.modalButtonPrimary]}
             onPress={onStart}
           >
-            <Text style={styles.modalButtonPrimaryText}>Start Trip</Text>
+            <Text style={styles.modalButtonPrimaryText}>{t('chauffeur:requestedModal.startTrip')}</Text>
           </Pressable>
           {/* <Pressable
             style={[styles.modalButton, styles.modalButtonSecondary]}

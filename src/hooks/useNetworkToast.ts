@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import NetInfo, { type NetInfoState } from '@react-native-community/netinfo';
+import { useTranslation } from 'react-i18next';
 import { Toast } from '@/shared/ui/molecules/Toast';
 
 /**
@@ -11,6 +12,7 @@ import { Toast } from '@/shared/ui/molecules/Toast';
  * Call once inside RootLayoutContent (after ToastProviderWithViewport mounts).
  */
 export function useNetworkToast() {
+  const { t } = useTranslation('common');
   const offlineToastId = useRef<string | null>(null);
   const prevConnected = useRef<boolean>(true); // assume connected on first render
 
@@ -23,7 +25,7 @@ export function useNetworkToast() {
       if (prev === connected) return; // no real transition
 
       if (!connected) {
-        offlineToastId.current = Toast.show('No Internet Connection', {
+        offlineToastId.current = Toast.show(t('noInternet'), {
           duration: 999999,
           position: 'top',
           type: 'error',
@@ -34,7 +36,7 @@ export function useNetworkToast() {
           Toast.dismiss(offlineToastId.current);
           offlineToastId.current = null;
         }
-        Toast.show('Back Online', {
+        Toast.show(t('backOnline'), {
           duration: 3000,
           position: 'top',
           type: 'success',

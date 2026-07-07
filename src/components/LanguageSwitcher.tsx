@@ -1,22 +1,23 @@
 import React from 'react';
 import { TouchableOpacity, View, Text, StyleSheet } from 'react-native';
-import { useLanguage, Language } from '../context/LanguageContext';
+import { useLanguage, type Language } from '@/i18n/useLanguage';
 import { colors } from '../core/theme';
+
+const OPTIONS: { label: string; value: Language; fontFamily?: string }[] = [
+  { label: 'EN', value: 'en' },
+  { label: 'اردو', value: 'ur' },
+  { label: 'العربية', value: 'ar', fontFamily: 'NotoSansArabic_700Bold' },
+];
 
 export function LanguageSwitcher() {
   const { language, setLanguage } = useLanguage();
 
-  const options: { label: string; value: Language }[] = [
-    { label: 'EN', value: 'en' },
-    { label: 'اردو', value: 'ur' },
-  ];
-
   return (
     <View style={styles.container}>
-      {options.map((opt, idx) => {
+      {OPTIONS.map((opt, idx) => {
         const isActive = language === opt.value;
         const isFirst = idx === 0;
-        const isLast = idx === options.length - 1;
+        const isLast = idx === OPTIONS.length - 1;
         return (
           <TouchableOpacity
             key={opt.value}
@@ -34,6 +35,7 @@ export function LanguageSwitcher() {
                 styles.label,
                 isActive && styles.labelActive,
                 opt.value === 'ur' && styles.labelUrdu,
+                opt.fontFamily ? { fontFamily: opt.fontFamily, fontSize: 11 } : undefined,
               ]}
             >
               {opt.label}
@@ -54,7 +56,7 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
   },
   pill: {
-    paddingHorizontal: 11,
+    paddingHorizontal: 9,
     paddingVertical: 3,
     borderRadius: 13,
     alignItems: 'center',

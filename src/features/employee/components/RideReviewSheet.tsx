@@ -18,6 +18,15 @@ import { Ionicons } from '@expo/vector-icons';
 import { fontFamily } from '@/core/theme';
 import { useToast } from '@/shared/ui/molecules/Toast';
 import { useSubmitChauffeurReviewMutation } from '../services/bookingsApi';
+import { useLanguage } from '@/i18n/useLanguage';
+import {
+  buildRtlFormLabelStyle,
+  buildRtlPrimaryButtonContainerStyle,
+  buildRtlPrimaryButtonTextStyle,
+  buildRtlSectionTitleStyle,
+  buildRtlSmallSubtitleTextStyle,
+  buildRtlTextInputStyle,
+} from '@/i18n/types';
 
 // ─── Typed Text wrapper ───────────────────────────────────────────────────────
 // React.memo prevents re-renders when parent state changes (e.g. star rating)
@@ -54,8 +63,9 @@ const ReviewToast = ({ title, message }: { title: string; message: string }) => 
 // ─── Constants ────────────────────────────────────────────────────────────────
 // Single tall snap point — sheet is always tall enough that keyboard won't
 // cover the input; no second snap needed since we're not animating with keyboard.
-const SNAP_POINTS = ['75%'];
-const RATING_LABELS = ['', 'Poor', 'Fair', 'Good', 'Great', 'Excellent'];
+const SNAP_POINTS_LTR = ['75%'];
+const SNAP_POINTS_RTL = ['88%'];
+const RATING_LABEL_KEYS = ['', 'poor', 'fair', 'good', 'great', 'excellent'] as const;
 
 // Defined outside the component — no closure over state, so it never needs
 // to be recreated and the Reanimated worklet it produces is truly stable.
@@ -123,6 +133,9 @@ function RideReviewSheetContent({
   onSuccess,
 }: Required<Omit<RideReviewSheetProps, 'visible'>>) {
   const insets = useSafeAreaInsets();
+  const { t, isRTL, language } = useLanguage();
+  const te = (key: string, options?: Record<string, unknown>) =>
+    t(`employee:${key}`, options);
   const [rating, setRating] = useState(0);
   const [reviewText, setReviewText] = useState('');
   const reviewInputRef = useRef<any>(null);
@@ -152,8 +165,8 @@ function RideReviewSheetContent({
     if (rating <= 3 && !reviewText.trim()) {
       toast.show(
         <ReviewToast
-          title="Review required"
-          message="Please enter a full review for low ratings."
+          title={te('reviewRequired')}
+          message={te('reviewRequiredLowRating')}
         />,
         { duration: 3500, position: 'top', type: 'default', backgroundColor: '#1c1c1c' },
       );
@@ -164,11 +177,11 @@ function RideReviewSheetContent({
       onSuccess();
     } catch {
       toast.show(
-        <ReviewToast title="Submission failed" message="Please try again." />,
+        <ReviewToast title={te('reviewSubmissionFailed')} message={te('reviewTryAgain')} />,
         { duration: 3500, position: 'top', type: 'default', backgroundColor: '#c0392b' },
       );
     }
-  }, [rating, reviewText, toast, submitReview, companyId, bookingId, onSuccess]);
+  }, [rating, reviewText, toast, submitReview, companyId, bookingId, onSuccess, te]);
 
   // Stable style arrays — useMemo so no new array is allocated on every render
   const submitBtnStyle = useMemo(
@@ -179,12 +192,37 @@ function RideReviewSheetContent({
     () => [styles.submitBtnText, !canSubmit && styles.submitBtnTextDisabled],
     [canSubmit],
   );
+  const snapPoints = useMemo(
+    () => (isRTL ? SNAP_POINTS_RTL : SNAP_POINTS_LTR),
+    [isRTL],
+  );
+  const scrollContentStyle = useMemo(
+    () => [
+      styles.scrollContent,
+      isRTL && {
+        paddingBottom: 56 + insets.bottom,
+      },
+    ],
+    [isRTL, insets.bottom],
+  );
+  const submitButtonContainerStyle = useMemo(
+    () => [
+      submitBtnStyle,
+      buildRtlPrimaryButtonContainerStyle(language),
+      isRTL && {
+        paddingVertical: language === 'ur' ? 22 : 18,
+        minHeight: language === 'ur' ? 58 : 52,
+        overflow: 'visible' as const,
+      },
+    ],
+    [submitBtnStyle, language, isRTL],
+  );
 
   return (
     <BottomSheet
       ref={sheetRef}
       index={0}
-      snapPoints={SNAP_POINTS}
+      snapPoints={snapPoints}
       // No keyboardBehavior prop: sheet stays perfectly still when keyboard
       // appears. Zero Reanimated worklets fire during keyboard animation → no
       // frame drop. The scroll view handles inset adjustment natively instead.
@@ -204,19 +242,39 @@ function RideReviewSheetContent({
         // The OS shifts the scroll view's bottom inset to match the keyboard
         // height entirely on the UI thread — no JS, no Reanimated, no frame drop.
         automaticallyAdjustKeyboardInsets
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={scrollContentStyle}
         showsVerticalScrollIndicator={false}
       >
         <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
           <View>
             {/* ── Header ──────────────────────────────────────────────── */}
-            <Text style={styles.title}>How was your ride?</Text>
-            <Text style={styles.subtitle}>Your feedback helps improve the service</Text>
+            <Text
+              style={[styles.title, buildRtlSectionTitleStyle(language), isRTL && { fontSize: 22 }]}
+            >
+              {te('howWasYourRide')}
+            </Text>
+            <Text
+              style={[
+                styles.subtitle,
+                buildRtlSmallSubtitleTextStyle(language),
+                isRTL && { textAlign: 'center' },
+              ]}
+            >
+              {te('reviewFeedbackSubtitle')}
+            </Text>
             <View style={styles.headerDivider} />
 
             {/* ── Driver section ───────────────────────────────────────── */}
             <View style={styles.captainCenterSection}>
-              <Text style={styles.captainRoleLabel}>YOUR CAPTAIN</Text>
+              <Text
+                style={[
+                  styles.captainRoleLabel,
+                  buildRtlFormLabelStyle(language),
+                  isRTL && { textTransform: 'none', letterSpacing: 0, textAlign: 'center' },
+                ]}
+              >
+                {te('yourChauffeur')}
+              </Text>
               <View style={styles.avatarCircleBig}>
                 <Text style={styles.avatarInitialsBig}>{driverInitials}</Text>
               </View>
@@ -255,19 +313,27 @@ function RideReviewSheetContent({
             </View>
 
             {rating > 0 && (
-              <Text style={styles.ratingLabel}>{RATING_LABELS[rating]}</Text>
+              <Text
+                style={[
+                  styles.ratingLabel,
+                  buildRtlFormLabelStyle(language),
+                  isRTL && { textTransform: 'none', letterSpacing: 0, color: '#FF5A00', textAlign: 'center' },
+                ]}
+              >
+                {te(`ratingLabels.${RATING_LABEL_KEYS[rating]}`)}
+              </Text>
             )}
 
             {/* ── Text input ────────────────────────────────────────────── */}
             <BottomSheetTextInput
               ref={reviewInputRef}
-              placeholder="Share your experience (optional)..."
+              placeholder={te('shareExperiencePlaceholder')}
               placeholderTextColor="#9CA3AF"
               multiline
               numberOfLines={4}
               value={reviewText}
               onChangeText={setReviewText}
-              style={styles.textInput}
+              style={[styles.textInput, buildRtlTextInputStyle(language)]}
               textAlignVertical="top"
             />
 
@@ -275,9 +341,16 @@ function RideReviewSheetContent({
             <Pressable
               onPress={handleSubmit}
               disabled={!canSubmit}
-              style={submitBtnStyle}
+              style={submitButtonContainerStyle}
             >
-              <Text style={submitBtnTextStyle}>{isSubmitting ? 'Submitting…' : 'Continue'}</Text>
+              <Text
+                style={[
+                  submitBtnTextStyle,
+                  buildRtlPrimaryButtonTextStyle(language),
+                ]}
+              >
+                {isSubmitting ? te('submitting') : te('reviewContinue')}
+              </Text>
             </Pressable>
           </View>
         </TouchableWithoutFeedback>

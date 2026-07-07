@@ -14,6 +14,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { fontFamily } from '@/core/theme';
 import { useRouter } from 'expo-router';
 import { ReportProblemBottomSheet } from './ReportProblemBottomSheet';
+import { useLanguage } from '@/i18n/useLanguage';
+import { DrawerLanguagePicker } from '@/components/DrawerLanguagePicker';
 
 const Text = (props: React.ComponentProps<typeof RNText>) => {
     return <RNText {...props} style={[{ fontFamily }, props.style]} />;
@@ -22,6 +24,7 @@ const Text = (props: React.ComponentProps<typeof RNText>) => {
 export function EmployeeDrawerContent(props: DrawerContentComponentProps) {
     const dispatch = useAppDispatch();
     const user = useAppSelector((state) => state.auth.user);
+    const { t, rtlRowStyle, drawerNavTextStyle, drawerSubTextStyle } = useLanguage();
     const insets = useSafeAreaInsets();
     const router = useRouter();
 
@@ -91,31 +94,41 @@ export function EmployeeDrawerContent(props: DrawerContentComponentProps) {
                 {/* --- The "Underline" Separator --- */}
                 <View className="h-[1px] bg-white/10 w-full my-6" />
 
-                {/* --- Main Menu Items (The "Three Use Cases") --- */}
                 <View className="flex-1">
                     <Pressable
                         onPress={() => props.navigation.navigate('index')}
-                        className="py-3 mb-2 flex-row items-center"
+                        style={rtlRowStyle}
+                        className="mb-2 flex-row items-center py-3"
                     >
                         <Feather name="home" size={20} color="white" />
-                        <Text className="text-white text-xl font-bold ml-4">Home</Text>
+                        <Text className="text-white text-xl font-bold ms-4" style={drawerNavTextStyle}>
+                            {t('employee:home')}
+                        </Text>
                     </Pressable>
 
                     <Pressable
                         onPress={() => props.navigation.navigate('rides')}
-                        className="py-3 mb-2 flex-row items-center"
+                        style={rtlRowStyle}
+                        className="mb-2 flex-row items-center py-3"
                     >
                         <MaterialIcons name="history-toggle-off" size={20} color="white" />
-                        <Text className="text-white text-xl font-bold ml-4">History</Text>
+                        <Text className="text-white text-xl font-bold ms-4" style={drawerNavTextStyle}>
+                            {t('employee:history')}
+                        </Text>
                     </Pressable>
 
                     <Pressable
                         onPress={openReportProblemSheet}
-                        className="py-3 mb-2 flex-row items-center"
+                        style={rtlRowStyle}
+                        className="mb-2 flex-row items-center py-3"
                     >
                         <MaterialIcons name="report-gmailerrorred" size={20} color="white" />
-                        <Text className="text-white text-xl font-bold ml-4">Report a problem</Text>
+                        <Text className="text-white text-xl font-bold ms-4" style={drawerNavTextStyle}>
+                            {t('employee:reportProblem')}
+                        </Text>
                     </Pressable>
+
+                    <DrawerLanguagePicker />
                 </View>
 
                 {/* --- Bottom Section (Premium & Logout) --- */}
@@ -124,6 +137,7 @@ export function EmployeeDrawerContent(props: DrawerContentComponentProps) {
                     <View className="h-[1px] bg-white/10 w-full my-6" />
                     <Pressable
                         onPress={handleLogout}
+                        style={rtlRowStyle}
                         className={`flex-row items-center py-4 ${isLoggingOut ? 'opacity-50' : ''}`}
                         accessibilityRole="button"
                         disabled={isLoggingOut}
@@ -133,8 +147,8 @@ export function EmployeeDrawerContent(props: DrawerContentComponentProps) {
                         ) : (
                             <MaterialCommunityIcons name="logout" color="#ef4444" size={20} />
                         )}
-                        <Text className="text-red-500 text-lg font-bold ml-3">
-                            {isLoggingOut ? 'Logging out...' : 'Log out'}
+                        <Text className="text-red-500 text-lg font-bold ms-3" style={drawerSubTextStyle}>
+                            {isLoggingOut ? t('common:loggingOut') : t('common:logout')}
                         </Text>
                     </Pressable>
                 </View>

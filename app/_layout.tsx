@@ -10,7 +10,7 @@ import * as TaskManager from 'expo-task-manager';
 // component mounts (and before the OS can deliver a background location event).
 import '../src/services/location/backgroundLocationTask';
 import { NotificationProvider } from '../src/context/NotificationContext';
-import { LanguageProvider } from '../src/context/LanguageContext';
+import { I18nAppProvider } from '../src/i18n/I18nAppProvider';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { useFonts } from 'expo-font';
@@ -24,6 +24,10 @@ import {
   Montserrat_300Light,
   Montserrat_400Regular,
 } from '@expo-google-fonts/montserrat';
+import {
+  NotoSansArabic_400Regular,
+  NotoSansArabic_700Bold,
+} from '@expo-google-fonts/noto-sans-arabic';
 
 import { Provider } from 'react-redux';
 import { PersistGate } from 'redux-persist/integration/react';
@@ -84,6 +88,8 @@ function RootLayoutContent() {
     Montserrat_400Regular,
     Geist: require('../fonts/Geist-VariableFont_wght.ttf'),
     NotoNastaliqUrdu: require('../fonts/NotoNastaliqUrdu-VariableFont_wght.ttf'),
+    NotoSansArabic_400Regular,
+    NotoSansArabic_700Bold,
   });
 
   const role = useAppSelector((s) => s.auth.role);
@@ -220,11 +226,11 @@ export default function RootLayout() {
   return (
     <Provider store={store}>
       <PersistGate loading={null} persistor={persistor}>
-        <LanguageProvider>
+        <I18nAppProvider>
           <NotificationProvider>
             <RootLayoutContent />
           </NotificationProvider>
-        </LanguageProvider>
+        </I18nAppProvider>
       </PersistGate>
     </Provider>
   );

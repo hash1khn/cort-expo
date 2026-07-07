@@ -18,6 +18,8 @@ import { useScanBoardingMutation } from '../services/boardingApi';
 import { useToast } from '@/shared/ui/molecules/Toast';
 import { CustomToast } from '@/features/shared/components/CustomToast';
 import { useRefetchOnReconnect } from '@/hooks/useRefetchOnReconnect';
+import { useLanguage } from '@/i18n/useLanguage';
+import { buildRtlPromoTextStyle } from '@/i18n/types';
 
 const Text = (props: React.ComponentProps<typeof RNText>) => {
   return <RNText {...props} style={[{ fontFamily }, props.style]} />;
@@ -111,6 +113,9 @@ export default function RideActive() {
   const userId = useAppSelector((state) => state.auth.user?.id ?? '');
   const user = useAppSelector((state) => state.auth.user);
   const toast = useToast();
+  const { t, isRTL, language } = useLanguage();
+  const te = (key: string, options?: Record<string, unknown>) =>
+    t(`employee:${key}`, options);
 
   const {
     tripId: tripIdParam,
@@ -604,7 +609,7 @@ export default function RideActive() {
       toast.show(
         <CustomToast
           type="success"
-          message="Successfully boarded"
+          message={t('employee:boardingSuccess')}
         />,
         { duration: 4000, position: 'top', backgroundColor: '#1ad41d' },
       );
@@ -615,11 +620,11 @@ export default function RideActive() {
       toast.show(
         <CustomToast
           type="error"
-          message={isTripNotFound ? 'Trip not found' : 'Failed to board'}
+          message={isTripNotFound ? t('employee:tripNotFound') : t('employee:failedToBoard')}
           subMessage={
             isTripNotFound
-              ? "We couldn't find an active trip. Please try again."
-              : (err?.data?.message ?? 'Could not mark attendance. Please try again.')
+              ? t('employee:couldNotFindTrip')
+              : (err?.data?.message ?? t('employee:couldNotMarkAttendance'))
           }
         />,
         { duration: 4000, position: 'top', backgroundColor: '#ff4545' },
@@ -645,12 +650,12 @@ export default function RideActive() {
   // ── Status text ───────────────────────────────────────────────────────────
   const chauffeurStatusText = (() => {
     switch (chauffeurStatus) {
-      case 'OTW':         return 'Chauffeur is on the way';
-      case 'ARRIVED':     return 'Chauffeur has arrived at your pickup';
-      case 'IN_PROGRESS': return "Sit tight, you're on your way";
-      case 'DROPPED_OFF': return "You've been dropped off";
-      case 'ENDED':       return 'Trip complete';
-      default:            return 'Chauffeur ride';
+      case 'OTW':         return te('chauffeurOnTheWay');
+      case 'ARRIVED':     return te('chauffeurArrivedPickup');
+      case 'IN_PROGRESS': return te('sitTightOnTheWay');
+      case 'DROPPED_OFF': return te('chauffeurDroppedOff');
+      case 'ENDED':       return te('tripComplete');
+      default:            return te('chauffeurRide');
     }
   })();
 
@@ -659,24 +664,24 @@ export default function RideActive() {
 
   const etaText = (() => {
     if (displayEtaMinutes === null) return null;
-    if (displayEtaMinutes <= 1) return 'Arriving shortly';
-    return `Arriving in ${displayEtaMinutes} min`;
+    if (displayEtaMinutes <= 1) return te('arrivingShortly');
+    return te('arrivingInMinutes', { count: displayEtaMinutes });
   })();
 
   const statusText = isChauffeurMode
     ? (chauffeurStatus === 'OTW' && etaText ? etaText : chauffeurStatusText)
     : directionParam === 'EVENING'
-      ? 'Ride in progress'
+      ? te('rideInProgressLabel')
       : isBoarded
-        ? "Sit tight, you're on the way"
+        ? te('sitTightOnTheWay')
         : captainIsHere
-          ? 'Captain is here, please board the shuttle'
+          ? te('captainBoardShuttle')
           : isWaitingForDriverResponse
-            ? 'Waiting for driver...'
-            : (etaText ?? 'On the way');
+            ? te('waitingForDriver')
+            : (etaText ?? te('rideOnTheWay'));
 
   const statusColor = captainIsHere ? '#000' : '#000';
-  const qrButtonLabel = isBoardingLoading ? 'Boarding...' : 'Board';
+  const qrButtonLabel = isBoardingLoading ? te('boarding') : te('board');
 
   return (
     <View style={styles.root}>
@@ -813,8 +818,14 @@ export default function RideActive() {
             {/* Big/Centered Layout */}
             <Animated.View style={bigProfileStyle}>
               <View style={styles.captainCenterSection}>
-                <Text style={styles.captainRoleLabel}>
-                  {isChauffeurMode ? 'YOUR CHAUFFEUR' : 'YOUR CAPTAIN'}
+                <Text
+                  style={[
+                    styles.captainRoleLabel,
+                    isRTL ? { textTransform: 'none', letterSpacing: 0 } : undefined,
+                    buildRtlPromoTextStyle(language, 'tag'),
+                  ]}
+                >
+                  {isChauffeurMode ? te('yourChauffeur') : te('yourCaptain')}
                 </Text>
 
                 <View style={styles.avatarCircleBig}>
@@ -839,12 +850,12 @@ export default function RideActive() {
           <View style={styles.threeActionsRow}>
             <Pressable style={styles.iconActionBtn} onPress={handleContactDriver} disabled={isCallingDriver}>
               <Ionicons name="call-outline" size={20} color="#141414" />
-              <Text style={styles.iconActionText}>{isCallingDriver ? 'calling...' : 'Call driver'}</Text>
+              <Text style={styles.iconActionText}>{isCallingDriver ? te('calling') : te('callDriver')}</Text>
             </Pressable>
 
             <Pressable style={styles.iconActionBtn} onPress={handleShareRide} disabled={isSharingRide}>
               <Octicons name="share" size={20} color="black" />
-              <Text style={styles.iconActionText}>{isSharingRide ? 'sharing...' : 'Share ride'}</Text>
+              <Text style={styles.iconActionText}>{isSharingRide ? te('sharing') : te('shareRide')}</Text>
             </Pressable>
 
             {!isChauffeurMode && !isBoarded && captainIsHere && directionParam !== 'EVENING' && (

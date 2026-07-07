@@ -9,16 +9,16 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useAppSelector, useAppDispatch } from '../../../store/hooks';
 import { logOut } from '@/features/auth/store';
 import { logout } from '@/features/auth/services';
-import { useLanguage } from '@/features/shared/context/LanguageContext';
+import { useLanguage } from '@/i18n/useLanguage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-
 import { useRouter } from 'expo-router';
 import { ActivityIndicator } from 'react-native';
+import { DrawerLanguagePicker } from '@/components/DrawerLanguagePicker';
 
 export function ShuttleDrawerContent(props: DrawerContentComponentProps) {
   const dispatch = useAppDispatch();
   const user = useAppSelector((state) => state.auth.user);
-  const { language, setLanguage } = useLanguage();
+  const { t, rtlRowStyle, drawerSubTextStyle } = useLanguage();
   const insets = useSafeAreaInsets();
   const router = useRouter();
 
@@ -37,7 +37,7 @@ export function ShuttleDrawerContent(props: DrawerContentComponentProps) {
       router.replace('/(auth)/get-started');
     }
   };
-  const fullName = user?.full_name ?? 'Guest';
+  const fullName = user?.full_name ?? t('common:guest');
   const initials = user?.full_name
     ? user.full_name
       .split(' ')
@@ -68,39 +68,19 @@ export function ShuttleDrawerContent(props: DrawerContentComponentProps) {
             )}
           </View>
           <Text className="text-white text-3xl font-bold mt-3">{fullName}</Text>
-          <Text className="text-gray-400 text-md mt-1">Shuttle Driver</Text>
+          <Text className="text-gray-400 text-md mt-1">{t('common:shuttleDriverRole')}</Text>
         </View>
 
+        <View className="h-[1px] bg-white/10 w-full my-6" />
 
-        <View className="mt-10">
-          <Text className="text-gray-400 text-sm mb-2 font-medium">Language</Text>
-          <View className="bg-white/10 rounded-2xl overflow-hidden">
-            <Pressable
-              onPress={() => setLanguage('en')}
-              className="flex-row justify-between items-center px-4 py-4 active:bg-white/5 border-b border-white/5"
-            >
-              <Text className="text-white text-lg font-medium">English</Text>
-              {language === 'en' && (
-                <MaterialCommunityIcons name="check" size={24} color="#FF5A00" />
-              )}
-            </Pressable>
-            <Pressable
-              onPress={() => setLanguage('ur')}
-              className="flex-row justify-between items-center px-4 py-4 active:bg-white/5"
-            >
-              <Text className="text-white text-lg font-medium">اردو (Urdu)</Text>
-              {language === 'ur' && (
-                <MaterialCommunityIcons name="check" size={24} color="#FF5A00" />
-              )}
-            </Pressable>
-          </View>
-        </View>
+        <DrawerLanguagePicker />
 
         <Pressable
           onPress={handleLogout}
+          style={rtlRowStyle}
           className={`mt-auto mb-16 pt-6 flex-row items-center gap-2 py-3 rounded-xl ${isLoggingOut ? 'opacity-50' : ''}`}
           accessibilityRole="button"
-          accessibilityLabel="Log out"
+          accessibilityLabel={t('common:logout')}
           disabled={isLoggingOut}
         >
           {isLoggingOut ? (
@@ -108,8 +88,8 @@ export function ShuttleDrawerContent(props: DrawerContentComponentProps) {
           ) : (
             <MaterialCommunityIcons name="logout" size={20} color="#EF4444" />
           )}
-          <Text className="text-base font-semibold text-red-500">
-            {isLoggingOut ? 'Logging out...' : 'Logout'}
+          <Text className="text-base font-semibold text-red-500" style={drawerSubTextStyle}>
+            {isLoggingOut ? t('common:loggingOut') : t('common:logout')}
           </Text>
         </Pressable>
       </View>

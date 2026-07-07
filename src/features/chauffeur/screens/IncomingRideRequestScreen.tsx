@@ -13,7 +13,7 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { fontFamily } from '@/core/theme';
 import { AppHeader } from '../../shared/components/AppHeader';
-import { useLanguage } from '@/features/shared/context/LanguageContext';
+import { useLanguage } from '@/i18n/useLanguage';
 
 const Text = (props: React.ComponentProps<typeof RNText>) => (
   <RNText {...props} style={[{ fontFamily }, props.style]} />
@@ -22,28 +22,6 @@ const Text = (props: React.ComponentProps<typeof RNText>) => (
 const PRIMARY = '#FF5A00';
 const INK = '#000000';
 const SHEET_MUTED = '#6B7280';
-
-const LABELS = {
-  en: {
-    rideRequestTitle: (name: string) => `A ride has been requested !`,
-    pickupLocation: 'Pickup location',
-    declineRequest: 'Decline request',
-    acceptRequest: 'Accept request',
-    inCity: 'In-city',
-    outStation: 'Outstation',
-    nDays: (n: number) => `${n} days`,
-  },
-  ur: {
-    rideRequestTitle: (name: string) => `${name} نے سواری کی درخواست کی ہے`,
-    pickupLocation: 'پک اپ کی جگہ',
-    declineRequest: 'درخواست مسترد کریں',
-    acceptRequest: 'درخواست قبول کریں',
-    inCity: 'شہر کے اندر',
-    outStation: 'آؤٹ اسٹیشن',
-    nDays: (n: number) => `${n} دن`,
-  },
-} as const;
-
 const DEFAULT_PICKUP = { latitude: 24.947404, longitude: 67.10848 };
 const DEFAULT_ADDRESS = 'County Garden, Metroville Society, Karachi';
 const DEFAULT_PASSENGER_NAME = 'Mohammad Azam';
@@ -57,8 +35,9 @@ function parseNum(value: string | undefined, fallback: number): number {
 
 export function IncomingRideRequestScreen() {
   const insets = useSafeAreaInsets();
-  const { language } = useLanguage();
-  const t = LABELS[language];
+  const { t } = useLanguage();
+  const tr = (key: string, options?: Record<string, unknown>) =>
+    t(`chauffeur:incomingRequest.${key}`, options);
 
   const params = useLocalSearchParams<{
     lat?: string;
@@ -92,7 +71,7 @@ export function IncomingRideRequestScreen() {
   const totalDays = Math.max(1, Math.round(parseNum(params.totalDays, 2)));
   const tripTypeRaw = (params.tripType?.trim() ?? '').toLowerCase() || 'in_city';
   const tripTypeLabel =
-    tripTypeRaw === 'out_station' || tripTypeRaw === 'outstation' ? t.outStation : t.inCity;
+    tripTypeRaw === 'out_station' || tripTypeRaw === 'outstation' ? tr('outStation') : tr('inCity');
 
   const bottomPad = Math.max(insets.bottom, 14);
 
@@ -134,12 +113,12 @@ export function IncomingRideRequestScreen() {
             showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.scrollContent}
           >
-            <Text style={styles.sheetTitle}>{t.rideRequestTitle(passengerName)}</Text>
+            <Text style={styles.sheetTitle}>{tr('rideRequestTitleNamed', { name: passengerName })}</Text>
 
             <View style={styles.pickupBlock}>
               <View style={styles.pickupDot} />
               <View style={styles.pickupTextCol}>
-                <Text style={styles.pickupLabel}>{t.pickupLocation}</Text>
+                <Text style={styles.pickupLabel}>{tr('pickupLocation')}</Text>
                 <Text style={styles.pickupAddress}>{address}</Text>
 
                 <View style={styles.metaRow}>
@@ -153,7 +132,7 @@ export function IncomingRideRequestScreen() {
                   <View style={styles.metaItem}>
                     <Ionicons name="calendar-outline" size={16} color={PRIMARY} />
                     <Text style={styles.metaItemText} numberOfLines={1}>
-                      {t.nDays(totalDays)}
+                      {tr('nDays', { count: totalDays })}
                     </Text>
                   </View>
                 </View>
@@ -194,7 +173,7 @@ export function IncomingRideRequestScreen() {
                   textAlign: 'center',
                 }}
               >
-                {t.declineRequest}
+                {tr('declineRequest')}
               </RNText>
             </TouchableOpacity>
 
@@ -224,7 +203,7 @@ export function IncomingRideRequestScreen() {
                   textAlign: 'center',
                 }}
               >
-                {t.acceptRequest}
+                {tr('acceptRequest')}
               </RNText>
             </TouchableOpacity>
 

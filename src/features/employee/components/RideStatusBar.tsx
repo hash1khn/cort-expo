@@ -1,13 +1,11 @@
 import React, { useCallback, useState } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
-import { SharedValue } from 'react-native-reanimated';
 import { router } from 'expo-router';
+import { useLanguage } from '@/i18n/useLanguage';
 
 export type RideStatus = 'idle' | 'started' | 'arrived';
 
-/** Upcoming/latest shuttle trip info for the status bar (from API). */
 export type UpcomingShuttleInfo = {
   routeName: string;
   driverName: string;
@@ -15,16 +13,11 @@ export type UpcomingShuttleInfo = {
 };
 
 type RideStatusBarProps = {
-  /** Controlled mode: pass status from parent. When undefined, uses internal state. */
   status?: RideStatus;
   onStatusChange?: (status: RideStatus) => void;
-  /** Enable long-press to cycle through states (for dev/demo) */
   enableDevToggle?: boolean;
-  /** Latest/upcoming shuttle trip for this employee's route. When provided, replaces hardcoded labels. */
   upcomingShuttle?: UpcomingShuttleInfo | null;
-  /** When true, show skeleton loaders instead of content (e.g. while shuttle data is fetching). */
   isLoading?: boolean;
-  /** Live ETA in minutes from the backend eta:update event. */
   etaMinutes?: number | null;
 };
 
@@ -42,6 +35,10 @@ export function RideStatusBar({
   isLoading = false,
   etaMinutes,
 }: RideStatusBarProps) {
+  const { t } = useLanguage();
+  const te = (key: string, options?: Record<string, unknown>) =>
+    t(`employee:${key}`, options);
+
   const [internalStatus, setInternalStatus] = useState<RideStatus>('idle');
   const status = controlledStatus ?? internalStatus;
 
@@ -68,10 +65,6 @@ export function RideStatusBar({
     };
     setStatus(next[status]);
   }, [status, setStatus, enableDevToggle]);
-
-  const gradientColors = ['#7e6aec', '#8b76f6'] as const;
-  const gradientStart = { x: 0 as const, y: 0 as const };
-  const gradientEnd = { x: 1 as const, y: 0 as const };
 
   if (isLoading) {
     return (
@@ -100,14 +93,14 @@ export function RideStatusBar({
                 <Ionicons name="bus-outline" size={24} color="#fff" />
               </View>
               <View>
-                <Text className="text-white text-xl font-bold">Ride is on the way</Text>
+                <Text className="text-white text-xl font-bold">{te('rideOnTheWay')}</Text>
                 <Text className="text-text-primary font-medium text-sm">{routeLabel}</Text>
               </View>
             </View>
-            <Text className="text-white/90 text-sm mb-1">ETA:</Text>
+            <Text className="text-white/90 text-sm mb-1">{te('eta')}</Text>
             <Text className="text-white text-3xl font-bold mb-4">
               {etaMinutes != null
-                ? etaMinutes <= 1 ? 'Arriving shortly' : `${etaMinutes} min`
+                ? etaMinutes <= 1 ? te('arrivingShortly') : te('etaMinutes', { count: etaMinutes })
                 : '—'}
             </Text>
             <View>
@@ -118,8 +111,8 @@ export function RideStatusBar({
                 />
               </View>
               <View className="flex-row justify-between">
-                <Text className="text-white/80 text-xs">Left</Text>
-                <Text className="text-white/80 text-xs">Arriving</Text>
+                <Text className="text-white/80 text-xs">{te('left')}</Text>
+                <Text className="text-white/80 text-xs">{te('arriving')}</Text>
               </View>
             </View>
           </View>
@@ -138,16 +131,16 @@ export function RideStatusBar({
                 <Ionicons name="bus-outline" size={24} color="#fff" />
               </View>
               <View>
-                <Text className="text-white text-xl font-bold">Shuttle has arrived</Text>
+                <Text className="text-white text-xl font-bold">{te('shuttleArrived')}</Text>
                 <Text className="text-white/80 text-sm">{routeLabel}</Text>
               </View>
             </View>
             <View className="flex-row items-end justify-between">
               <View>
-                <Text className="text-white text-3xl font-bold">Arrived</Text>
+                <Text className="text-white text-3xl font-bold">{te('arrived')}</Text>
                 <View className="flex-row items-center mt-1 gap-1.5">
                   <View className="w-2 h-2 rounded-full bg-[#22c55e]" />
-                  <Text className="text-white/90 text-sm">Ready for departure</Text>
+                  <Text className="text-white/90 text-sm">{te('readyForDeparture')}</Text>
                 </View>
               </View>
               <View className="w-14 h-14 rounded-full bg-white items-center justify-center">
@@ -160,7 +153,6 @@ export function RideStatusBar({
     );
   }
 
-  // idle
   return (
     <Pressable onLongPress={cycleStatus} onPress={()=>router.push('/employee/ride-active')}>
       <View style={styles.container}>
@@ -168,15 +160,12 @@ export function RideStatusBar({
           <View className="flex-row items-center flex-wrap">
             <Text className="text-white text-4xl font-bold">{routeLabel}</Text>
           </View>
-          <Text className="text-white text-base font-semibold mt-1">Driver: {driverName}</Text>
+          <Text className="text-white text-base font-semibold mt-1">{te('driver', { name: driverName })}</Text>
           <View className="flex-row items-center bg-white px-2.5 py-1.5 rounded-xl self-start mt-2.5 gap-1.5">
             <Ionicons name="time-outline" size={14} color="black" />
-            <Text className="text-black text-base font-bold">Next Shuttle: {nextShuttleTime}</Text>
+            <Text className="text-black text-base font-bold">{te('nextShuttle', { time: nextShuttleTime })}</Text>
           </View>
         </View>
-        {/* <View className="w-20 h-20 rounded-full bg-white/20 items-center justify-center">
-          <Ionicons name="bus-outline" size={42} color="#fff" />
-        </View> */}
       </View>
     </Pressable>
   );

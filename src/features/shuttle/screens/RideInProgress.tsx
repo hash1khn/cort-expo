@@ -20,7 +20,8 @@ import BottomSheet, {
   BottomSheetBackdrop,
   BottomSheetScrollView,
 } from '@gorhom/bottom-sheet';
-import { useLanguage } from '@/features/shared/context/LanguageContext';
+import { useLanguage } from '@/i18n/useLanguage';
+import { buildRtlSectionTitleStyle, buildRtlSmallSubtitleTextStyle } from '@/i18n/types';
 import { useToast } from '@/shared/ui/molecules/Toast';
 import { CustomToast } from '@/features/shared/components/CustomToast';
 import {
@@ -41,57 +42,7 @@ import { useAppSelector } from '@/store/hooks';
 import { store } from '@/store';
 import { useRiderLocationTracking } from '@/hooks/useRiderLocationTracking';
 import { LocationDisclosureModal } from '@/components/LocationDisclosureModal';
-
-const LABELS = {
-  en: {
-    tripInProgress: 'Trip In Progress',
-    readyToGo: 'Ready to go',
-    hiace: 'Hiace',
-    stops: 'Stops',
-    employees: 'Employees',
-    routeOverview: 'Route Overview',
-    processing: 'Processing...',
-    completeTrip: 'Complete Trip',
-    markAsArrived: 'Mark as Arrived',
-    beginRide: 'Begin ride',
-    markAllAttendance: 'Mark all attendance before proceeding',
-    failedProceed: 'Failed to proceed to next stop. Please try again.',
-    failedComplete: 'Failed to complete trip. Please try again.',
-    couldNotMarkAbsent: "Couldn't mark as absent.",
-    couldNotMarkPresent: "Couldn't mark as present.",
-    markAttendanceSubtitle: 'Mark employees as present or absent',
-    currentStop: 'Current Stop',
-    proceeding: 'Proceeding...',
-    proceedNextStop: 'Proceed to next stop',
-    present: 'Present',
-    absent: 'Absent',
-    noNumber: 'No number',
-  },
-  ur: {
-    tripInProgress: 'سفر جاری ہے',
-    readyToGo: 'شروع کرنے کے لیے تیار',
-    hiace: 'ہائس',
-    stops: 'اسٹاپ',
-    employees: 'افراد',
-    routeOverview: 'راستے کا جائزہ',
-    processing: 'جاری ہے...',
-    completeTrip: 'سفر مکمل کریں',
-    markAsArrived: 'اسٹاپ پر پہنچ گئے',
-    beginRide: 'شروع کریں',
-    markAllAttendance: 'شروع کرنے سے پہلے تمام حاضری درج کریں',
-    failedProceed: 'اگلے اسٹاپ پر نہیں جا سکے۔ دوبارہ کوشش کریں۔',
-    failedComplete: 'سفر مکمل نہ ہو سکا۔ دوبارہ کوشش کریں۔',
-    couldNotMarkAbsent: 'غیر حاضر درج نہ ہو سکا۔',
-    couldNotMarkPresent: 'حاضر درج نہ ہو سکا۔',
-    markAttendanceSubtitle: 'افراد کی حاضری یا غیر حاضری مقرر کریں',
-    currentStop: 'موجودہ اسٹاپ',
-    proceeding: 'جا رہے ہیں...',
-    proceedNextStop: 'اگلے اسٹاپ پر جائیں',
-    present: 'حاضر',
-    absent: 'غیر حاضر',
-    noNumber: 'نمبر نہیں',
-  },
-} as const;
+import { BackButton } from '@/components/BackButton';
 
 type EmployeeStatus = 'present' | 'absent';
 
@@ -113,9 +64,8 @@ export default function RideInProgress() {
   const { tripId: tripIdParam } = useLocalSearchParams<{ tripId?: string }>();
   const preferredTripId = tripIdParam ? Number.parseInt(tripIdParam, 10) : null;
   const safePreferredTripId = Number.isNaN(preferredTripId ?? NaN) ? null : preferredTripId;
-  const { language } = useLanguage();
-  const isUrdu = language === 'ur';
-  const t = LABELS[language];
+  const { t, isRTL, rtlFont, language } = useLanguage();
+  const tr = (key: string) => t(`shuttle:rideInProgress.${key}`);
   const toast = useToast();
 
   const {
@@ -424,7 +374,7 @@ export default function RideInProgress() {
       await stopTracking().catch(console.warn);
       router.push('/shuttle');
     } catch {
-      Alert.alert('Error', t.failedComplete);
+      Alert.alert('Error', tr('failedComplete'));
     }
   }, [
     rideStarted,
@@ -448,12 +398,12 @@ export default function RideInProgress() {
         onAccept={onDisclosureAccept}
         onDecline={onDisclosureDecline}
       />
-      <Pressable onPress={() => router.back()}>
-        <View className="flex-row items-center gap-2 ml-[-4px] px-6 mb-3">
-          <Feather name="chevron-left" size={24} color="black" />
-          {/* <Text className="text-black font-bold">Home</Text> */}
-        </View>
-      </Pressable>
+      <BackButton
+        onPress={() => router.back()}
+        anchored={false}
+        iconSize={24}
+        className={isRTL ? 'self-end px-6 mb-3 mt-3' : 'ml-[-4px] px-6 mb-3 mt-3'}
+      />
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={styles.scrollContent}
@@ -463,7 +413,7 @@ export default function RideInProgress() {
         {/* Header */}
         <View style={styles.header}>
           <Text style={styles.titleText}>
-            {rideStarted ? t.tripInProgress : t.readyToGo}
+            {rideStarted ? tr('tripInProgress') : tr('readyToGo')}
           </Text>
           <Text style={styles.subtitleText}>Black Hiace • ABR 986</Text>
         </View>
@@ -475,7 +425,7 @@ export default function RideInProgress() {
             <View className="w-8 h-8 rounded-lg bg-black/10 items-center justify-center mb-0.5">
               <MaterialCommunityIcons name="bus" size={16} color="#000" />
             </View>
-            <Text className="text-[10px] font-semibold text-black/50 uppercase tracking-[0.8px]">{t.hiace}</Text>
+            <Text className="text-[10px] font-semibold text-black/50 uppercase tracking-[0.8px]">{tr('hiace')}</Text>
             <Text className="text-[13px] font-extrabold text-[#000] tracking-[-0.2px]">ABR 986</Text>
           </View>
 
@@ -486,7 +436,7 @@ export default function RideInProgress() {
             <View className="w-8 h-8 rounded-lg bg-black/10 items-center justify-center mb-0.5">
               <Ionicons name="location-outline" size={16} color="#000" />
             </View>
-            <Text className="text-[10px] font-semibold text-black/50 uppercase tracking-[0.8px]">{t.stops}</Text>
+            <Text className="text-[10px] font-semibold text-black/50 uppercase tracking-[0.8px]">{tr('stops')}</Text>
             <Text className="text-[13px] font-extrabold text-[#000] tracking-[-0.2px]">{stops.length}</Text>
           </View>
 
@@ -497,7 +447,7 @@ export default function RideInProgress() {
             <View className="w-8 h-8 rounded-lg bg-black/10 items-center justify-center mb-0.5">
               <Ionicons name="people-outline" size={16} color="#000" />
             </View>
-            <Text className="text-[10px] font-semibold text-black/50 uppercase tracking-[0.8px]">{t.employees}</Text>
+            <Text className="text-[10px] font-semibold text-black/50 uppercase tracking-[0.8px]">{tr('employees')}</Text>
             <Text className="text-[13px] font-extrabold text-[#000] tracking-[-0.2px]">{tripEmployeesRaw.length}</Text>
           </View>
         </View>
@@ -505,7 +455,7 @@ export default function RideInProgress() {
         {/* Route Overview */}
         <View className="mb-6 mt-4">
           <Text className="text-xl font-bold mb-6 text-black">
-            {t.routeOverview}
+            {tr('routeOverview')}
           </Text>
           <View className="ml-2">
             {stops.map((stop, index) => {
@@ -665,16 +615,12 @@ export default function RideInProgress() {
           <View className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2">
             <Text className="text-[13px] text-amber-900 leading-[18px]" style={{ fontFamily }}>
               {locationPermissionWarning === 'background'
-                ? isUrdu
-                  ? 'ترتیبات میں لوکیشن کو "ہمیشہ اجازت" پر سیٹ کریں تاکہ سفر کے دوران ٹریکنگ ہو سکے۔'
-                  : 'Set location access to "Allow all the time" in Settings so rides can be tracked.'
-                : isUrdu
-                  ? 'ترتیبات میں ایپ کی اجازتوں سے لوکیشن چالو کریں، پھر سفر شروع کریں۔'
-                  : 'Enable Location in Settings (App → Permissions) before starting a ride.'}
+                ? t('common:locationBackgroundHint')
+                : t('common:locationForegroundHint')}
             </Text>
             <Pressable onPress={() => Linking.openSettings()} className="mt-2 self-start">
               <Text className="text-[13px] font-semibold text-amber-950" style={{ fontFamily }}>
-                {isUrdu ? 'ترتیبات کھولیں' : 'Open Settings'}
+                {t('common:openSettings')}
               </Text>
             </Pressable>
           </View>
@@ -692,10 +638,10 @@ export default function RideInProgress() {
           )}
           <Text className="text-white text-[17px] font-bold mr-1">
             {isActionLoading
-              ? t.processing
+              ? tr('processing')
               : (rideStarted
-                ? (isLastStop ? t.completeTrip : t.markAsArrived)
-                : t.beginRide)}
+                ? (isLastStop ? tr('completeTrip') : tr('markAsArrived'))
+                : tr('beginRide'))}
           </Text>
         </Pressable>
       </View>
@@ -721,11 +667,17 @@ export default function RideInProgress() {
         >
           <View className="px-5 pb-4 pt-2 flex-row justify-between items-center">
             <View>
-              <Text className="text-xl font-bold mb-1 text-black">
-                {stopForAttendance?.name || t.currentStop}
+              <Text
+                className={isRTL ? 'mb-1 text-black font-bold' : 'text-xl font-bold mb-1 text-black'}
+                style={buildRtlSectionTitleStyle(language)}
+              >
+                {stopForAttendance?.name || tr('currentStop')}
               </Text>
-              <Text className="text-sm text-[#6B7280]">
-                {t.markAttendanceSubtitle}
+              <Text
+                className={isRTL ? 'text-[#6B7280]' : 'text-sm text-[#6B7280]'}
+                style={buildRtlSmallSubtitleTextStyle(language)}
+              >
+                {tr('markAttendanceSubtitle')}
               </Text>
             </View>
           </View>
@@ -763,7 +715,7 @@ export default function RideInProgress() {
                       </Text>
                       <View className="flex-row items-center mt-1">
                         <Text className="text-[#8E8E93] text-[15px] mr-2" numberOfLines={1}>
-                          {emp.status === 'present' ? t.present : emp.status === 'absent' ? t.absent : (emp.number || t.noNumber)}
+                          {emp.status === 'present' ? tr('present') : emp.status === 'absent' ? tr('absent') : (emp.number || t('common:noNumber'))}
                         </Text>
                       </View>
                     </View>
@@ -796,7 +748,7 @@ export default function RideInProgress() {
                             }).unwrap();
                             setDriverMarkedIds((prev) => new Set(prev).add(emp.id));
                           } catch {
-                            Alert.alert('Error', t.couldNotMarkAbsent);
+                            Alert.alert('Error', tr('couldNotMarkAbsent'));
                           } finally {
                             setEmployeeLoading(emp.id, null);
                           }
@@ -833,7 +785,7 @@ export default function RideInProgress() {
                             }).unwrap();
                             setDriverMarkedIds((prev) => new Set(prev).add(emp.id));
                           } catch {
-                            Alert.alert('Error', t.couldNotMarkPresent);
+                            Alert.alert('Error', tr('couldNotMarkPresent'));
                           } finally {
                             setEmployeeLoading(emp.id, null);
                           }
@@ -871,7 +823,7 @@ export default function RideInProgress() {
                   toast.show(
                     <CustomToast
                       type="error"
-                      message={t.markAllAttendance}
+                      message={tr('markAllAttendance')}
                     />,
                     { duration: 3500, position: 'top', backgroundColor: '#ff4545' },
                   );
@@ -884,7 +836,7 @@ export default function RideInProgress() {
                   try {
                     await proceedFromStop({ tripId: activeTrip.id }).unwrap();
                   } catch {
-                    Alert.alert('Error', t.failedProceed);
+                    Alert.alert('Error', tr('failedProceed'));
                     return;
                   }
                 }
@@ -907,7 +859,7 @@ export default function RideInProgress() {
                 <ActivityIndicator size="small" color="#FFFFFF" style={{ marginRight: 8 }} />
               )}
               <Text className="text-white text-[17px] font-bold mr-1">
-                {isProceeding ? t.proceeding : t.proceedNextStop}
+                {isProceeding ? tr('proceeding') : tr('proceedNextStop')}
               </Text>
             </Pressable>
           </BottomSheetScrollView>

@@ -30,16 +30,14 @@ import { getHomePathForRole } from '../utils/getHomePathForRole';
 import { credentialStorage, BiometricType } from '../utils/credentialStorage';
 import { ChauffeurSignupBottomSheet } from '../components/ChauffeurSignupBottomSheet';
 import { BottomSheetModal } from '@gorhom/bottom-sheet';
-import { useLanguage } from '../../../context/LanguageContext';
+import { useLanguage } from '@/i18n/useLanguage';
 
 export function LoginScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
-  const { t, isRTL } = useLanguage();
+  const { tAuth: t, isRTL, rtlTextStyle: rtlText, rtlRowStyle: rtlRow } = useLanguage();
 
-  // RTL helpers
-  const rtlText = isRTL ? ({ textAlign: 'right', writingDirection: 'rtl' } as const) : {};
-  const rtlRow = isRTL ? ({ flexDirection: 'row-reverse' } as const) : {};
+  // RTL helpers provided by useLanguage
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);

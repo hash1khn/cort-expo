@@ -25,7 +25,8 @@ import { useToast } from '@/shared/ui/molecules/Toast';
 import { CustomToast } from '@/features/shared/components/CustomToast';
 import { useRiderLocationTracking } from '@/hooks/useRiderLocationTracking';
 import { LocationDisclosureModal } from '@/components/LocationDisclosureModal';
-import { useLanguage } from '@/features/shared/context/LanguageContext';
+import { useLanguage } from '@/i18n/useLanguage';
+import { BackButton } from '@/components/BackButton';
 import { useRefetchOnReconnect } from '@/hooks/useRefetchOnReconnect';
 import { socketService } from '@/services/socket.service';
 import { useAppSelector } from '@/store/hooks';
@@ -33,125 +34,6 @@ import { useAppSelector } from '@/store/hooks';
 const Text = (props: React.ComponentProps<typeof RNText>) => {
     return <RNText {...props} style={[{ fontFamily }, props.style]} />;
 };
-
-// ─── Translations ─────────────────────────────────────────────────────────────
-
-const LABELS = {
-  en: {
-    headerTitle: 'Ride In Progress',
-    passenger: 'PASSENGER',
-    pickupAddress: 'PICKUP ADDRESS',
-    cancel: 'Cancel',
-    endFullTrip: 'End full trip',
-    meterReading: 'Meter Reading',
-    meterPhoto: 'Meter Photo',
-    tapToRetake: 'Tap to retake',
-    tapToCaptureMeterPhoto: 'Tap to capture meter photo',
-    enterStartMeter: 'Enter start meter',
-    capturing: 'Capturing…',
-    tapToCaptureMeter: 'Tap to capture meter',
-    cameraRequired: 'Camera required',
-    cameraPermissionMsg: 'Please allow camera access to take the meter photo.',
-    punchline: {
-      START_TRIP: 'Lets start the trip! Your passenger is expecting arrival.',
-      MARK_ARRIVED: 'Almost there! Mark arrived so the passenger knows.',
-      RESUME_TRIP: 'Passenger is coming! Ready to go?',
-      MARK_DROPPED_OFF: 'You are on your way. Good luck and travel safe.',
-      END_RIDE: 'Lets head back home. Great work today!',
-      default: 'Ready for your next ride?',
-    } as Record<string, string>,
-    buttonLabel: {
-      starting: 'Starting...',
-      markingArrived: 'Marking arrived...',
-      resumingTrip: 'Resuming trip...',
-      markingDropoff: 'Marking dropped off...',
-      endingDay: 'Ending day...',
-      startTrip: 'Start trip',
-      markArrived: 'Mark as arrived',
-      resumeTrip: 'Resume trip',
-      markDropoff: 'Mark as dropped off',
-      endDay: 'End day',
-      endRide: 'End ride',
-    },
-    modal: {
-      titleStart: 'Start this ride?',
-      titleEndDay: "End today's trip?",
-      titleDropoff: 'Mark dropped off?',
-      subtitleStart: 'You want to start this ride now.',
-      subtitleEndDay: 'This completes today, but the trip continues tomorrow.',
-      subtitleDropoff: 'You want to mark this ride as dropped off.',
-      confirmStart: 'Yes, Start',
-      confirmEndDay: 'Yes, End day',
-      confirmMark: 'Yes, Mark',
-    },
-    errors: {
-      meterRequired: 'Meter reading and photo are required for OUT_STATION trips.',
-      arrivedFail: 'Could not mark as arrived. Please try again.',
-      resumeFail: 'Could not resume trip. Please try again.',
-      dropoffFail: 'Could not mark as dropped off. Please try again.',
-      mapsFail: 'Could not open Google Maps',
-      endDayFail: "Could not complete today's trip. Please try again.",
-      startFail: 'Ride could not be started. Please try again.',
-    },
-  },
-  ur: {
-    headerTitle: 'سفر جاری ہے',
-    passenger: 'مسافر',
-    pickupAddress: 'پک اپ پتہ',
-    cancel: 'منسوخ',
-    endFullTrip: 'مکمل سفر ختم کریں',
-    meterReading: 'میٹر ریڈنگ',
-    meterPhoto: 'میٹر فوٹو',
-    tapToRetake: 'دوبارہ لینے کے لیے دبائیں',
-    tapToCaptureMeterPhoto: 'میٹر فوٹو لینے کے لیے دبائیں',
-    enterStartMeter: 'ابتدائی میٹر درج کریں',
-    capturing: 'فوٹو لی جا رہی ہے…',
-    tapToCaptureMeter: 'میٹر فوٹو لینے کے لیے دبائیں',
-    cameraRequired: 'کیمرہ درکار ہے',
-    cameraPermissionMsg: 'میٹر فوٹو کے لیے کیمرے کی اجازت دیں۔',
-    punchline: {
-      START_TRIP: 'سفر شروع کریں! آپ کے مسافر کو آپ کا انتظار ہے۔',
-      MARK_ARRIVED: 'تقریباً پہنچ گئے! مسافر کو بتانے کے لیے پہنچنے کا نشان لگائیں۔',
-      RESUME_TRIP: 'مسافر آ رہا ہے! چلنے کے لیے تیار؟',
-      MARK_DROPPED_OFF: 'آپ راستے میں ہیں۔ محفوظ سفر کریں۔',
-      END_RIDE: 'گھر کی طرف چلیں۔ آج کا کام بہت اچھا رہا!',
-      default: 'کیا آپ اگلی بکنگ کے لیے تیار ہیں؟',
-    } as Record<string, string>,
-    buttonLabel: {
-      starting: 'شروع ہو رہا ہے...',
-      markingArrived: 'پہنچنے کا نشان لگ رہا ہے...',
-      resumingTrip: 'سفر دوبارہ شروع ہو رہا ہے...',
-      markingDropoff: 'اتارنے کا نشان لگ رہا ہے...',
-      endingDay: 'دن ختم ہو رہا ہے...',
-      startTrip: 'سفر شروع کریں',
-      markArrived: 'مسافر کے پاس پہنچ گئے',
-      resumeTrip: 'سفر دوبارہ شروع کریں',
-      markDropoff: ' مسافر  کو  اُتار  دیا  ہے',
-      endDay: 'دن ختم کریں',
-      endRide: 'بکنگ ختم کریں',
-    },
-    modal: {
-      titleStart: 'یہ بکنگ شروع کریں؟',
-      titleEndDay: 'آج کا سفر ختم کریں؟',
-      titleDropoff: 'اتارنا درج کریں؟',
-      subtitleStart: 'کیا آپ یہ بکنگ ابھی شروع کرنا چاہتے ہیں؟',
-      subtitleEndDay: 'آج مکمل ہوتا ہے، لیکن سفر کل جاری رہے گا۔',
-      subtitleDropoff: 'کیا آپ اس بکنگ کو اتارنا درج کرنا چاہتے ہیں؟',
-      confirmStart: 'ہاں، شروع کریں',
-      confirmEndDay: 'ہاں، دن ختم کریں',
-      confirmMark: 'ہاں، درج کریں',
-    },
-    errors: {
-      meterRequired: 'آؤٹ اسٹیشن بکنگ کے لیے میٹر ریڈنگ اور فوٹو ضروری ہے۔',
-      arrivedFail: 'پہنچنا درج نہ ہو سکا۔ دوبارہ کوشش کریں۔',
-      resumeFail: 'سفر دوبارہ شروع نہ ہو سکا۔ دوبارہ کوشش کریں۔',
-      dropoffFail: 'اتارنا درج نہ ہو سکا۔ دوبارہ کوشش کریں۔',
-      mapsFail: 'گوگل میپس نہیں کھل سکا',
-      endDayFail: 'آج کا سفر مکمل نہ ہو سکا۔ دوبارہ کوشش کریں۔',
-      startFail: 'بکنگ شروع نہ ہو سکی۔ دوبارہ کوشش کریں۔',
-    },
-  },
-} as const;
 
 // Maps the backend trip status to what button to show next
 type TripStep = 'START_TRIP' | 'MARK_ARRIVED' | 'RESUME_TRIP' | 'MARK_DROPPED_OFF' | 'END_RIDE';
@@ -186,8 +68,12 @@ function deriveTripStep(status: TripStatus | undefined, todayLog: ChauffeurDaily
 export function ActiveTripScreen() {
     const confirmSheetRef = useRef<BottomSheet>(null);
     const toast = useToast();
-    const { language } = useLanguage();
-    const t = LABELS[language];
+    const { t, isRTL } = useLanguage();
+    const ta = (key: string) => t(`chauffeur:activeTrip.${key}`);
+    const taPunchline = (key: string) => t(`chauffeur:activeTrip.punchline.${key}`);
+    const taButton = (key: string) => t(`chauffeur:activeTrip.buttonLabel.${key}`);
+    const taModal = (key: string) => t(`chauffeur:activeTrip.modal.${key}`);
+    const taError = (key: string) => t(`chauffeur:activeTrip.errors.${key}`);
     const userId = useAppSelector((s) => s.auth.user?.id ?? '');
 
     const renderBackdrop = useCallback(
@@ -296,7 +182,9 @@ export function ActiveTripScreen() {
     }, [tripStep]);
 
     const punchline = useMemo(() => {
-        return t.punchline[tripStep] ?? t.punchline.default;
+        const key = `chauffeur:activeTrip.punchline.${tripStep}`;
+        const translated = t(key);
+        return translated === key ? taPunchline('default') : translated;
     }, [tripStep, t]);
 
     const showError = (message: string) => {
@@ -307,17 +195,17 @@ export function ActiveTripScreen() {
     };
 
     const buttonLabel = () => {
-        if (isStartingTrip)    return t.buttonLabel.starting;
-        if (isMarkingArrived)  return t.buttonLabel.markingArrived;
-        if (isMarkingOnboard)  return t.buttonLabel.resumingTrip;
-        if (isMarkingDropoff)  return t.buttonLabel.markingDropoff;
-        if (isEndingTrip)      return t.buttonLabel.endingDay;
+        if (isStartingTrip)    return taButton('starting');
+        if (isMarkingArrived)  return taButton('markingArrived');
+        if (isMarkingOnboard)  return taButton('resumingTrip');
+        if (isMarkingDropoff)  return taButton('markingDropoff');
+        if (isEndingTrip)      return taButton('endingDay');
         switch (tripStep) {
-            case 'START_TRIP':        return t.buttonLabel.startTrip;
-            case 'MARK_ARRIVED':      return t.buttonLabel.markArrived;
-            case 'RESUME_TRIP':       return t.buttonLabel.resumeTrip;
-            case 'MARK_DROPPED_OFF':  return t.buttonLabel.markDropoff;
-            case 'END_RIDE':          return isMultiDayIntermediateEnd ? t.buttonLabel.endDay : t.buttonLabel.endRide;
+            case 'START_TRIP':        return taButton('startTrip');
+            case 'MARK_ARRIVED':      return taButton('markArrived');
+            case 'RESUME_TRIP':       return taButton('resumeTrip');
+            case 'MARK_DROPPED_OFF':  return taButton('markDropoff');
+            case 'END_RIDE':          return isMultiDayIntermediateEnd ? taButton('endDay') : taButton('endRide');
         }
     };
 
@@ -331,13 +219,11 @@ export function ActiveTripScreen() {
             const { status: bgGuard } = await Location.getBackgroundPermissionsAsync();
             if (fgGuard === 'denied' || bgGuard === 'denied') {
                 Alert.alert(
-                    language === 'ur' ? 'لوکیشن درکار ہے' : 'Location required',
-                    language === 'ur'
-                        ? 'لوکیشن کی اجازت نہیں ملی۔ ترتیبات میں جا کر لوکیشن چالو کریں تاکہ آپ سفر شروع کر سکیں۔'
-                        : 'Location permission was denied. Open Settings to allow location access so you can start this ride.',
+                    t('common:locationRequired'),
+                    t('common:locationDeniedMessage'),
                     [
-                        { text: language === 'ur' ? 'منسوخ' : 'Cancel', style: 'cancel' },
-                        { text: language === 'ur' ? 'ترتیبات کھولیں' : 'Open Settings', onPress: () => Linking.openSettings() },
+                        { text: t('common:cancel'), style: 'cancel' },
+                        { text: t('common:openSettings'), onPress: () => Linking.openSettings() },
                     ],
                 );
                 return;
@@ -348,13 +234,13 @@ export function ActiveTripScreen() {
             try {
                 await markArrived({ bookingId: id }).unwrap();
             } catch {
-                showError(t.errors.arrivedFail);
+                showError(taError('arrivedFail'));
             }
         } else if (tripStep === 'RESUME_TRIP') {
             try {
                 await markOnboard({ bookingId: id }).unwrap();
             } catch {
-                showError(t.errors.resumeFail);
+                showError(taError('resumeFail'));
             }
         } else if (tripStep === 'MARK_DROPPED_OFF') {
             // Confirmation sheet handles the API call
@@ -376,17 +262,17 @@ export function ActiveTripScreen() {
         }
     };
 
-    const modalTitle = tripStep === 'START_TRIP' ? t.modal.titleStart
-                     : tripStep === 'END_RIDE' ? t.modal.titleEndDay
-                     : t.modal.titleDropoff;
+    const modalTitle = tripStep === 'START_TRIP' ? taModal('titleStart')
+                     : tripStep === 'END_RIDE' ? taModal('titleEndDay')
+                     : taModal('titleDropoff');
     
-    const modalSubtitle = tripStep === 'START_TRIP' ? t.modal.subtitleStart
-                        : tripStep === 'END_RIDE' ? t.modal.subtitleEndDay
-                        : t.modal.subtitleDropoff;
+    const modalSubtitle = tripStep === 'START_TRIP' ? taModal('subtitleStart')
+                        : tripStep === 'END_RIDE' ? taModal('subtitleEndDay')
+                        : taModal('subtitleDropoff');
     
-    const modalConfirmLabel = tripStep === 'START_TRIP' ? t.modal.confirmStart
-                            : tripStep === 'END_RIDE' ? t.modal.confirmEndDay
-                            : t.modal.confirmMark;
+    const modalConfirmLabel = tripStep === 'START_TRIP' ? taModal('confirmStart')
+                            : tripStep === 'END_RIDE' ? taModal('confirmEndDay')
+                            : taModal('confirmMark');
 
     const handleModalConfirm = async () => {
         if (!activeBooking?.id) return;
@@ -396,7 +282,7 @@ export function ActiveTripScreen() {
             try {
                 const isOutstation = activeBooking.trip_type === 'OUT_STATION';
                 if (isOutstation && (!startMeterValue || !startMeterPhoto)) {
-                    showError(t.errors.meterRequired);
+                    showError(taError('meterRequired'));
                     return;
                 }
 
@@ -406,13 +292,11 @@ export function ActiveTripScreen() {
                 if (fgGuard === 'denied' || bgGuard === 'denied') {
                     confirmSheetRef.current?.close();
                     Alert.alert(
-                        language === 'ur' ? 'لوکیشن درکار ہے' : 'Location required',
-                        language === 'ur'
-                            ? 'لوکیشن کی اجازت نہیں ملی۔ ترتیبات میں جا کر لوکیشن چالو کریں تاکہ آپ سفر شروع کر سکیں۔'
-                            : 'Location permission was denied. Open Settings to allow location access so you can start this ride.',
+                        t('common:locationRequired'),
+                        t('common:locationDeniedMessage'),
                         [
-                            { text: language === 'ur' ? 'منسوخ' : 'Cancel', style: 'cancel' },
-                            { text: language === 'ur' ? 'ترتیبات کھولیں' : 'Open Settings', onPress: () => Linking.openSettings() },
+                            { text: t('common:cancel'), style: 'cancel' },
+                            { text: t('common:openSettings'), onPress: () => Linking.openSettings() },
                         ],
                     );
                     return;
@@ -423,7 +307,7 @@ export function ActiveTripScreen() {
                 const openMaps = displayPickupAddress
                     ? () => {
                           const url = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(displayPickupAddress)}`;
-                          Linking.openURL(url).catch(() => showError(t.errors.mapsFail));
+                          Linking.openURL(url).catch(() => showError(taError('mapsFail')));
                       }
                     : undefined;
 
@@ -460,14 +344,14 @@ export function ActiveTripScreen() {
                     return;
                 }
             } catch {
-                showError(t.errors.startFail);
+                showError(taError('startFail'));
             }
         } else if (tripStep === 'MARK_DROPPED_OFF') {
             try {
                 confirmSheetRef.current?.close();
                 await markDropoff({ bookingId: id }).unwrap();
             } catch {
-                showError(t.errors.dropoffFail);
+                showError(taError('dropoffFail'));
             }
         } else if (tripStep === 'END_RIDE') {
             try {
@@ -486,7 +370,7 @@ export function ActiveTripScreen() {
                     bookingId: id,
                     tripStep,
                 });
-                showError(t.errors.endDayFail);
+                showError(taError('endDayFail'));
             }
         }
     };
@@ -506,7 +390,7 @@ export function ActiveTripScreen() {
         if (!permission?.granted) {
             const { granted } = await requestPermission();
             if (!granted) {
-                Alert.alert(t.cameraRequired, t.cameraPermissionMsg);
+                Alert.alert(ta('cameraRequired'), ta('cameraPermissionMsg'));
                 return;
             }
         }
@@ -540,16 +424,19 @@ export function ActiveTripScreen() {
                 onDecline={onDisclosureDecline}
             />
             {/* Header Strip */}
-                <View style={styles.headerContent}>
-                    <Pressable style={styles.backButton} onPress={() => router.back()}>
-                        <Ionicons name="chevron-back" size={24} color="#000" />
-                    </Pressable>
-                    <Text style={styles.headerTitle}>{t.headerTitle}</Text>
+                <View style={[styles.headerContent, isRTL && { flexDirection: 'row-reverse' }]}>
+                    <BackButton
+                        onPress={() => router.back()}
+                        anchored={false}
+                        iconSize={24}
+                        style={styles.backButton}
+                    />
+                    <Text style={styles.headerTitle}>{ta('headerTitle')}</Text>
                     <View style={{ width: 40 }} />
                 </View>
 
-                <View style={[styles.illustrationContainer, language === 'ur' && { paddingVertical: 10 }]}>
-                    <View style={[styles.illustrationFrame, language === 'ur' && { height: 180, marginBottom: 12 }]}>
+                <View style={[styles.illustrationContainer, isRTL && { paddingVertical: 10 }]}>
+                    <View style={[styles.illustrationFrame, isRTL && { height: 180, marginBottom: 12 }]}>
                         <Animated.View
                             key={tripStep}
                             entering={FadeIn.duration(280)}
@@ -559,15 +446,15 @@ export function ActiveTripScreen() {
                         >
                             <ExpoImage
                                 source={illustrationSource}
-                                style={[styles.illustration, language === 'ur' && { height: 180 }]}
+                                style={[styles.illustration, isRTL && { height: 180 }]}
                                 contentFit="contain"
                             />
                         </Animated.View>
                     </View>
-                    <Text style={[styles.punchline, language === 'ur' && { paddingVertical: 12 }]}>{punchline}</Text>
+                    <Text style={[styles.punchline, isRTL && { paddingVertical: 12 }]}>{punchline}</Text>
                 </View>
 
-                <View style={[styles.divider, language === 'ur' && { marginVertical: 16 }]} />
+                <View style={[styles.divider, isRTL && { marginVertical: 16 }]} />
 
                 <View style={styles.mainContent} >
                     <View style={styles.passengerRow}>
@@ -575,7 +462,7 @@ export function ActiveTripScreen() {
                             <Text style={styles.avatarInitials}>{initials}</Text>
                         </View>
                         <View style={styles.passengerInfoBox}>
-                            <Text style={styles.passengerRole}>{t.passenger}</Text>
+                            <Text style={styles.passengerRole}>{ta('passenger')}</Text>
                             <Text style={styles.passengerName}>{passengerName}</Text>
                         </View>
                     </View>
@@ -585,7 +472,7 @@ export function ActiveTripScreen() {
                             <View style={styles.addressInfo}>
                                 <Ionicons name="location-outline" size={20} color="#666" />
                                 <View style={styles.addressTextContainer}>
-                                    <Text style={styles.addressLabel}>{t.pickupAddress}</Text>
+                                    <Text style={styles.addressLabel}>{ta('pickupAddress')}</Text>
                                     <Text style={styles.addressValue} numberOfLines={2}>
                                         {displayPickupAddress}
                                     </Text>
@@ -611,16 +498,12 @@ export function ActiveTripScreen() {
                             <View style={styles.permissionWarningBanner}>
                                 <Text style={styles.permissionWarningText}>
                                     {locationPermissionWarning === 'background'
-                                        ? language === 'ur'
-                                            ? 'ترتیبات میں لوکیشن کو "ہمیشہ اجازت" پر سیٹ کریں تاکہ سفر کے دوران ٹریکنگ ہو سکے۔'
-                                            : 'Set location access to "Allow all the time" in Settings so rides can be tracked.'
-                                        : language === 'ur'
-                                            ? 'ترتیبات میں ایپ کی اجازتوں سے لوکیشن چالو کریں، پھر سفر شروع کریں۔'
-                                            : 'Enable Location in Settings (App → Permissions) before starting a ride.'}
+                                        ? t('common:locationBackgroundHint')
+                                        : t('common:locationForegroundHint')}
                                 </Text>
                                 <Pressable onPress={() => Linking.openSettings()} hitSlop={8}>
                                     <Text style={styles.permissionWarningLink}>
-                                        {language === 'ur' ? 'ترتیبات کھولیں' : 'Open Settings'}
+                                        {t('common:openSettings')}
                                     </Text>
                                 </Pressable>
                             </View>
@@ -650,7 +533,7 @@ export function ActiveTripScreen() {
                                 onPress={handleEndFullTrip}
                                 disabled={isAnyLoading}
                             >
-                                <Text style={styles.endFullTripText}>{t.endFullTrip}</Text>
+                                <Text style={styles.endFullTripText}>{ta('endFullTrip')}</Text>
                             </Pressable>
                         )}
                     </View>
@@ -672,10 +555,10 @@ export function ActiveTripScreen() {
                             
                             {isOutstationStart ? (
                                 <View style={{ width: '100%', marginBottom: 20 }}>
-                                    <Text style={[styles.modalSubtitle, { textAlign: 'left', marginBottom: 8 }]}>{t.meterReading}</Text>
+                                    <Text style={[styles.modalSubtitle, { textAlign: 'left', marginBottom: 8 }]}>{ta('meterReading')}</Text>
                                     <TextInput
                                         style={styles.input}
-                                        placeholder={t.enterStartMeter}
+                                        placeholder={ta('enterStartMeter')}
                                         keyboardType="numeric"
                                         value={startMeterValue}
                                         onChangeText={setStartMeterValue}
@@ -685,13 +568,13 @@ export function ActiveTripScreen() {
                                         onSubmitEditing={Keyboard.dismiss}
                                     />
                                     
-                                    <Text style={[styles.modalSubtitle, { textAlign: 'left', marginTop: 16, marginBottom: 8 }]}>{t.meterPhoto}</Text>
+                                    <Text style={[styles.modalSubtitle, { textAlign: 'left', marginTop: 16, marginBottom: 8 }]}>{ta('meterPhoto')}</Text>
                                     {startMeterPhoto ? (
                                         <Pressable onPress={handleOpenCamera} style={{ width: '100%', borderRadius: 12, overflow: 'hidden', marginBottom: 8 }}>
                                             <Image source={{ uri: startMeterPhoto }} style={{ width: '100%', height: 120, borderRadius: 12 }} resizeMode="cover" />
                                             <View style={{ position: 'absolute', bottom: 6, right: 6, backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4, flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                                                 <Ionicons name="camera-outline" size={14} color="#fff" />
-                                                <Text style={{ color: '#fff', fontSize: 11, fontWeight: '600' }}>{t.tapToRetake}</Text>
+                                                <Text style={{ color: '#fff', fontSize: 11, fontWeight: '600' }}>{ta('tapToRetake')}</Text>
                                             </View>
                                         </Pressable>
                                     ) : (
@@ -700,7 +583,7 @@ export function ActiveTripScreen() {
                                             style={{ height: 120, borderRadius: 12, backgroundColor: '#F9FAFB', borderWidth: 1, borderColor: '#FF5A00', borderStyle: 'dashed', alignItems: 'center', justifyContent: 'center' }}
                                         >
                                             <Ionicons name="camera-outline" size={32} color="#9CA3AF" />
-                                            <Text style={{ color: '#9CA3AF', fontSize: 13, marginTop: 8, fontWeight: '500' }}>{t.tapToCaptureMeterPhoto}</Text>
+                                            <Text style={{ color: '#9CA3AF', fontSize: 13, marginTop: 8, fontWeight: '500' }}>{ta('tapToCaptureMeterPhoto')}</Text>
                                         </Pressable>
                                     )}
                                 </View>
@@ -724,7 +607,7 @@ export function ActiveTripScreen() {
                                 style={[styles.modalButton, styles.modalButtonSecondary]}
                                 onPress={() => confirmSheetRef.current?.close()}
                             >
-                                <Text style={styles.modalButtonSecondaryText}>{t.cancel}</Text>
+                                <Text style={styles.modalButtonSecondaryText}>{ta('cancel')}</Text>
                             </Pressable>
                         </View>
                     </TouchableWithoutFeedback>
@@ -744,7 +627,7 @@ export function ActiveTripScreen() {
                                 {isCapturing ? <ActivityIndicator color="#fff" /> : <View style={{ width: 56, height: 56, borderRadius: 28, backgroundColor: '#fff' }} />}
                             </Pressable>
                             <Text style={{ color: '#fff', marginTop: 8, fontSize: 14, fontWeight: '500' }}>
-                                {isCapturing ? t.capturing : t.tapToCaptureMeter}
+                                {isCapturing ? ta('capturing') : ta('tapToCaptureMeter')}
                             </Text>
                         </View>
                     </View>

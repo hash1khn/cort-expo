@@ -6,6 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { colors, radii, shadows, typography } from '../../../core/theme';
 import { VALID_SHUTTLE_QR } from '../../../services/mockData';
+import { useLanguage } from '@/i18n/useLanguage';
 
 type Props = {
   onClose?: () => void;
@@ -13,6 +14,7 @@ type Props = {
 };
 
 export function EmployeeQrScannerScreen({ onClose, onSuccess }: Props) {
+  const { t } = useLanguage();
   const [permission, requestPermission] = useCameraPermissions();
   const [lastScan, setLastScan] = useState<string | null>(null);
 
@@ -103,7 +105,7 @@ export function EmployeeQrScannerScreen({ onClose, onSuccess }: Props) {
 
         {lastScan ? (
           <View style={styles.toast}>
-            <Text style={styles.toastTitle}>{lastScan === VALID_SHUTTLE_QR ? 'Valid ride' : 'Invalid code'}</Text>
+            <Text style={styles.toastTitle}>{lastScan === VALID_SHUTTLE_QR ? t('employee:validRide') : t('employee:invalidCode')}</Text>
             <Text style={styles.toastValue} numberOfLines={1}>
               {lastScan}
             </Text>

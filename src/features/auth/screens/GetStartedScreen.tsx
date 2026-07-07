@@ -21,8 +21,9 @@ import { colors, fontFamily } from '../../../core/theme';
 import { CortButton } from '@/components';
 import { LegalBottomSheet, LegalDocumentType } from '../components/LegalBottomSheet';
 import { BottomSheetModal } from '@gorhom/bottom-sheet';
-import { LanguageSwitcher } from '../../../components/LanguageSwitcher';
-import { useLanguage } from '../../../context/LanguageContext';
+import { Ionicons } from '@expo/vector-icons';
+import Dropdown from '@/shared/ui/organisms/dropdown';
+import { useLanguage } from '@/i18n/useLanguage';
 
 const { width, height } = Dimensions.get('window');
 
@@ -31,24 +32,30 @@ const Text = (props: React.ComponentProps<typeof RNText>) => {
   return <RNText {...props} style={[{ fontFamily }, props.style]} />;
 };
 
+const LANG_OPTIONS = [
+  { value: 'en' as const, label: 'English', short: 'EN' },
+  { value: 'ur' as const, label: 'اردو', short: 'ار', fontFamily: 'NotoNastaliqUrdu' },
+  { value: 'ar' as const, label: 'العربية', short: 'عر', fontFamily: 'NotoSansArabic_400Regular' },
+];
+
 const CAROUSEL_DATA = [
   {
     id: '1',
     image: require('../../../../assets/user_onboard.svg'),
-    title: 'Your Commute,\nSimplified', // Added new line for better balance
-    subtitle: 'Safe • On-Time • Tracked',
+    titleKey: 'carousel.slide1Title',
+    subtitleKey: 'carousel.slide1Subtitle',
   },
   {
     id: '2',
     image: require('../../../../assets/car_pool.svg'),
-    title: 'Safe & Secure',
-    subtitle: 'Professional chauffeurs you can trust.',
+    titleKey: 'carousel.slide2Title',
+    subtitleKey: 'carousel.slide2Subtitle',
   },
   {
     id: '3',
     image: require('../../../../assets/bus_stop.svg'),
-    title: 'Destinations,On Time',
-    subtitle: 'Reliable shuttles for every route.',
+    titleKey: 'carousel.slide3Title',
+    subtitleKey: 'carousel.slide3Subtitle',
   },
 ];
 
@@ -59,9 +66,11 @@ type CarouselItemProps = {
   item: (typeof CAROUSEL_DATA)[0];
   index: number;
   scrollX: SharedValue<number>;
+  t: (key: string) => string;
+  isRTL: boolean;
 };
 
-function CarouselItem({ item, index, scrollX }: CarouselItemProps) {
+function CarouselItem({ item, index, scrollX, t, isRTL }: CarouselItemProps) {
   const animatedStyle = useAnimatedStyle(() => {
     const scale = interpolate(
       scrollX.value,
@@ -91,9 +100,9 @@ function CarouselItem({ item, index, scrollX }: CarouselItemProps) {
           contentFit="contain"
         />
       </Animated.View>
-      <View style={styles.textContainer}>
-        <Text style={styles.heading}>{item.title}</Text>
-        <Text style={styles.body}>{item.subtitle}</Text>
+      <View style={[styles.textContainer, isRTL && styles.textContainerRTL]}>
+        <Text style={[styles.heading, isRTL && styles.headingRTL]}>{t(item.titleKey)}</Text>
+        <Text style={[styles.body, isRTL && styles.bodyRTL]}>{t(item.subtitleKey)}</Text>
       </View>
     </View>
   );
@@ -136,7 +145,7 @@ export function GetStartedScreen({ onGetStarted }: { onGetStarted?: () => void }
   const scrollX = useSharedValue(0);
   const bottomSheetRef = React.useRef<BottomSheetModal>(null);
   const [docType, setDocType] = React.useState<LegalDocumentType>('terms');
-  const { t, isRTL } = useLanguage();
+  const { tAuth: t, isRTL, rtlFont, language, setLanguage } = useLanguage();
   const insets = useSafeAreaInsets();
 
   const openLegalModal = (type: LegalDocumentType) => {
@@ -150,16 +159,41 @@ export function GetStartedScreen({ onGetStarted }: { onGetStarted?: () => void }
     },
   });
 
-  // RTL text alignment helper
-  const rtlText = isRTL ? { textAlign: 'right' as const, writingDirection: 'rtl' as const } : {};
-  const rtlRow = isRTL ? { flexDirection: 'row-reverse' as const } : {};
-
   return (
     <View style={styles.root}>
       <SafeAreaView style={styles.safeArea}>
         {/* Language switcher — absolute top-right, respects safe area */}
         <View style={[styles.switcherWrap, { top: insets.top + 8 }]}>
-          <LanguageSwitcher />
+          <Dropdown>
+            <Dropdown.Trigger style={styles.langTrigger}>
+              <Ionicons name="globe-outline" size={15} color={colors.orange} />
+              {(() => {
+                const cur = LANG_OPTIONS.find(o => o.value === language);
+                return (
+                  <Text style={[
+                    styles.langTriggerText,
+                    cur?.fontFamily ? { fontFamily: cur.fontFamily, fontSize: 11 } : undefined,
+                  ]}>
+                    {cur?.short ?? 'EN'}
+                  </Text>
+                );
+              })()}
+              <Ionicons name="chevron-down" size={12} color="#9CA3AF" />
+            </Dropdown.Trigger>
+            <Dropdown.Content style={styles.langMenu}>
+              {LANG_OPTIONS.map(opt => (
+                <Dropdown.Item key={opt.value} onPress={() => setLanguage(opt.value)}>
+                  <Text style={[styles.langItemText, opt.fontFamily ? { fontFamily: opt.fontFamily } : undefined]}>
+                    {opt.label}
+                  </Text>
+                  {language === opt.value
+                    ? <Ionicons name="checkmark-circle" size={18} color={colors.orange} />
+                    : <View style={styles.langItemCircle} />
+                  }
+                </Dropdown.Item>
+              ))}
+            </Dropdown.Content>
+          </Dropdown>
         </View>
 
         {/* Header: centered logo */}
@@ -175,7 +209,7 @@ export function GetStartedScreen({ onGetStarted }: { onGetStarted?: () => void }
         <Animated.FlatList
           data={CAROUSEL_DATA}
           renderItem={({ item, index }) => (
-            <CarouselItem item={item} index={index} scrollX={scrollX} />
+            <CarouselItem item={item} index={index} scrollX={scrollX} t={t} isRTL={isRTL} />
           )}
           horizontal
           pagingEnabled
@@ -200,7 +234,12 @@ export function GetStartedScreen({ onGetStarted }: { onGetStarted?: () => void }
             onPress={() => onGetStarted?.()}
             variant="primary"
           />
-          <Text style={styles.footerLegalText}>
+          <Text
+            style={[
+              styles.footerLegalText,
+              isRTL && rtlFont ? { fontFamily: rtlFont, writingDirection: 'rtl' } : undefined,
+            ]}
+          >
             {t('byClickingGetStarted')}{' '}
             <Text suppressHighlighting={true} style={styles.legalLink} onPress={() => openLegalModal('terms')}>
               {t('termsOfUse')}
@@ -264,7 +303,11 @@ const styles = StyleSheet.create({
   textContainer: {
     alignItems: 'center',
     width: '100%',
-    minHeight: 80, // Prevents layout jump if text wraps
+    minHeight: 80,
+  },
+  textContainerRTL: {
+    marginTop: -24,
+    paddingTop: 16,
   },
   heading: {
     fontSize: 30,
@@ -275,6 +318,11 @@ const styles = StyleSheet.create({
     letterSpacing: -1,
     lineHeight: 36,
   },
+  headingRTL: {
+    fontSize: 26,
+    lineHeight: 60,
+    letterSpacing: 0,
+  },
   body: {
     fontSize: 17,
     color: colors.text,
@@ -283,6 +331,9 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     opacity: 0.6,
     letterSpacing: 0.2,
+  },
+  bodyRTL: {
+    lineHeight: 34,
   },
   indicatorContainer: {
     flexDirection: 'row',
@@ -314,5 +365,50 @@ const styles = StyleSheet.create({
     color: colors.orange,
     fontWeight: '700',
     textDecorationLine: 'underline',
+  },
+  langTrigger: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.07,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  langTriggerText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#1A1A1A',
+    width: 22,
+    textAlign: 'center',
+  },
+  langMenu: {
+    backgroundColor: '#FFFFFF',
+    minWidth: 160,
+    borderRadius: 14,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.1,
+    shadowRadius: 16,
+    elevation: 10,
+  },
+  langItemText: {
+    fontSize: 15,
+    color: '#1A1A1A',
+    fontWeight: '500',
+  },
+  langItemCircle: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    borderWidth: 1.5,
+    borderColor: '#D1D5DB',
   },
 });

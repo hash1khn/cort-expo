@@ -3,13 +3,20 @@ import {
   View,
   Text as RNText,
   ScrollView,
-  Pressable,
 } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { fontFamily } from '@/core/theme';
+import { BackButton } from '@/components/BackButton';
+import { useLanguage } from '@/i18n/useLanguage';
+import {
+  buildRtlBadgeContainerStyle,
+  buildRtlBadgeTextStyle,
+  buildRtlDetailTextStyle,
+  isRTLLanguage,
+  type Language,
+} from '@/i18n/types';
 import { useAppSelector } from '../../../store/hooks';
 import { useGetEmployeeBookingDetailQuery } from '../services/bookingsApi';
 import { useGetShuttleTripsForEmployeeQuery } from '../services/employeeShuttleApi';
@@ -18,12 +25,47 @@ const Text = (props: React.ComponentProps<typeof RNText>) => {
   return <RNText {...props} style={[{ fontFamily }, props.style]} />;
 };
 
-function DetailRow({ label, value }: { label: string; value: string }) {
+function DetailRow({ label, value, isRTL, language }: { label: string; value: string; isRTL?: boolean; language?: Language }) {
+  const rtlTextMetrics = isRTL && language ? buildRtlDetailTextStyle(language) : undefined;
   return (
-    <View className="flex-row justify-between items-center px-4 py-4 border-b border-gray-100">
-      <Text className="text-[15px] font-semibold text-gray-500">{label}</Text>
-      <Text className="text-[15px] font-semibold text-black flex-1 text-right ml-4" numberOfLines={2}>
+    <View
+      className={`${isRTL ? 'flex-row-reverse' : 'flex-row'} justify-between items-center px-4 py-4 border-b border-gray-100`}
+    >
+      <Text className="text-[15px] font-semibold text-gray-500" style={rtlTextMetrics}>{label}</Text>
+      <Text
+        className={`text-[15px] font-semibold text-black flex-1 ${isRTL ? 'text-left mr-4' : 'text-right ml-4'}`}
+        style={rtlTextMetrics}
+        numberOfLines={2}
+      >
         {value}
+      </Text>
+    </View>
+  );
+}
+
+function StatusBadge({
+  label,
+  backgroundColor,
+  textColor,
+  language,
+}: {
+  label: string;
+  backgroundColor: string;
+  textColor: string;
+  language: Language;
+}) {
+  const isRtl = isRTLLanguage(language);
+
+  return (
+    <View
+      className={isRtl ? 'rounded-full' : 'rounded-full px-3 py-1'}
+      style={[{ backgroundColor }, buildRtlBadgeContainerStyle(language)]}
+    >
+      <Text
+        className={isRtl ? undefined : 'text-sm font-semibold'}
+        style={[{ color: textColor }, buildRtlBadgeTextStyle(language)]}
+      >
+        {label}
       </Text>
     </View>
   );
@@ -73,6 +115,7 @@ function RideDetailsSkeleton() {
 }
 
 const RideDetails = () => {
+  const { t, isRTL, language } = useLanguage();
   const { rideId, rideType, from, rideDate } = useLocalSearchParams<{
     rideId?: string;
     rideType?: string;
@@ -146,13 +189,7 @@ const RideDetails = () => {
     return (
       <SafeAreaView className="flex-1 bg-white" edges={['top']}>
         <View className="flex-row items-center justify-center px-4 py-3 relative">
-          <Pressable
-            onPress={handleBack}
-            className="rounded-full flex-row items-center justify-center absolute left-4"
-          >
-            <Ionicons name="chevron-back" size={26} color="black" />
-            <Text className="text-black text-lg font-medium">Back</Text>
-          </Pressable>
+          <BackButton label={t('common:back')} onPress={handleBack} />
           <Text className="text-black text-xl font-bold text-center">{headerDate}</Text>
         </View>
         <RideDetailsSkeleton />
@@ -166,7 +203,9 @@ const RideDetails = () => {
     const vehicle = bookingDetail?.vehicles;
     const pickup = bookingDetail?.pickup_address ?? '—';
     const destinations = bookingDetail?.destination_cities?.join(', ') ?? '—';
-    const tripType = bookingDetail?.trip_type === 'OUT_STATION' ? 'Outstation' : 'In-city';
+    const tripType = bookingDetail?.trip_type === 'OUT_STATION'
+      ? t('employee:outstation')
+      : t('employee:inCity');
     const scheduledFor = bookingDetail?.scheduled_for
       ? new Date(bookingDetail.scheduled_for).toLocaleString('en-US', {
           weekday: 'short',
@@ -181,13 +220,7 @@ const RideDetails = () => {
     return (
       <SafeAreaView className="flex-1 bg-white">
         <View className="flex-row items-center justify-center px-4 py-3 relative">
-          <Pressable
-            onPress={handleBack}
-            className="rounded-full flex-row items-center justify-center absolute left-4"
-          >
-            <Ionicons name="chevron-back" size={26} color="black" />
-            <Text className="text-black text-lg font-medium">Back</Text>
-          </Pressable>
+          <BackButton label={t('common:back')} onPress={handleBack} />
           <Text className="text-black text-xl font-bold text-center">{headerDate}</Text>
         </View>
 
@@ -198,36 +231,41 @@ const RideDetails = () => {
         >
           {/* Trip info */}
           <View className="overflow-hidden rounded-2xl mx-4 mt-6 border border-gray-200 bg-white">
-            <View className="bg-gray-50 px-4 py-3 border-b border-gray-200">
-              <Text className="text-[14px] font-semibold text-gray-600">Trip information</Text>
-            </View>
-            <DetailRow label="Type" value={tripType} />
-            <DetailRow label="Pickup" value={pickup} />
-            {destinations !== '—' && <DetailRow label="Destination" value={destinations} />}
-            <DetailRow label="Scheduled" value={scheduledFor} />
-            <View className="flex-row justify-between items-center px-4 py-4">
-              <Text className="text-[15px] font-semibold text-gray-500">Status</Text>
-              <View
-                className="rounded-full px-3 py-1"
-                style={{ backgroundColor: bookingDetail?.status === 'COMPLETED' ? '#dcfce7' : '#fef9c3' }}
+            <View className={`bg-gray-50 px-4 py-3 border-b border-gray-200 ${isRTL ? 'items-end' : ''}`}>
+              <Text
+                className="text-[14px] font-semibold text-gray-600"
+                style={buildRtlDetailTextStyle(language)}
               >
-                <Text
-                  className="text-sm font-semibold"
-                  style={{ color: bookingDetail?.status === 'COMPLETED' ? '#16a34a' : '#a16207' }}
-                >
-                  {bookingDetail?.status ?? '—'}
-                </Text>
-              </View>
+                {t('employee:tripInformation')}
+              </Text>
+            </View>
+            <DetailRow isRTL={isRTL} language={language} label={t('employee:type')} value={tripType} />
+            <DetailRow isRTL={isRTL} language={language} label={t('employee:pickup')} value={pickup} />
+            {destinations !== '—' && <DetailRow isRTL={isRTL} language={language} label={t('employee:destination')} value={destinations} />}
+            <DetailRow isRTL={isRTL} language={language} label={t('employee:scheduled')} value={scheduledFor} />
+            <View className={`${isRTL ? 'flex-row-reverse' : 'flex-row'} justify-between items-center px-4 py-4`}>
+              <Text className="text-[15px] font-semibold text-gray-500">{t('employee:status')}</Text>
+              <StatusBadge
+                label={bookingDetail?.status === 'COMPLETED' ? t('employee:completed') : (bookingDetail?.status ?? '—')}
+                backgroundColor={bookingDetail?.status === 'COMPLETED' ? '#dcfce7' : '#fef9c3'}
+                textColor={bookingDetail?.status === 'COMPLETED' ? '#16a34a' : '#a16207'}
+                language={language}
+              />
             </View>
           </View>
 
           {/* Driver info */}
           <View className="overflow-hidden rounded-2xl mx-4 mt-4 border border-gray-200 bg-white">
-            <View className="bg-gray-50 px-4 py-3 border-b border-gray-200">
-              <Text className="text-[14px] font-semibold text-gray-600">Driver information</Text>
+            <View className={`bg-gray-50 px-4 py-3 border-b border-gray-200 ${isRTL ? 'items-end' : ''}`}>
+              <Text
+                className="text-[14px] font-semibold text-gray-600"
+                style={buildRtlDetailTextStyle(language)}
+              >
+                {t('employee:driverInformation')}
+              </Text>
             </View>
-            <View className="flex-row items-center px-4 py-4 border-b border-gray-100">
-              <View className="w-12 h-12 rounded-full bg-black items-center justify-center overflow-hidden mr-3">
+            <View className={`${isRTL ? 'flex-row-reverse' : 'flex-row'} items-center px-4 py-4 border-b border-gray-100`}>
+              <View className={`w-12 h-12 rounded-full bg-black items-center justify-center overflow-hidden ${isRTL ? 'ml-3' : 'mr-3'}`}>
                 {driver?.profile_picture_url ? (
                   <ExpoImage
                     source={{ uri: driver.profile_picture_url }}
@@ -245,15 +283,17 @@ const RideDetails = () => {
               <Text className="text-[15px] font-semibold text-black">{driver?.full_name ?? '—'}</Text>
             </View>
             <DetailRow
-              label="Vehicle"
+              isRTL={isRTL}
+              language={language}
+              label={t('employee:vehicle')}
               value={
                 vehicle
                   ? `${vehicle.color ? vehicle.color + ' ' : ''}${vehicle.make ?? ''} ${vehicle.model ?? ''}`.trim()
                   : '—'
               }
             />
-            <View className="flex-row justify-between items-center px-4 py-4">
-              <Text className="text-[15px] font-semibold text-gray-500">Number Plate</Text>
+            <View className={`${isRTL ? 'flex-row-reverse' : 'flex-row'} justify-between items-center px-4 py-4`}>
+              <Text className="text-[15px] font-semibold text-gray-500">{t('employee:numberPlate')}</Text>
               <Text className="text-[15px] font-semibold text-black">{vehicle?.plate_number ?? '—'}</Text>
             </View>
           </View>
@@ -274,13 +314,7 @@ const RideDetails = () => {
   return (
     <SafeAreaView className="flex-1 bg-white">
       <View className="flex-row items-center justify-center px-4 py-3 relative">
-        <Pressable
-          onPress={handleBack}
-          className="rounded-full flex-row items-center justify-center absolute left-4"
-        >
-          <Ionicons name="chevron-back" size={26} color="black" />
-          <Text className="text-black text-lg font-medium">Back</Text>
-        </Pressable>
+        <BackButton label={t('common:back')} onPress={handleBack} />
         <Text className="text-black text-xl font-bold text-center">{headerDate}</Text>
       </View>
 
@@ -291,26 +325,29 @@ const RideDetails = () => {
       >
         {/* Trip info */}
         <View className="overflow-hidden rounded-2xl mx-4 mt-6 border border-gray-200 bg-white">
-          <View className="bg-gray-50 px-4 py-3 border-b border-gray-200">
-            <Text className="text-[14px] font-semibold text-gray-600">Trip information</Text>
+          <View className={`bg-gray-50 px-4 py-3 border-b border-gray-200 ${isRTL ? 'items-end' : ''}`}>
+            <Text className="text-[14px] font-semibold text-gray-600">{t('employee:tripInformation')}</Text>
           </View>
-          <DetailRow label="Route" value={routeName} />
-          <DetailRow label="Direction" value={direction} />
-          <View className="flex-row justify-between items-center px-4 py-4">
-            <Text className="text-[15px] font-semibold text-gray-500">Status</Text>
-            <View className="rounded-full px-3 py-1 bg-[#dcfce7]">
-              <Text className="text-sm font-semibold text-[#16a34a]">Completed</Text>
-            </View>
+          <DetailRow isRTL={isRTL} language={language} label={t('employee:route')} value={routeName} />
+          <DetailRow isRTL={isRTL} language={language} label={t('employee:direction')} value={direction} />
+          <View className={`${isRTL ? 'flex-row-reverse' : 'flex-row'} justify-between items-center px-4 py-4`}>
+            <Text className="text-[15px] font-semibold text-gray-500">{t('employee:status')}</Text>
+            <StatusBadge
+              label={t('employee:completed')}
+              backgroundColor="#dcfce7"
+              textColor="#16a34a"
+              language={language}
+            />
           </View>
         </View>
 
         {/* Driver info */}
         <View className="overflow-hidden rounded-2xl mx-4 mt-4 border border-gray-200 bg-white">
-          <View className="bg-gray-50 px-4 py-3 border-b border-gray-200">
-            <Text className="text-[14px] font-semibold text-gray-600">Driver information</Text>
+          <View className={`bg-gray-50 px-4 py-3 border-b border-gray-200 ${isRTL ? 'items-end' : ''}`}>
+            <Text className="text-[14px] font-semibold text-gray-600">{t('employee:driverInformation')}</Text>
           </View>
-          <View className="flex-row items-center px-4 py-4 border-b border-gray-100">
-            <View className="w-12 h-12 rounded-full bg-black items-center justify-center overflow-hidden mr-3">
+          <View className={`${isRTL ? 'flex-row-reverse' : 'flex-row'} items-center px-4 py-4 border-b border-gray-100`}>
+            <View className={`w-12 h-12 rounded-full bg-black items-center justify-center overflow-hidden ${isRTL ? 'ml-3' : 'mr-3'}`}>
               {driver?.profile_picture_url ? (
                 <ExpoImage
                   source={{ uri: driver.profile_picture_url }}
@@ -329,9 +366,9 @@ const RideDetails = () => {
           </View>
           {vehicle && (
             <>
-              <DetailRow label="Vehicle" value={`${vehicle.make ?? ''} ${vehicle.model ?? ''}`.trim() || '—'} />
-              <View className="flex-row justify-between items-center px-4 py-4">
-                <Text className="text-[15px] font-semibold text-gray-500">Number Plate</Text>
+              <DetailRow isRTL={isRTL} language={language} label={t('employee:vehicle')} value={`${vehicle.make ?? ''} ${vehicle.model ?? ''}`.trim() || '—'} />
+              <View className={`${isRTL ? 'flex-row-reverse' : 'flex-row'} justify-between items-center px-4 py-4`}>
+                <Text className="text-[15px] font-semibold text-gray-500">{t('employee:numberPlate')}</Text>
                 <Text className="text-[15px] font-semibold text-black">{vehicle.plate_number}</Text>
               </View>
             </>
