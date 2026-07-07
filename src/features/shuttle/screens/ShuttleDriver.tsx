@@ -1,7 +1,11 @@
 import React, { useMemo, useEffect, useState, useCallback } from 'react';
 import { Pressable, RefreshControl, Text, View, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Feather, Ionicons, FontAwesome5, MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
+import Feather from "@react-native-vector-icons/feather/static";
+import Ionicons from "@react-native-vector-icons/ionicons/static";
+import FontAwesome5 from "@react-native-vector-icons/fontawesome5/static";
+import MaterialCommunityIcons from "@react-native-vector-icons/material-design-icons/static";
+import MaterialIcons from "@react-native-vector-icons/material-icons/static";
 import { useNavigation } from '@react-navigation/native';
 import { router } from 'expo-router';
 import { useLanguage } from '@/i18n/useLanguage';

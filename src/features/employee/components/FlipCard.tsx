@@ -7,7 +7,8 @@ import {
 import MapView, { Marker, PROVIDER_GOOGLE, Region } from 'react-native-maps';
 import { GooglePlacesAutocomplete } from 'react-native-google-places-autocomplete';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import Ionicons from "@react-native-vector-icons/ionicons/static";
+import MaterialCommunityIcons from "@react-native-vector-icons/material-design-icons/static";
 import { Image } from 'expo-image';
 import { fontFamily } from '@/core/theme';
 import { EmployeeActiveChauffeurBooking, useRequestNextDayPickupMutation } from "../services/bookingsApi";

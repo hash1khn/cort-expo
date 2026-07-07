@@ -14,7 +14,10 @@ import {
   InteractionManager,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { AntDesign, Entypo, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import AntDesign from "@react-native-vector-icons/ant-design/static";
+import Entypo from "@react-native-vector-icons/entypo/static";
+import Ionicons from "@react-native-vector-icons/ionicons/static";
+import MaterialCommunityIcons from "@react-native-vector-icons/material-design-icons/static";
 import { fontFamily } from '@/core/theme';
 import { useLanguage } from '@/i18n/useLanguage';
 import { buildRtlLinkTextStyle, buildRtlPromoTextStyle } from '@/i18n/types';

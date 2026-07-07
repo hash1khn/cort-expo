@@ -2,7 +2,9 @@ import React, { useCallback, useEffect, useMemo, useRef, useState, } from 'react
 import { Linking, Platform, Pressable, StyleSheet, Text as RNText, View, ActivityIndicator, Image, Dimensions, Share } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
 import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
-import { Ionicons, MaterialCommunityIcons, Octicons } from '@expo/vector-icons';
+import Ionicons from "@react-native-vector-icons/ionicons/static";
+import MaterialCommunityIcons from "@react-native-vector-icons/material-design-icons/static";
+import Octicons from "@react-native-vector-icons/octicons/static";
 import BottomSheet, { BottomSheetView } from '@gorhom/bottom-sheet';
 import Animated, { useSharedValue, useAnimatedStyle, interpolate, useDerivedValue } from 'react-native-reanimated';
 import { router, useLocalSearchParams } from 'expo-router';

@@ -17,7 +17,7 @@ import {
   BottomSheetScrollView,
   BottomSheetTextInput,
 } from '@gorhom/bottom-sheet';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from "@react-native-vector-icons/ionicons/static";
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { colors, typography } from '../../../core/theme';
 import { CortButton } from '../../../components';
@@ -98,17 +98,14 @@ export const ChauffeurSignupBottomSheet = React.forwardRef<BottomSheetModal, {}>
 
     const canSubmit = useMemo(() => {
       const photosOk = (Object.keys(EMPTY_PHOTOS) as ChauffeurPhotoKey[]).every((k) => !!photos[k]);
-      return (
-        name.trim().length > 0 &&
-        phone.replace(/\D/g, '').length === 11 &&
-        cnic.trim().length > 0 &&
-        licenseNumber.trim().length > 0 &&
-        carMake.trim().length > 0 &&
-        carModel.trim().length > 0 &&
-        parsedCarYear >= MIN_CAR_YEAR &&
-        parsedCarYear <= maxCarYear &&
-        photosOk
-      );
+      return (name.trim().length > 0 &&
+      phone.replace(/\D/g, '').length === 11 &&
+      cnic.trim().length > 0 &&
+      licenseNumber.trim().length > 0 &&
+      carMake.trim().length > 0 &&
+      carModel.trim().length > 0 &&
+      parsedCarYear >= MIN_CAR_YEAR &&
+      parsedCarYear <= maxCarYear && photosOk);
     }, [name, phone, cnic, licenseNumber, carMake, carModel, parsedCarYear, maxCarYear, photos]);
 
     const resetForm = useCallback(() => {
@@ -491,7 +488,6 @@ export const ChauffeurSignupBottomSheet = React.forwardRef<BottomSheetModal, {}>
             </View>
           )}
         </BottomSheetModal>
-
         <Modal visible={activePhotoCapture !== null} animationType="slide">
           <View style={styles.cameraRoot}>
             <CameraView ref={cameraRef} style={StyleSheet.absoluteFill} />

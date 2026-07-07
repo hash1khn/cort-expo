@@ -6,7 +6,10 @@ import {
     DrawerContentComponentProps,
 } from '@react-navigation/drawer';
 import { BottomSheetModal } from '@gorhom/bottom-sheet';
-import { Ionicons, MaterialCommunityIcons, Feather, MaterialIcons } from '@expo/vector-icons';
+import Ionicons from "@react-native-vector-icons/ionicons/static";
+import MaterialCommunityIcons from "@react-native-vector-icons/material-design-icons/static";
+import Feather from "@react-native-vector-icons/feather/static";
+import MaterialIcons from "@react-native-vector-icons/material-icons/static";
 import { useAppSelector, useAppDispatch } from '../../../store/hooks';
 import { logOut } from '@/features/auth/store';
 import { logout } from '@/features/auth/services';

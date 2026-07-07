@@ -1,6 +1,6 @@
 import React, { useCallback } from 'react';
 import { View, Pressable } from 'react-native';
-import { AntDesign } from '@expo/vector-icons';
+import AntDesign from "@react-native-vector-icons/ant-design/static";
 import { useNavigation } from 'expo-router';
 import { DrawerActions } from '@react-navigation/native';
 import { Image } from 'expo-image';

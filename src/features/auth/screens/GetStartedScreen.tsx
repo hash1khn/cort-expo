@@ -21,7 +21,7 @@ import { colors, fontFamily } from '../../../core/theme';
 import { CortButton } from '@/components';
 import { LegalBottomSheet, LegalDocumentType } from '../components/LegalBottomSheet';
 import { BottomSheetModal } from '@gorhom/bottom-sheet';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from "@react-native-vector-icons/ionicons/static";
 import Dropdown from '@/shared/ui/organisms/dropdown';
 import { useLanguage } from '@/i18n/useLanguage';
 

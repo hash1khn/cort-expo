@@ -5,7 +5,7 @@ import {
     DrawerContentScrollView,
     DrawerContentComponentProps,
 } from '@react-navigation/drawer';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import MaterialCommunityIcons from "@react-native-vector-icons/material-design-icons/static";
 import { useAppSelector, useAppDispatch } from '../../../store/hooks';
 import { logOut } from '@/features/auth/store';
 import { logout } from '@/features/auth/services';

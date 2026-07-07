@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { View, Text as RNText, Pressable, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from "@react-native-vector-icons/ionicons/static";
 import { useRouter } from 'expo-router';
 import { CompactRideHistoryCard } from '../components/CompactRideHistoryCard';
 import { CompactRideHistoryCardSkeleton } from '../components/CompactRideHistoryCardSkeleton';

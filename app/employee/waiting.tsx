@@ -3,7 +3,7 @@ import { View, Text as RNText, TouchableOpacity } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import LottieView from 'lottie-react-native';
 import { fontFamily } from '@/core/theme';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from "@react-native-vector-icons/ionicons/static";
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useChauffeurSocket } from '@/hooks/useChauffeurSocket';
 import { useAppSelector } from '@/store/hooks';

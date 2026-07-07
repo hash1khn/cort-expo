@@ -18,7 +18,7 @@ import { Image } from 'expo-image';
 import BottomSheet, { BottomSheetBackdrop, BottomSheetView } from '@gorhom/bottom-sheet';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from "@react-native-vector-icons/ionicons/static";
 
 import { CortButton } from '../../../components';
 import { colors, radii, typography } from '../../../core/theme';

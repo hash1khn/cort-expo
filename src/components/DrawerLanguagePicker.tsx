@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Pressable, Text as RNText, View } from 'react-native';
-import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
+import MaterialCommunityIcons from "@react-native-vector-icons/material-design-icons/static";
+import MaterialIcons from "@react-native-vector-icons/material-icons/static";
 import Animated, { Easing, FadeInDown, FadeOutUp } from 'react-native-reanimated';
 import { useLanguage, type Language } from '@/i18n/useLanguage';
 import { buildRtlDrawerTextStyle } from '@/i18n/types';

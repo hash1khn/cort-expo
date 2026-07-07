@@ -1,6 +1,6 @@
 import React from 'react';
 import { Pressable, Text, type StyleProp, type ViewStyle } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from "@react-native-vector-icons/ionicons/static";
 import { useLanguage } from '@/i18n/useLanguage';
 import { buildRtlBackButtonTextStyle } from '@/i18n/types';
 

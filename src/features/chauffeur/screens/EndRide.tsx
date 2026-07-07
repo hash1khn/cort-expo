@@ -1,7 +1,8 @@
 import React, { useState, useRef } from 'react';
 import { View, ScrollView, Pressable, Text as RNText, StyleSheet, Image, Modal, ActivityIndicator, Alert, TextInput } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Feather, Ionicons } from '@expo/vector-icons';
+import Feather from "@react-native-vector-icons/feather/static";
+import Ionicons from "@react-native-vector-icons/ionicons/static";
 import { router, useLocalSearchParams } from 'expo-router';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { fontFamily } from '@/core/theme';

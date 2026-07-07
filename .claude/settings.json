@@ -11,7 +11,9 @@
       "Bash(xargs kill -9)",
       "Bash(pkill -f \"expo start --web\")",
       "Bash(lsof -ti:19100)",
-      "Bash(git status *)"
+      "Bash(git status *)",
+      "Bash(npx expo-doctor *)",
+      "Bash(node node_modules/expo/bin/cli config --json --full)"
     ]
   }
 }
