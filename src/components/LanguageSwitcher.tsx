@@ -10,14 +10,15 @@ const OPTIONS: { label: string; value: Language; fontFamily?: string }[] = [
 ];
 
 export function LanguageSwitcher() {
-  const { language, setLanguage } = useLanguage();
+  const { language, setLanguage, availableLanguages } = useLanguage();
+  const options = OPTIONS.filter((opt) => availableLanguages.includes(opt.value));
 
   return (
     <View style={styles.container}>
-      {OPTIONS.map((opt, idx) => {
+      {options.map((opt, idx) => {
         const isActive = language === opt.value;
         const isFirst = idx === 0;
-        const isLast = idx === OPTIONS.length - 1;
+        const isLast = idx === options.length - 1;
         return (
           <TouchableOpacity
             key={opt.value}

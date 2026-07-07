@@ -48,6 +48,7 @@ import { router } from 'expo-router';
 import { Platform } from 'react-native';
 import { apiFetch } from '../src/services/api';
 import { useNotification } from '../src/context/NotificationContext';
+import { refreshAvailableLanguages } from '../src/i18n/region';
 
 SplashScreen.preventAutoHideAsync().catch(() => {
   // no-op (can throw if called twice in dev)
@@ -143,6 +144,13 @@ function RootLayoutContent() {
   }, []);
 
   useSplashPrefetch(fontsLoaded, hasHydrated);
+
+  // Fire-and-forget: resolve region from IP to decide which languages to
+  // offer (e.g. Pakistan -> EN/UR, Saudi Arabia -> EN/AR). No permission
+  // needed, must not block splash hide.
+  useEffect(() => {
+    refreshAvailableLanguages();
+  }, []);
 
   useEffect(() => {
     setOnUnauthorized(() => store.dispatch(logOut()));

@@ -21,7 +21,8 @@ const ENTER_DURATION_MS = 320;
 const EXIT_DURATION_MS = 200;
 
 export function DrawerLanguagePicker() {
-  const { language, setLanguage, t, isRTL, rtlRowStyle, drawerNavTextStyle } = useLanguage();
+  const { language, setLanguage, availableLanguages, t, isRTL, rtlRowStyle, drawerNavTextStyle } = useLanguage();
+  const options = OPTIONS.filter((opt) => availableLanguages.includes(opt.value));
   const [isOpen, setIsOpen] = useState(false);
 
   const handleSelect = (value: Language) => {
@@ -49,7 +50,7 @@ export function DrawerLanguagePicker() {
 
       {isOpen && (
         <View className={`mb-2 ${isRTL ? 'mr-9' : 'ml-9'}`}>
-          {OPTIONS.map((opt, index) => (
+          {options.map((opt, index) => (
             <Animated.View
               key={opt.value}
               entering={FadeInDown.duration(ENTER_DURATION_MS)

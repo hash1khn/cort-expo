@@ -145,7 +145,8 @@ export function GetStartedScreen({ onGetStarted }: { onGetStarted?: () => void }
   const scrollX = useSharedValue(0);
   const bottomSheetRef = React.useRef<BottomSheetModal>(null);
   const [docType, setDocType] = React.useState<LegalDocumentType>('terms');
-  const { tAuth: t, isRTL, rtlFont, language, setLanguage } = useLanguage();
+  const { tAuth: t, isRTL, rtlFont, language, setLanguage, availableLanguages } = useLanguage();
+  const langOptions = LANG_OPTIONS.filter((opt) => availableLanguages.includes(opt.value));
   const insets = useSafeAreaInsets();
 
   const openLegalModal = (type: LegalDocumentType) => {
@@ -181,7 +182,7 @@ export function GetStartedScreen({ onGetStarted }: { onGetStarted?: () => void }
               <Ionicons name="chevron-down" size={12} color="#9CA3AF" />
             </Dropdown.Trigger>
             <Dropdown.Content style={styles.langMenu}>
-              {LANG_OPTIONS.map(opt => (
+              {langOptions.map(opt => (
                 <Dropdown.Item key={opt.value} onPress={() => setLanguage(opt.value)}>
                   <Text style={[styles.langItemText, opt.fontFamily ? { fontFamily: opt.fontFamily } : undefined]}>
                     {opt.label}

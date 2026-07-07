@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(curl -s http://localhost:8080/region)",
+      "Bash(curl -s -H \"X-Forwarded-For: 39.32.0.1\" http://localhost:8080/region)",
+      "Bash(curl -s -H \"X-Forwarded-For: 178.145.0.1\" http://localhost:8080/region)",
+      "Bash(curl -s -H \"X-Forwarded-For: 8.8.8.8\" http://localhost:8080/region)",
+      "Bash(pkill -f \"nest start\")",
+      "Bash(pkill -f \"cort-backend\")",
+      "Bash(lsof -ti:8080)",
+      "Bash(xargs kill -9)",
+      "Bash(pkill -f \"expo start --web\")",
+      "Bash(lsof -ti:19100)",
+      "Bash(git status *)"
+    ]
+  }
+}

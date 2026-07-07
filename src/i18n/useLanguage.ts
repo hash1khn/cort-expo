@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { APP_NAMESPACES, changeAppLanguage } from './index';
 import {
@@ -10,6 +10,11 @@ import {
   localeCode,
   rtlFontFamily,
 } from './types';
+import {
+  getAvailableLanguagesSnapshot,
+  hydrateAvailableLanguagesFromCache,
+  subscribeAvailableLanguages,
+} from './region';
 
 export type { Language };
 
@@ -44,6 +49,15 @@ export function useLanguage() {
     [language],
   );
 
+  const [availableLanguages, setAvailableLanguages] = useState<Language[]>(
+    getAvailableLanguagesSnapshot(),
+  );
+
+  useEffect(() => {
+    hydrateAvailableLanguagesFromCache();
+    return subscribeAvailableLanguages(setAvailableLanguages);
+  }, []);
+
   const tAuth = useCallback(
     (key: string, options?: Record<string, unknown>) =>
       t(key, { ns: 'auth', ...options }),
@@ -53,6 +67,7 @@ export function useLanguage() {
   return {
     language,
     setLanguage,
+    availableLanguages,
     isRTL,
     ready,
     t,
