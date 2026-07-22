@@ -8,7 +8,7 @@ export default function GetStartedRoute() {
   return (
     <GetStartedScreen
       onGetStarted={() => {
-        router.push('/(auth)/login');
+        router.navigate('/(auth)/login');
       }}
     />
   );

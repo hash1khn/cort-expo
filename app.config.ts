@@ -46,7 +46,6 @@ export default ({ config }: ConfigContext): ExpoConfig => {
     platforms: ["ios", "android"],
     orientation: "portrait",
     userInterfaceStyle: "light",
-    newArchEnabled: true,
     icon: icon,
     scheme: scheme,
     splash: {
@@ -80,7 +79,6 @@ export default ({ config }: ConfigContext): ExpoConfig => {
         backgroundColor: "#000000",
       },
       package: packageName,
-      edgeToEdgeEnabled: true,
       predictiveBackGestureEnabled: false,
       "googleServicesFile": "./google-services.json",
       permissions: [
