@@ -37,6 +37,8 @@ import {
   useCompleteTripMutation,
   TripEmployee,
   shuttleApi,
+  formatShuttleVehicleLabel,
+  formatShuttleVehiclePlate,
 } from '../services/shuttleApi';
 import { useActiveTrip, type Stop } from '../hooks/useActiveTrip';
 import { useRideSocket } from '@/hooks/useRideSocket';
@@ -82,6 +84,11 @@ export default function RideInProgress() {
     isAtStop,
     isLoading: isTripsLoading,
   } = useActiveTrip(safePreferredTripId);
+
+  const vehicle = activeTrip?.routes?.vehicles ?? null;
+  const vehicleLabel = formatShuttleVehicleLabel(vehicle);
+  const vehiclePlate = formatShuttleVehiclePlate(vehicle);
+  const vehicleModel = vehicle?.model?.trim() || vehicle?.make?.trim() || '—';
 
   const userId = useAppSelector((s) => s.auth.user?.id ?? '');
 
@@ -417,7 +424,11 @@ export default function RideInProgress() {
           <Text style={styles.titleText}>
             {rideStarted ? tr('tripInProgress') : tr('readyToGo')}
           </Text>
-          <Text style={styles.subtitleText}>Black Hiace • ABR 986</Text>
+          <Text style={styles.subtitleText}>
+            {vehicleLabel === '—' && vehiclePlate === '—'
+              ? '—'
+              : `${vehicleLabel} • ${vehiclePlate}`}
+          </Text>
         </View>
 
         {/* Info Grid */}
@@ -427,8 +438,8 @@ export default function RideInProgress() {
             <View className="w-8 h-8 rounded-lg bg-black/10 items-center justify-center mb-0.5">
               <MaterialCommunityIcons name="bus" size={16} color="#000" />
             </View>
-            <Text className="text-[10px] font-semibold text-black/50 uppercase tracking-[0.8px]">{tr('hiace')}</Text>
-            <Text className="text-[13px] font-extrabold text-[#000] tracking-[-0.2px]">ABR 986</Text>
+            <Text className="text-[10px] font-semibold text-black/50 uppercase tracking-[0.8px]">{vehicleModel}</Text>
+            <Text className="text-[13px] font-extrabold text-[#000] tracking-[-0.2px]">{vehiclePlate}</Text>
           </View>
 
           <View className="w-[1px] h-[80%] self-center bg-black/10" />

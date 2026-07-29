@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState, } from 'react';
 import { Linking, Platform, Pressable, StyleSheet, Text as RNText, View, ActivityIndicator, Image, Dimensions, Share } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
-import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
+import MapView, { Marker, MarkerAnimated, AnimatedRegion, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
 import Ionicons from "@react-native-vector-icons/ionicons/static";
 import MaterialCommunityIcons from "@react-native-vector-icons/material-design-icons/static";
 import Octicons from "@react-native-vector-icons/octicons/static";
@@ -385,6 +385,20 @@ export default function RideActive() {
   // ── Bottom Sheet refs ─────────────────────────────────────────────────────
   const bottomSheetRef = useRef<BottomSheet>(null);
   const mapRef = useRef<MapView>(null);
+  // Android: driven imperatively via ref (confirmed working — animateMarkerToCoordinate
+  // is dispatched as a native command, bypassing the Fabric prop-diffing bug).
+  const carMarkerRef = useRef<React.ElementRef<typeof Marker>>(null);
+  // iOS: react-native-maps' own docs only show animateMarkerToCoordinate for Android;
+  // on iOS it throws "No command found with name animateMarkerToCoordinate" under the
+  // Fabric Interop Layer (github.com/react-native-maps/react-native-maps/issues/5284).
+  // iOS instead needs MarkerAnimated + AnimatedRegion.timing(), the pattern react-native-maps'
+  // README documents for iOS specifically.
+  //
+  // Created lazily (via useState, not useRef) so it never exists with a wrong
+  // placeholder coordinate — it's only constructed once displayDriverCoord has
+  // a real value, already positioned correctly on the very first render that
+  // mounts <MarkerAnimated>. Mutated in place afterward for subsequent updates.
+  const [animatedDriverRegion, setAnimatedDriverRegion] = useState<AnimatedRegion | null>(null);
   const snapPoints = useMemo(() => ['35%', '55%'], []);
 
   // ── ANIMATION FIX ─────────────────────────────────────────────────────────
@@ -499,6 +513,49 @@ export default function RideActive() {
 
     return lastHeadingRef.current;
   }, [allRoutePoints, currentDriverPolylineIndex]);
+
+  // react-native-maps' declarative `coordinate` prop on <Marker> can silently
+  // fail to move the marker on real devices (works fine in the Simulator) — a
+  // known Fabric Interop Layer limitation for markers with custom child views
+  // (github.com/react-native-maps/react-native-maps/discussions/5355). The fix
+  // is platform-specific, matching react-native-maps' own README example:
+  //  - Android: imperative animateMarkerToCoordinate via ref.
+  //  - iOS: MarkerAnimated + AnimatedRegion.timing() (animateMarkerToCoordinate
+  //    throws "No command found" on iOS under Fabric — issue #5284).
+  useEffect(() => {
+    if (!displayDriverCoord) return;
+
+    // First value we ever get (cold-launch fallback or first socket emission):
+    // construct the AnimatedRegion already at the correct coordinate — it never
+    // exists at a wrong placeholder, so <MarkerAnimated> is correctly positioned
+    // the instant it first mounts, same frame as the polyline.
+    if (!animatedDriverRegion) {
+      setAnimatedDriverRegion(
+        new AnimatedRegion({
+          latitude: displayDriverCoord.latitude,
+          longitude: displayDriverCoord.longitude,
+          latitudeDelta: 0,
+          longitudeDelta: 0,
+        }),
+      );
+      return;
+    }
+
+    // Subsequent real updates only — animate smoothly to the new position.
+    if (!driverCoord) return;
+    if (Platform.OS === 'android') {
+      carMarkerRef.current?.animateMarkerToCoordinate(driverCoord, 500);
+    } else {
+      animatedDriverRegion
+        .timing({
+          latitude: driverCoord.latitude,
+          longitude: driverCoord.longitude,
+          duration: 500,
+          useNativeDriver: false,
+        } as Parameters<typeof animatedDriverRegion.timing>[0])
+        .start();
+    }
+  }, [displayDriverCoord, driverCoord, animatedDriverRegion]);
 
   const completedRoute = useMemo(() => {
     if (currentDriverPolylineIndex === null || !allRoutePoints.length) return [];
@@ -759,9 +816,13 @@ export default function RideActive() {
         )}
 
         {/* Car marker: shown immediately using polyline[0] as fallback; snaps to
-            live socket coord once the first emission arrives */}
-        {displayDriverCoord && (
+            live socket coord once the first emission arrives. Position updates are
+            driven imperatively (see effect above) — Android via ref command,
+            iOS via AnimatedRegion — rather than relying on the coordinate prop
+            alone, which silently fails to move on real devices under Fabric. */}
+        {displayDriverCoord && Platform.OS === 'android' && (
           <Marker
+            ref={carMarkerRef}
             coordinate={displayDriverCoord}
             anchor={{ x: 0.5, y: 0.5 }}
             flat={true}
@@ -774,7 +835,39 @@ export default function RideActive() {
             />
           </Marker>
         )}
+        {displayDriverCoord && animatedDriverRegion && Platform.OS !== 'android' && (
+          <MarkerAnimated
+            // react-native-maps' types don't model AnimatedRegion as a valid
+            // `coordinate` value even though it's the documented API for it.
+            coordinate={animatedDriverRegion as unknown as LatLng}
+            anchor={{ x: 0.5, y: 0.5 }}
+            flat={true}
+            rotation={busHeading}
+            style={{ zIndex: 100 }}
+          >
+            <Image
+              source={require('../../../../assets/car_birdeye.png')}
+              style={{ width: 60, height: 60, resizeMode: 'contain' }}
+            />
+          </MarkerAnimated>
+        )}
       </MapView>
+
+      {/* Floating back button — return to employee home (drawer / logout) */}
+      <View style={[styles.floatingButtons, isRTL && styles.floatingButtonsRtl]}>
+        <Pressable
+          style={styles.floatingBtn}
+          onPress={() => router.replace('/employee')}
+          accessibilityRole="button"
+          accessibilityLabel={t('common:back')}
+        >
+          <Ionicons
+            name={isRTL ? 'arrow-forward' : 'arrow-back'}
+            size={24}
+            color="#000000"
+          />
+        </Pressable>
+      </View>
 
       {/* BottomSheet: animatedPosition replaces animatedIndex */}
       <BottomSheet
@@ -940,6 +1033,10 @@ const styles = StyleSheet.create({
     top: 60,
     left: 20,
     zIndex: 10,
+  },
+  floatingButtonsRtl: {
+    left: undefined,
+    right: 20,
   },
   floatingBtn: {
     width: 44,

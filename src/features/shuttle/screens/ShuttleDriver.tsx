@@ -14,6 +14,8 @@ import {
   useGetTodayTripQuery,
   useLazyGetTripEmployeesQuery,
   ShuttleTrip,
+  formatShuttleVehicleLabel,
+  formatShuttleVehiclePlate,
 } from '../services/shuttleApi';
 import { AppHeader } from '../../shared/components/AppHeader';
 import { useRefetchOnReconnect } from '@/hooks/useRefetchOnReconnect';
@@ -365,10 +367,10 @@ export function ShuttleDriver() {
                     </View>
                     <View>
                       <Text className="text-xs font-semibold tracking-wider text-[#6B7280]">
-                        {tr('blackHiace')}
+                        {formatShuttleVehicleLabel(latestTrip?.routes?.vehicles)}
                       </Text>
                       <Text className="text-lg font-semibold text-black">
-                        ABR‑986
+                        {formatShuttleVehiclePlate(latestTrip?.routes?.vehicles)}
                       </Text>
                     </View>
                   </View>
@@ -379,15 +381,11 @@ export function ShuttleDriver() {
                   </View>
                 </View>
 
-                <View className="flex-row items-center gap-3 mb-0">
-                  <Text className="text-[2rem] text-black font-bold">
-                    {routeDetails.origin}
-                  </Text>
-                  <Feather name="arrow-right" size={24} color="#6B7280" />
-                  <Text className="text-[2rem] text-black font-bold">
-                    {routeDetails.destination}
-                  </Text>
-                </View>
+                <Text className="text-[2rem] text-black font-bold w-full">
+                  {routeDetails.origin}
+                  <Text className="text-[#6B7280]"> → </Text>
+                  {routeDetails.destination}
+                </Text>
 
               </View>
 
@@ -409,7 +407,7 @@ export function ShuttleDriver() {
                   <InfoRow
                     label={tr('route')}
                     value={routeDetails.number}
-                    icon={<FontAwesome5 name="route" size={18} color="#000000" />}
+                    icon={<FontAwesome5 name="route" iconStyle="solid" size={18} color="#000000" />}
                   />
                   <InfoRow
                     label={tr('stops')}
@@ -516,19 +514,11 @@ export function ShuttleDriver() {
                               </View>
                             </View>
 
-                            <View className="flex-row items-center gap-2">
-                              <Text className="text-xl text-black font-bold">
-                                {tripDetails.origin}
-                              </Text>
-                              <Feather
-                                name="arrow-right"
-                                size={18}
-                                color="#6B7280"
-                              />
-                              <Text className="text-xl text-black font-bold">
-                                {tripDetails.destination}
-                              </Text>
-                            </View>
+                            <Text className="text-xl text-black font-bold w-full">
+                              {tripDetails.origin}
+                              <Text className="text-[#6B7280]"> → </Text>
+                              {tripDetails.destination}
+                            </Text>
                           </View>
 
                           <View className="h-px bg-black/10 mb-3" />

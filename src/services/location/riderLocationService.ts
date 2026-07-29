@@ -61,7 +61,7 @@ export async function startLocationTracking(tripId: string | number, tripType?: 
     // and satisfies the OS constraint for background location access.
     foregroundService: {
       notificationTitle: 'Active Ride',
-      notificationBody: 'Cort is sharing your location during this ride.',
+      notificationBody: 'Traflinq is sharing your location during this ride.',
       notificationColor: '#F4593B',
     },
   });

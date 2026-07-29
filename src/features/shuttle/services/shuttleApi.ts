@@ -21,8 +21,25 @@ type RouteCount = {
 type Vehicle = {
   id: number;
   plate_number: string;
+  make?: string | null;
   model: string | null;
+  color?: string | null;
 };
+
+/** Display label like "Black Hiace" or "Toyota Hiace". */
+export function formatShuttleVehicleLabel(vehicle?: Vehicle | null): string {
+  if (!vehicle) return '—';
+  const model = vehicle.model?.trim() || '';
+  const color = vehicle.color?.trim() || '';
+  const make = vehicle.make?.trim() || '';
+  if (color && model) return `${color} ${model}`;
+  if (make && model) return `${make} ${model}`;
+  return model || make || color || '—';
+}
+
+export function formatShuttleVehiclePlate(vehicle?: Vehicle | null): string {
+  return vehicle?.plate_number?.trim() || '—';
+}
 
 type Route = {
   id: number;
