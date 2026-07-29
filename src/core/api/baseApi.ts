@@ -23,28 +23,12 @@ const baseQueryWithReauth = async (args: any, api: any, extraOptions: any) => {
   let result = await baseQuery(args, api, extraOptions);
 
   if (result.error && result.error.status === 401) {
-    const refreshToken = await tokenStorage.getRefreshToken();
+    // Single-flight refresh — shared with apiFetch + socket so concurrent
+    // 401s don't revoke each other's refresh tokens and force logout.
+    const newAccessToken = await tokenStorage.refreshAccessToken();
 
-    if (refreshToken) {
-      const refreshResult = await baseQuery(
-        {
-          url: '/auth/refresh-token',
-          method: 'POST',
-          body: { refreshToken },
-        },
-        api,
-        extraOptions,
-      );
-
-      if (refreshResult.data) {
-        const payload = refreshResult.data as { data: { session: { access_token: string; refresh_token: string } } };
-        const session = payload.data.session;
-        await tokenStorage.setTokens(session.access_token, session.refresh_token);
-        result = await baseQuery(args, api, extraOptions);
-      } else {
-        await tokenStorage.clearTokens();
-        triggerOnUnauthorized();
-      }
+    if (newAccessToken) {
+      result = await baseQuery(args, api, extraOptions);
     } else {
       await tokenStorage.clearTokens();
       triggerOnUnauthorized();
@@ -60,4 +44,3 @@ export const baseApi = createApi({
   tagTypes: ['Auth', 'Booking', 'ChauffeurBooking', 'ShuttleTrip', 'Attendance', 'ShuttlePolyline', 'ChauffeurPolyline'],
   endpoints: () => ({}),
 });
-

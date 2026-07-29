@@ -29,6 +29,9 @@ const webStorage = {
   },
 };
 
+/** In-flight refresh promise — prevents concurrent refresh races that revoke each other. */
+let refreshInFlight: Promise<string | null> | null = null;
+
 export const tokenStorage = {
   async getAccessToken(): Promise<string | null> {
     if (isWeb) return webStorage.getItem(KEYS.ACCESS_TOKEN);
@@ -90,31 +93,43 @@ export const tokenStorage = {
    * Uses the stored refresh token to obtain a new access token from the
    * backend, persists both new tokens, and returns the new access token.
    * Returns null if the refresh token is missing or the request fails.
+   *
+   * Single-flight: concurrent callers share one refresh request. The backend
+   * rotates (revokes) refresh tokens, so parallel refreshes would otherwise
+   * log the user out after ~15m when access tokens expire.
    */
   async refreshAccessToken(): Promise<string | null> {
-    const refreshToken = await this.getRefreshToken();
-    if (!refreshToken) return null;
+    if (refreshInFlight) return refreshInFlight;
 
-    try {
-      const base = env.API_URL.replace(/\/$/, '');
-      const res = await fetch(`${base}/auth/refresh-token`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ refreshToken }),
-      });
+    refreshInFlight = (async () => {
+      const refreshToken = await this.getRefreshToken();
+      if (!refreshToken) return null;
 
-      if (!res.ok) return null;
+      try {
+        const base = env.API_URL.replace(/\/$/, '');
+        const res = await fetch(`${base}/auth/refresh-token`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refreshToken }),
+        });
 
-      const json = await res.json();
-      const accessToken: string | undefined = json?.data?.session?.access_token;
-      const newRefreshToken: string | undefined = json?.data?.session?.refresh_token;
+        if (!res.ok) return null;
 
-      if (!accessToken) return null;
+        const json = await res.json();
+        const accessToken: string | undefined = json?.data?.session?.access_token;
+        const newRefreshToken: string | undefined = json?.data?.session?.refresh_token;
 
-      await this.setTokens(accessToken, newRefreshToken ?? refreshToken);
-      return accessToken;
-    } catch {
-      return null;
-    }
+        if (!accessToken) return null;
+
+        await this.setTokens(accessToken, newRefreshToken ?? refreshToken);
+        return accessToken;
+      } catch {
+        return null;
+      }
+    })().finally(() => {
+      refreshInFlight = null;
+    });
+
+    return refreshInFlight;
   },
 };
