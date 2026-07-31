@@ -202,6 +202,7 @@ const BackContent = ({ booking, shuttleTrip, onClose, onRequestCaptain }: BackCo
     const { t } = useLanguage();
     const te = (key: string, options?: Record<string, unknown>) =>
         t(`employee:${key}`, options);
+    const [isImageExpanded, setIsImageExpanded] = useState(false);
     const isChauffeurMode = !!booking;
     const driver = booking?.users_chauffeur_bookings_driver_idTousers;
     const chauffeurVehicle = booking?.vehicles;
@@ -258,17 +259,22 @@ const BackContent = ({ booking, shuttleTrip, onClose, onRequestCaptain }: BackCo
 
                     {/* Captain avatar */}
                     <View style={styles.captainSection}>
-                        <View style={styles.avatarCircle}>
-                            {driverPictureUrl ? (
-                                <Image
-                                    source={{ uri: driverPictureUrl }}
-                                    style={{ width: 64, height: 64, borderRadius: 32 }}
-                                    contentFit="cover"
-                                />
-                            ) : (
-                                <Text style={styles.avatarInitials}>{initials}</Text>
-                            )}
-                        </View>
+                        <Pressable
+                            onPress={() => driverPictureUrl && setIsImageExpanded(true)}
+                            disabled={!driverPictureUrl}
+                        >
+                            <View style={styles.avatarCircle}>
+                                {driverPictureUrl ? (
+                                    <Image
+                                        source={{ uri: driverPictureUrl }}
+                                        style={{ width: 64, height: 64, borderRadius: 32 }}
+                                        contentFit="cover"
+                                    />
+                                ) : (
+                                    <Text style={styles.avatarInitials}>{initials}</Text>
+                                )}
+                            </View>
+                        </Pressable>
                         <Text style={styles.captainRole}>
                             {isChauffeurMode ? te('yourChauffeur') : te('yourCaptain')}
                         </Text>
@@ -350,6 +356,26 @@ const BackContent = ({ booking, shuttleTrip, onClose, onRequestCaptain }: BackCo
             <Pressable style={styles.crossButton} onPress={onClose} hitSlop={15}>
                 <Ionicons name="close" size={22} color="#000" />
             </Pressable>
+
+            {driverPictureUrl && (
+                <Modal
+                    visible={isImageExpanded}
+                    transparent
+                    animationType="fade"
+                    onRequestClose={() => setIsImageExpanded(false)}
+                >
+                    <Pressable style={styles.imageViewerBackdrop} onPress={() => setIsImageExpanded(false)}>
+                        <Image
+                            source={{ uri: driverPictureUrl }}
+                            style={styles.expandedImage}
+                            contentFit="contain"
+                        />
+                        <Pressable style={styles.imageViewerCloseButton} onPress={() => setIsImageExpanded(false)} hitSlop={15}>
+                            <Ionicons name="close" size={26} color="#fff" />
+                        </Pressable>
+                    </Pressable>
+                </Modal>
+            )}
         </>
     );
 };
@@ -1323,6 +1349,30 @@ const styles = StyleSheet.create({
     // wrapper that groups avatar + divider + grid so they sit close together
     captainBlock: {
         gap: 14,
+    },
+
+    // ── Expanded driver photo viewer ────────────────────────
+    imageViewerBackdrop: {
+        flex: 1,
+        backgroundColor: "rgba(0,0,0,0.92)",
+        alignItems: "center",
+        justifyContent: "center",
+    },
+    expandedImage: {
+        width: "85%",
+        height: "60%",
+        borderRadius: 12,
+    },
+    imageViewerCloseButton: {
+        position: "absolute",
+        top: 50,
+        right: 20,
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        backgroundColor: "rgba(255,255,255,0.2)",
+        alignItems: "center",
+        justifyContent: "center",
     },
 
     // Call Captain button
