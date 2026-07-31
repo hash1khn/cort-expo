@@ -1,5 +1,5 @@
-import React, { useMemo, useRef, useState, useCallback } from 'react';
-import { StyleSheet, Text as RNText, View, Pressable, Modal, ActivityIndicator, Linking, TextInput, Image, ScrollView, Alert, TouchableWithoutFeedback, Keyboard, Platform } from 'react-native';
+import React, { useMemo, useRef, useState, useCallback, useEffect } from 'react';
+import { StyleSheet, Text as RNText, View, Pressable, Modal, ActivityIndicator, Linking, TextInput, Image, ScrollView, Alert, TouchableWithoutFeedback, Keyboard, Platform, AppState } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import BottomSheet, { BottomSheetView, BottomSheetBackdrop } from '@gorhom/bottom-sheet';
@@ -117,40 +117,59 @@ export function ActiveTripScreen() {
         'foreground' | 'background' | null
     >(null);
 
+    const checkLocationPermission = useCallback(async (isStale: () => boolean) => {
+        // iOS: CLAuthorizationStatus can lag a frame after returning from
+        // Settings, so we wait briefly before reading to avoid a false banner.
+        if (Platform.OS === 'ios') {
+            await new Promise<void>((r) => setTimeout(r, 300));
+        }
+        if (isStale()) return;
+        const fg = await Location.getForegroundPermissionsAsync();
+        const bg = await Location.getBackgroundPermissionsAsync();
+        if (isStale()) return;
+        const iosScope = Platform.OS === 'ios'
+            ? ((fg as any)?.ios?.scope as string | undefined)
+            : undefined;
+        const fullyGranted =
+            (fg.status === 'granted' && bg.status === 'granted') ||
+            (Platform.OS === 'ios' && fg.status === 'granted' && iosScope === 'always');
+        // Only lock the button / show the Settings banner when the OS will no
+        // longer show its own dialog. A 'denied' status with canAskAgain still
+        // true (e.g. a silent OS/OEM revoke of a previously-granted permission)
+        // should be treated like a fresh ask, not a permanent block.
+        if (fullyGranted) {
+            setLocationPermissionWarning(null);
+        } else if (fg.status === 'denied' && !fg.canAskAgain) {
+            setLocationPermissionWarning('foreground');
+        } else if (bg.status === 'denied' && !bg.canAskAgain) {
+            setLocationPermissionWarning('background');
+        } else {
+            setLocationPermissionWarning(null);
+        }
+    }, []);
+
     useFocusEffect(
         useCallback(() => {
             let cancelled = false;
-            (async () => {
-                // iOS: CLAuthorizationStatus can lag a frame after returning from
-                // Settings, so we wait briefly before reading to avoid a false banner.
-                if (Platform.OS === 'ios') {
-                    await new Promise<void>((r) => setTimeout(r, 300));
-                }
-                if (cancelled) return;
-                const fg = await Location.getForegroundPermissionsAsync();
-                const bg = await Location.getBackgroundPermissionsAsync();
-                if (cancelled) return;
-                const iosScope = Platform.OS === 'ios'
-                    ? ((fg as any)?.ios?.scope as string | undefined)
-                    : undefined;
-                const fullyGranted =
-                    (fg.status === 'granted' && bg.status === 'granted') ||
-                    (Platform.OS === 'ios' && fg.status === 'granted' && iosScope === 'always');
-                if (fullyGranted) {
-                    setLocationPermissionWarning(null);
-                } else if (fg.status === 'denied') {
-                    setLocationPermissionWarning('foreground');
-                } else if (bg.status === 'denied') {
-                    setLocationPermissionWarning('background');
-                } else {
-                    setLocationPermissionWarning(null);
-                }
-            })();
+            checkLocationPermission(() => cancelled);
             return () => {
                 cancelled = true;
             };
-        }, []),
+        }, [checkLocationPermission]),
     );
+
+    // Catch permission changes that happen while the app is merely backgrounded
+    // (OS/OEM auto-revoke, user editing Settings and switching back) rather than
+    // only re-checking on React Navigation focus events.
+    useEffect(() => {
+        const subscription = AppState.addEventListener('change', (nextState) => {
+            if (nextState === 'active') {
+                let cancelled = false;
+                checkLocationPermission(() => cancelled);
+            }
+        });
+        return () => subscription.remove();
+    }, [checkLocationPermission]);
 
     const totalDays = activeBooking?.no_of_days ?? 1;
     const completedDays = activeBooking?.chauffeur_trip_daily_logs?.filter(l => l.status === 'COMPLETED').length ?? 0;
@@ -214,10 +233,14 @@ export function ActiveTripScreen() {
         const id = activeBooking.id;
 
         if (tripStep === 'START_TRIP') {
-            // Last-resort: only when permanently denied — do not skip disclosure / OS dialogs for undetermined.
-            const { status: fgGuard } = await Location.getForegroundPermissionsAsync();
-            const { status: bgGuard } = await Location.getBackgroundPermissionsAsync();
-            if (fgGuard === 'denied' || bgGuard === 'denied') {
+            // Last-resort: only when permanently denied (OS will no longer show its own
+            // dialog) do we send the driver to Settings — otherwise let the normal
+            // disclosure / native-dialog flow run so the OS can re-prompt.
+            const fgGuard = await Location.getForegroundPermissionsAsync();
+            const bgGuard = await Location.getBackgroundPermissionsAsync();
+            const fgPermanentlyDenied = fgGuard.status === 'denied' && !fgGuard.canAskAgain;
+            const bgPermanentlyDenied = bgGuard.status === 'denied' && !bgGuard.canAskAgain;
+            if (fgPermanentlyDenied || bgPermanentlyDenied) {
                 Alert.alert(
                     t('common:locationRequired'),
                     t('common:locationDeniedMessage'),
@@ -287,9 +310,11 @@ export function ActiveTripScreen() {
                 }
 
                 // Last-resort: only when permanently denied — safety net if the sheet was open when revoked.
-                const { status: fgGuard } = await Location.getForegroundPermissionsAsync();
-                const { status: bgGuard } = await Location.getBackgroundPermissionsAsync();
-                if (fgGuard === 'denied' || bgGuard === 'denied') {
+                const fgGuard = await Location.getForegroundPermissionsAsync();
+                const bgGuard = await Location.getBackgroundPermissionsAsync();
+                const fgPermanentlyDenied = fgGuard.status === 'denied' && !fgGuard.canAskAgain;
+                const bgPermanentlyDenied = bgGuard.status === 'denied' && !bgGuard.canAskAgain;
+                if (fgPermanentlyDenied || bgPermanentlyDenied) {
                     confirmSheetRef.current?.close();
                     Alert.alert(
                         t('common:locationRequired'),

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, View, ActivityIndicator } from 'react-native';
+import { Alert, AppState, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, View, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Feather from "@react-native-vector-icons/feather/static";
 import Ionicons from "@react-native-vector-icons/ionicons/static";
@@ -213,10 +213,14 @@ export default function Return() {
 
     // First slide: submit bulk return attendance and open maps with all stops
     if (!returnTripStarted) {
-      // Last-resort: only when permanently denied — do not skip disclosure / OS dialogs for undetermined.
-      const { status: fgGuard } = await Location.getForegroundPermissionsAsync();
-      const { status: bgGuard } = await Location.getBackgroundPermissionsAsync();
-      if (fgGuard === 'denied' || bgGuard === 'denied') {
+      // Last-resort: only when permanently denied (OS will no longer show its own
+      // dialog) do we send the driver to Settings — otherwise let the normal
+      // disclosure / native-dialog flow run so the OS can re-prompt.
+      const fgGuard = await Location.getForegroundPermissionsAsync();
+      const bgGuard = await Location.getBackgroundPermissionsAsync();
+      const fgPermanentlyDenied = fgGuard.status === 'denied' && !fgGuard.canAskAgain;
+      const bgPermanentlyDenied = bgGuard.status === 'denied' && !bgGuard.canAskAgain;
+      if (fgPermanentlyDenied || bgPermanentlyDenied) {
         Alert.alert(
           t('common:locationRequired'),
           t('common:locationDeniedMessage'),
@@ -367,40 +371,59 @@ export default function Return() {
     setEmployeeForAbsent(null);
   }, []);
 
+  const checkLocationPermission = useCallback(async (isStale: () => boolean) => {
+    // iOS: CLAuthorizationStatus can lag a frame after returning from
+    // Settings, so we wait briefly before reading to avoid a false banner.
+    if (Platform.OS === 'ios') {
+      await new Promise<void>((r) => setTimeout(r, 300));
+    }
+    if (isStale()) return;
+    const fg = await Location.getForegroundPermissionsAsync();
+    const bg = await Location.getBackgroundPermissionsAsync();
+    if (isStale()) return;
+    const iosScope = Platform.OS === 'ios'
+      ? ((fg as any)?.ios?.scope as string | undefined)
+      : undefined;
+    const fullyGranted =
+      (fg.status === 'granted' && bg.status === 'granted') ||
+      (Platform.OS === 'ios' && fg.status === 'granted' && iosScope === 'always');
+    // Only lock the button / show the Settings banner when the OS will no
+    // longer show its own dialog. A 'denied' status with canAskAgain still
+    // true (e.g. a silent OS/OEM revoke of a previously-granted permission)
+    // should be treated like a fresh ask, not a permanent block.
+    if (fullyGranted) {
+      setLocationPermissionWarning(null);
+    } else if (fg.status === 'denied' && !fg.canAskAgain) {
+      setLocationPermissionWarning('foreground');
+    } else if (bg.status === 'denied' && !bg.canAskAgain) {
+      setLocationPermissionWarning('background');
+    } else {
+      setLocationPermissionWarning(null);
+    }
+  }, []);
+
   useFocusEffect(
     useCallback(() => {
       let cancelled = false;
-      (async () => {
-        // iOS: CLAuthorizationStatus can lag a frame after returning from
-        // Settings, so we wait briefly before reading to avoid a false banner.
-        if (Platform.OS === 'ios') {
-          await new Promise<void>((r) => setTimeout(r, 300));
-        }
-        if (cancelled) return;
-        const fg = await Location.getForegroundPermissionsAsync();
-        const bg = await Location.getBackgroundPermissionsAsync();
-        if (cancelled) return;
-        const iosScope = Platform.OS === 'ios'
-          ? ((fg as any)?.ios?.scope as string | undefined)
-          : undefined;
-        const fullyGranted =
-          (fg.status === 'granted' && bg.status === 'granted') ||
-          (Platform.OS === 'ios' && fg.status === 'granted' && iosScope === 'always');
-        if (fullyGranted) {
-          setLocationPermissionWarning(null);
-        } else if (fg.status === 'denied') {
-          setLocationPermissionWarning('foreground');
-        } else if (bg.status === 'denied') {
-          setLocationPermissionWarning('background');
-        } else {
-          setLocationPermissionWarning(null);
-        }
-      })();
+      checkLocationPermission(() => cancelled);
       return () => {
         cancelled = true;
       };
-    }, []),
+    }, [checkLocationPermission]),
   );
+
+  // Catch permission changes that happen while the app is merely backgrounded
+  // (OS/OEM auto-revoke, user editing Settings and switching back) rather than
+  // only re-checking on React Navigation focus events.
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      if (nextState === 'active') {
+        let cancelled = false;
+        checkLocationPermission(() => cancelled);
+      }
+    });
+    return () => subscription.remove();
+  }, [checkLocationPermission]);
 
   // We should also suspend the screen UI while attendance is loading on crash recovery
   if (isTripsLoading || isEmployeesLoading || (tripAlreadyStarted && isAttendanceLoading)) {
