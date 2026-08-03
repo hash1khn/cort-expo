@@ -19,7 +19,7 @@ export function getPktMinutesSinceMidnight(now: Date = new Date()): number {
 }
 
 /**
- * Parse a route-stop ETA (HH:MM, HH:MM:SS, or ISO) to minutes since midnight.
+ * Parse a route-stop ETA / lock time (HH:MM, HH:MM:SS, or ISO) to minutes since midnight.
  */
 export function parseEtaToMinutes(eta: string | null | undefined): number | null {
   if (eta == null) return null;
@@ -48,34 +48,20 @@ export function formatMinutesAs12h(totalMinutes: number): string {
   return `${hours12}:${String(minutes).padStart(2, '0')} ${suffix}`;
 }
 
-/**
- * Office evening departure ETA is the first evening stop's evening_eta
- * (office is evening_sequence 1).
- */
-export function getOfficeEveningEta(
-  stops: Array<{ evening_eta?: string | null; sequence_order?: number }> | null | undefined,
-): string | null {
-  if (!stops?.length) return null;
-  const ordered = [...stops].sort(
-    (a, b) => (a.sequence_order ?? 0) - (b.sequence_order ?? 0),
-  );
-  return ordered[0]?.evening_eta ?? null;
-}
-
 export type EveningStartLock = {
   locked: boolean;
   unlockAtLabel: string | null;
 };
 
 /**
- * Whether the evening return trip is still locked until office end (PKT).
- * No lock when evening_eta is missing.
+ * Whether the evening return trip is still locked until evening_lock_time (PKT).
+ * No lock when evening_lock_time is missing.
  */
 export function getEveningStartLock(
-  officeEveningEta: string | null | undefined,
+  eveningLockTime: string | null | undefined,
   now: Date = new Date(),
 ): EveningStartLock {
-  const etaMinutes = parseEtaToMinutes(officeEveningEta);
+  const etaMinutes = parseEtaToMinutes(eveningLockTime);
   if (etaMinutes == null) {
     return { locked: false, unlockAtLabel: null };
   }

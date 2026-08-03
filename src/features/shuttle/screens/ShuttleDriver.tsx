@@ -19,7 +19,7 @@ import {
 } from '../services/shuttleApi';
 import { AppHeader } from '../../shared/components/AppHeader';
 import { useRefetchOnReconnect } from '@/hooks/useRefetchOnReconnect';
-import { getEveningStartLock, getOfficeEveningEta, type EveningStartLock } from '../utils/pktTime';
+import { getEveningStartLock, type EveningStartLock } from '../utils/pktTime';
 
 export function ShuttleDriver() {
   const navigation = useNavigation();
@@ -66,8 +66,10 @@ export function ShuttleDriver() {
     if (!trip || trip.direction !== 'EVENING' || trip.status === 'STARTED' || trip.status === 'IN_PROGRESS') {
       return { locked: false, unlockAtLabel: null };
     }
-    return getEveningStartLock(getOfficeEveningEta(trip.routes?.route_stops));
-  }, []);
+    return getEveningStartLock(trip.routes?.evening_lock_time);
+    // lockClockTick keeps the lock refreshing as wall-clock advances
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lockClockTick]);
 
   // Prefetch employees for the latest trip as soon as we know it,
   // so navigation to RideInProgress/Return feels instant.

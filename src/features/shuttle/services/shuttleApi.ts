@@ -44,6 +44,8 @@ export function formatShuttleVehiclePlate(vehicle?: Vehicle | null): string {
 type Route = {
   id: number;
   name: string;
+  /** PKT HH:MM — evening return trips cannot start before this time */
+  evening_lock_time?: string | null;
   route_stops: RouteStop[];
   _count?: RouteCount;
   vehicles?: Vehicle | null;
