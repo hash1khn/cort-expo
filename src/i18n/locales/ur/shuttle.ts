@@ -51,6 +51,8 @@ export const shuttle = {
     completing: 'مکمل ہو رہا ہے...',
     markAllAttendance: 'شروع کرنے سے پہلے تمام حاضری درج کریں',
     couldNotStartRide: 'شروع نہ ہو سکی',
+    tooEarlyOfficeEnd: 'شام کا سفر آفس کے اختتام ({{time}} PKT) کے بعد شروع ہو سکتا ہے۔',
+    tooEarlyOfficeEndFallback: 'شام کا سفر آفس کے اختتام سے پہلے شروع نہیں ہو سکتا (PKT)۔',
     absentReasons: {
       SELF_COMMUTE: 'خود آنا جانا',
       LATE: 'دیر',

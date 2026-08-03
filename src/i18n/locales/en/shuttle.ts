@@ -51,6 +51,8 @@ export const shuttle = {
     completing: 'Completing...',
     markAllAttendance: 'Mark all attendance to start ride',
     couldNotStartRide: 'Could not start ride',
+    tooEarlyOfficeEnd: 'Evening trip can start after office end ({{time}} PKT).',
+    tooEarlyOfficeEndFallback: 'Evening trip cannot start before office end time (PKT).',
     absentReasons: {
       SELF_COMMUTE: 'Self commute',
       LATE: 'Late',

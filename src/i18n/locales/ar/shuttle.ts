@@ -51,6 +51,8 @@ export const shuttle = {
     completing: 'جارٍ الإكمال...',
     markAllAttendance: 'سجّل الحضور للجميع لبدء الرحلة',
     couldNotStartRide: 'تعذّر بدء الرحلة',
+    tooEarlyOfficeEnd: 'يمكن بدء رحلة المساء بعد نهاية الدوام ({{time}} PKT).',
+    tooEarlyOfficeEndFallback: 'لا يمكن بدء رحلة المساء قبل نهاية الدوام (PKT).',
     absentReasons: {
       SELF_COMMUTE: 'تنقّل ذاتي',
       LATE: 'تأخير',
