@@ -228,7 +228,10 @@ export function LoginScreen() {
 
             {/* Email Input */}
             <View style={styles.field}>
-              <Text style={[styles.label, rtlText]}>{t('emailAddress')}</Text>
+              <Text style={[styles.label, rtlText]}>
+                {t('emailAddress')}
+                {error ? <Text style={styles.requiredStar}> *</Text> : null}
+              </Text>
               <View style={[
                 styles.inputContainer,
                 focusedField === 'email' && styles.inputFocused,
@@ -258,7 +261,10 @@ export function LoginScreen() {
 
             {/* Password Input */}
             <View style={styles.field}>
-              <Text style={[styles.label, rtlText]}>{t('password')}</Text>
+              <Text style={[styles.label, rtlText]}>
+                {t('password')}
+                {error ? <Text style={styles.requiredStar}> *</Text> : null}
+              </Text>
               <View style={[
                 styles.inputContainer,
                 focusedField === 'password' && styles.inputFocused,
@@ -291,12 +297,6 @@ export function LoginScreen() {
                 <Text style={[styles.forgotPass, isRTL && { alignSelf: 'flex-start' }]}>{t('forgotPassword')}</Text>
               </Pressable>
             </View>
-
-            {error && (
-              <View style={styles.errorContainer}>
-                <Text style={styles.errorText}>{error}</Text>
-              </View>
-            )}
 
             {/* Primary Action Button */}
             <View style={styles.actionRow}>
@@ -446,6 +446,10 @@ const styles = StyleSheet.create({
   inputError: {
     borderColor: colors.red,
   },
+  requiredStar: {
+    color: colors.red,
+    fontWeight: '700',
+  },
   input: {
     flex: 1,
     height: '100%',
@@ -465,20 +469,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     fontSize: 13,
     color: '#6B7280', // Subdued gray text
-  },
-  errorContainer: {
-    backgroundColor: 'rgba(211, 47, 47, 0.05)',
-    padding: 12,
-    borderRadius: 12,
-    marginBottom: 16,
-    borderLeftWidth: 3,
-    borderLeftColor: colors.red,
-  },
-  errorText: {
-    fontFamily: typography.family.regular,
-    fontWeight: '500',
-    fontSize: 13,
-    color: colors.red,
   },
   actionRow: {
     marginTop: 16,
