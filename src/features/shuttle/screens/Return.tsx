@@ -27,7 +27,6 @@ import { LocationDisclosureModal } from '@/components/LocationDisclosureModal';
 import { BackButton } from '@/components/BackButton';
 import { useAppSelector } from '@/store/hooks';
 import { socketService } from '@/services/socket.service';
-import { getEveningStartLock, getOfficeEveningEta } from '../utils/pktTime';
 
 const AppText = ({ style, ...props }: any) => (
   <Text style={[{ fontFamily }, style]} {...props} />
@@ -134,23 +133,6 @@ export default function Return() {
   const tripAlreadyStarted =
     activeTrip?.status === 'STARTED' || activeTrip?.status === 'IN_PROGRESS';
   const [returnTripStarted, setReturnTripStarted] = useState(false);
-  // Re-evaluate office-end lock as wall-clock advances (PKT).
-  const [lockClockTick, setLockClockTick] = useState(0);
-
-  useEffect(() => {
-    if (returnTripStarted || tripAlreadyStarted) return;
-    const id = setInterval(() => setLockClockTick((n) => n + 1), 30_000);
-    return () => clearInterval(id);
-  }, [returnTripStarted, tripAlreadyStarted]);
-
-  // Office end = first evening stop's evening_eta; compare in PKT.
-  const eveningStartLock = useMemo(() => {
-    if (returnTripStarted || tripAlreadyStarted) {
-      return { locked: false, unlockAtLabel: null as string | null };
-    }
-    const officeEta = getOfficeEveningEta(activeTrip?.routes?.route_stops);
-    return getEveningStartLock(officeEta);
-  }, [activeTrip?.routes?.route_stops, returnTripStarted, tripAlreadyStarted, lockClockTick]);
 
   // Sync once the trip data arrives (covers the crash-recovery path where the
   // component mounts before the RTK Query result is available).
@@ -246,25 +228,6 @@ export default function Return() {
 
     // First slide: submit bulk return attendance and open maps with all stops
     if (!returnTripStarted) {
-      // Live PKT check (don't rely only on the memoized banner state).
-      const liveLock = getEveningStartLock(
-        getOfficeEveningEta(activeTrip?.routes?.route_stops),
-      );
-      if (liveLock.locked) {
-        toast.show(
-          <CustomToast
-            type="error"
-            message={
-              liveLock.unlockAtLabel
-                ? tr('tooEarlyOfficeEnd').replace('{{time}}', liveLock.unlockAtLabel)
-                : tr('tooEarlyOfficeEndFallback')
-            }
-          />,
-          { duration: 4000, position: 'top', backgroundColor: '#ff4545' },
-        );
-        return;
-      }
-
       // Last-resort: only when permanently denied (OS will no longer show its own
       // dialog) do we send the driver to Settings — otherwise let the normal
       // disclosure / native-dialog flow run so the OS can re-prompt.
@@ -384,7 +347,6 @@ export default function Return() {
   }, [
     tripId,
     activeTrip?.route_id,
-    activeTrip?.routes?.route_stops,
     employees,
     returnTripStarted,
     submitReturnAttendance,
@@ -679,15 +641,6 @@ export default function Return() {
       </ScrollView>
 
       <View className="absolute bottom-16 left-5 right-5 pointer-events-auto gap-2">
-        {!returnTripStarted && eveningStartLock.locked && (
-          <View className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2">
-            <AppText className="text-[13px] text-amber-900 leading-[18px]">
-              {eveningStartLock.unlockAtLabel
-                ? tr('tooEarlyOfficeEnd').replace('{{time}}', eveningStartLock.unlockAtLabel)
-                : tr('tooEarlyOfficeEndFallback')}
-            </AppText>
-          </View>
-        )}
         {locationPermissionWarning && (
           <View className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2">
             <AppText className="text-[13px] text-amber-900 leading-[18px]">
@@ -707,14 +660,12 @@ export default function Return() {
           disabled={
             isActionLoading
             || (!returnTripStarted && locationPermissionWarning !== null)
-            || (!returnTripStarted && eveningStartLock.locked)
           }
           className="bg-[#FF5A00] flex-row items-center justify-center py-4 rounded-xl active:opacity-90"
           style={{
             opacity:
               isActionLoading
               || (!returnTripStarted && locationPermissionWarning !== null)
-              || (!returnTripStarted && eveningStartLock.locked)
                 ? 0.5
                 : 1,
           }}

@@ -19,6 +19,7 @@ import {
 } from '../services/shuttleApi';
 import { AppHeader } from '../../shared/components/AppHeader';
 import { useRefetchOnReconnect } from '@/hooks/useRefetchOnReconnect';
+import { getEveningStartLock, getOfficeEveningEta, type EveningStartLock } from '../utils/pktTime';
 
 export function ShuttleDriver() {
   const navigation = useNavigation();
@@ -47,6 +48,26 @@ export function ShuttleDriver() {
 
   const latestTrip: ShuttleTrip | null = todayTrips.length > 0 ? todayTrips[0] : null;
   const upcomingTrips: ShuttleTrip[] = todayTrips.length > 1 ? todayTrips.slice(1) : [];
+
+  // Re-evaluate office-end lock as wall-clock advances (PKT); only tick while
+  // it can actually change something, i.e. there's an evening trip not yet started.
+  const [lockClockTick, setLockClockTick] = useState(0);
+  const hasPendingEveningTrip = todayTrips.some(
+    (trip) => trip.direction === 'EVENING' && trip.status !== 'STARTED' && trip.status !== 'IN_PROGRESS',
+  );
+
+  useEffect(() => {
+    if (!hasPendingEveningTrip) return;
+    const id = setInterval(() => setLockClockTick((n) => n + 1), 30_000);
+    return () => clearInterval(id);
+  }, [hasPendingEveningTrip]);
+
+  const getTripLock = useCallback((trip: ShuttleTrip | null): EveningStartLock => {
+    if (!trip || trip.direction !== 'EVENING' || trip.status === 'STARTED' || trip.status === 'IN_PROGRESS') {
+      return { locked: false, unlockAtLabel: null };
+    }
+    return getEveningStartLock(getOfficeEveningEta(trip.routes?.route_stops));
+  }, []);
 
   // Prefetch employees for the latest trip as soon as we know it,
   // so navigation to RideInProgress/Return feels instant.
@@ -152,6 +173,10 @@ export function ShuttleDriver() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [latestTrip, isTodayTripLoading],
   );
+  const latestTripLock = useMemo(
+    () => getTripLock(latestTrip),
+    [getTripLock, latestTrip, lockClockTick],
+  );
   const todayDateLabel = useMemo(
     () =>
       new Date().toLocaleDateString(locale, {
@@ -222,10 +247,11 @@ export function ShuttleDriver() {
           subtitle: details.start,
           trip,
           details,
+          lock: getTripLock(trip),
         };
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [upcomingTrips, isTodayTripLoading],
+    [upcomingTrips, isTodayTripLoading, getTripLock, lockClockTick],
   );
 
   // Loading skeleton state
@@ -433,9 +459,23 @@ export function ShuttleDriver() {
                   />
                 </View>
 
+                {latestTripLock.locked && (
+                  <View className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 mt-4">
+                    <Text className="text-[13px] text-amber-900 leading-[18px]">
+                      {latestTripLock.unlockAtLabel
+                        ? t('shuttle:return.tooEarlyOfficeEnd').replace('{{time}}', latestTripLock.unlockAtLabel)
+                        : t('shuttle:return.tooEarlyOfficeEndFallback')}
+                    </Text>
+                  </View>
+                )}
+
                 <Pressable
-                  onPress={() => handleTripStart(latestTrip)}
-                  className="flex-row items-center justify-center gap-2 py-2 rounded-xl mt-4 bg-[#FF5A00] active:scale-[0.98]"
+                  onPress={() => {
+                    if (latestTripLock.locked) return;
+                    handleTripStart(latestTrip);
+                  }}
+                  disabled={latestTripLock.locked}
+                  className={`flex-row items-center justify-center gap-2 py-2 rounded-xl mt-4 bg-[#FF5A00] active:scale-[0.98] ${latestTripLock.locked ? 'opacity-50' : ''}`}
                 >
                   <Ionicons name="play-sharp" size={20} color="#FFFFFF" />
                   <Text
@@ -555,9 +595,23 @@ export function ShuttleDriver() {
                             />
                           </View>
 
+                          {item.lock.locked && (
+                            <View className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 mt-4">
+                              <Text className="text-[13px] text-amber-900 leading-[18px]">
+                                {item.lock.unlockAtLabel
+                                  ? t('shuttle:return.tooEarlyOfficeEnd').replace('{{time}}', item.lock.unlockAtLabel)
+                                  : t('shuttle:return.tooEarlyOfficeEndFallback')}
+                              </Text>
+                            </View>
+                          )}
+
                           <Pressable
-                            onPress={() => handleTripStart(item.trip)}
-                            className="flex-row items-center justify-center gap-2 py-2 rounded-xl mt-4 bg-[#FF5A00] active:scale-[0.98]"
+                            onPress={() => {
+                              if (item.lock.locked) return;
+                              handleTripStart(item.trip);
+                            }}
+                            disabled={item.lock.locked}
+                            className={`flex-row items-center justify-center gap-2 py-2 rounded-xl mt-4 bg-[#FF5A00] active:scale-[0.98] ${item.lock.locked ? 'opacity-50' : ''}`}
                           >
                             <Ionicons name="play-sharp" size={18} color="#FFFFFF" />
                             <Text
