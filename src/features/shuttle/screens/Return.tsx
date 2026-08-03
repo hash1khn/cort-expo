@@ -41,9 +41,23 @@ type ReturnEmployee = {
   number: string;
   status: EmployeeStatus;
   absentReason?: AbsentReason;
+  stopId: number | null;
 };
 
 const ABSENT_REASON_VALUES: AbsentReason[] = ['SELF_COMMUTE', 'LATE', 'SICK'];
+
+/**
+ * Drops any stop nobody needs today. A stop survives if at least one employee
+ * assigned to it is marked present; if employees hasn't loaded yet (e.g. called
+ * defensively before data is ready) we fail open and keep every stop.
+ */
+export function filterStopsByAttendance(stops: Stop[], employees: ReturnEmployee[]): Stop[] {
+  if (!employees.length) return stops;
+  const presentStopIds = new Set(
+    employees.filter((e) => e.status === 'present' && e.stopId != null).map((e) => e.stopId),
+  );
+  return stops.filter((stop) => presentStopIds.has(stop.id));
+}
 
 function getInitials(name: string) {
   return name
@@ -167,6 +181,7 @@ export default function Return() {
           name: emp.fullName,
           number: emp.phone ?? '',
           status,
+          stopId: emp.pickupStopId,
         };
       });
     });
@@ -286,7 +301,7 @@ export default function Return() {
           }
 
           setReturnTripStarted(true);
-          openStopsInMaps(stops);
+          openStopsInMaps(filterStopsByAttendance(stops, employees));
           setSliderKey((k) => k + 1);
         };
 
