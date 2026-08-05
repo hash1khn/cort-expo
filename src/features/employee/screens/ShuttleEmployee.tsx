@@ -275,10 +275,12 @@ export default function NewHome() {
     if (!companyId || !employeeId) return;
 
     // ── Check Shuttle ──
+    // Skip trips where this employee has already been dropped off — the trip itself can
+    // still be STARTED/IN_PROGRESS for other riders on an evening route.
     const activeTrip = shuttleTrips.find(
-      (t) => t.status === 'STARTED' || t.status === 'IN_PROGRESS'
+      (t) => (t.status === 'STARTED' || t.status === 'IN_PROGRESS') && t.my_boarding_status !== 'DROPPED_OFF'
     );
-    
+
     if (activeTrip) {
       hasNavigatedToActiveRideRef.current = true;
       const vehicle = activeTrip.routes?.vehicles;

@@ -93,6 +93,9 @@ const FrontContent = ({ booking, shuttleTrip, isLoading, isChauffeurEnabled, isS
     // Shuttle-specific
     const shuttleStatus = shuttleTrip?.status?.toUpperCase();
     const isShuttleActive = shuttleStatus === 'STARTED' || shuttleStatus === 'IN_PROGRESS';
+    // The trip can still be IN_PROGRESS for other riders on an evening route after this
+    // employee has already been dropped off at their own stop.
+    const isShuttleDroppedOff = shuttleTrip?.my_boarding_status === 'DROPPED_OFF';
     const shuttleDirection = shuttleTrip?.direction;
     const shuttlePickupEta = shuttleDirection === 'EVENING'
         ? (shuttleTrip?.my_pickup_stop?.evening_eta ?? null)
@@ -144,7 +147,7 @@ const FrontContent = ({ booking, shuttleTrip, isLoading, isChauffeurEnabled, isS
     const timeDisplay = booking
         ? (isChauffeurActive ? te('inProgress') : (booking.scheduled_for ? new Date(booking.scheduled_for).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'))
         : shuttleTrip
-            ? (isShuttleActive ? te('inProgress') : shuttlePickupTime)
+            ? (isShuttleDroppedOff ? te('droppedOff') : isShuttleActive ? te('inProgress') : shuttlePickupTime)
             : '—';
 
     return (
@@ -307,11 +310,13 @@ const BackContent = ({ booking, shuttleTrip, onClose, onRequestCaptain }: BackCo
                             <Text style={styles.infoCellValue}>
                                 {isChauffeurMode
                                     ? (isDroppedOff ? 'In Progress' : (booking!.scheduled_for ? new Date(booking!.scheduled_for).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'))
-                                    : (shuttleTrip?.status?.toUpperCase() === 'STARTED' || shuttleTrip?.status?.toUpperCase() === 'IN_PROGRESS'
-                                        ? 'In Progress'
-                                        : formatEta(shuttleTrip?.direction === 'EVENING'
-                                            ? (shuttleTrip?.my_pickup_stop?.evening_eta ?? null)
-                                            : (shuttleTrip?.my_pickup_stop?.morning_eta ?? null)))}
+                                    : (shuttleTrip?.my_boarding_status === 'DROPPED_OFF'
+                                        ? 'Dropped Off'
+                                        : shuttleTrip?.status?.toUpperCase() === 'STARTED' || shuttleTrip?.status?.toUpperCase() === 'IN_PROGRESS'
+                                            ? 'In Progress'
+                                            : formatEta(shuttleTrip?.direction === 'EVENING'
+                                                ? (shuttleTrip?.my_pickup_stop?.evening_eta ?? null)
+                                                : (shuttleTrip?.my_pickup_stop?.morning_eta ?? null)))}
                             </Text>
                             <Text style={styles.infoCellSub}>Today</Text>
                         </View>

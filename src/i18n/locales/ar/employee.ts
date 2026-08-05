@@ -5,6 +5,7 @@ export const employee = {
   yourCaptain: 'كابتنك',
   tapForDetails: 'اضغط للتفاصيل',
   inProgress: 'جارية',
+  droppedOff: 'تم الإنزال',
   assigning: 'جارٍ التعيين...',
   pickup: 'الالتقاط',
   stop: 'المحطة',

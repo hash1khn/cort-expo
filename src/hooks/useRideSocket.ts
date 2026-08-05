@@ -33,6 +33,15 @@ interface RideEndedPayload {
     endedAt: string;
 }
 
+/** Emitted to this employee's personal socket room when the driver's geofence check drops
+ * them off mid-evening-trip — the trip itself may still be IN_PROGRESS for other riders. */
+interface PassengerDroppedOffPayload {
+    tripId: number;
+    stopId: number;
+    stopName: string;
+    droppedAt: string;
+}
+
 export interface EtaUpdatePayload {
     tripId: number;
     stopId: number | string;
@@ -53,6 +62,7 @@ interface UseRideSocketOptions {
     onRideProceeding?: (data: RideProceedingPayload) => void;
     onAttendanceMarked?: (data: AttendanceMarkedPayload) => void;
     onRideEnded?: (data: RideEndedPayload) => void;
+    onPassengerDroppedOff?: (data: PassengerDroppedOffPayload) => void;
     onPolylineUpdated?: () => void;
     onEtaUpdate?: (data: EtaUpdatePayload) => void;
 }
@@ -71,6 +81,7 @@ export function useRideSocket({
     onRideProceeding,
     onAttendanceMarked,
     onRideEnded,
+    onPassengerDroppedOff,
     onPolylineUpdated,
     onEtaUpdate,
 }: UseRideSocketOptions) {
@@ -81,6 +92,7 @@ export function useRideSocket({
     const onRideProceedingRef = useRef(onRideProceeding);
     const onAttendanceMarkedRef = useRef(onAttendanceMarked);
     const onRideEndedRef = useRef(onRideEnded);
+    const onPassengerDroppedOffRef = useRef(onPassengerDroppedOff);
     const onPolylineUpdatedRef = useRef(onPolylineUpdated);
     const onEtaUpdateRef = useRef(onEtaUpdate);
     onLocationUpdateRef.current = onLocationUpdate;
@@ -88,6 +100,7 @@ export function useRideSocket({
     onRideProceedingRef.current = onRideProceeding;
     onAttendanceMarkedRef.current = onAttendanceMarked;
     onRideEndedRef.current = onRideEnded;
+    onPassengerDroppedOffRef.current = onPassengerDroppedOff;
     onPolylineUpdatedRef.current = onPolylineUpdated;
     onEtaUpdateRef.current = onEtaUpdate;
 
@@ -101,6 +114,8 @@ export function useRideSocket({
         const handleRideProceeding = (data: RideProceedingPayload) => onRideProceedingRef.current?.(data);
         const handleAttendanceMarked = (data: AttendanceMarkedPayload) => onAttendanceMarkedRef.current?.(data);
         const handleRideEnded = (data: RideEndedPayload) => onRideEndedRef.current?.(data);
+        const handlePassengerDroppedOff = (data: PassengerDroppedOffPayload) =>
+            onPassengerDroppedOffRef.current?.(data);
         const handlePolylineUpdated = () => onPolylineUpdatedRef.current?.();
         const handleEtaUpdate = (data: EtaUpdatePayload) => onEtaUpdateRef.current?.(data);
 
@@ -109,6 +124,7 @@ export function useRideSocket({
         socketService.on('ride:proceeding', handleRideProceeding);
         socketService.on('attendance:marked', handleAttendanceMarked);
         socketService.on('RIDE_ENDED', handleRideEnded);
+        socketService.on('SHUTTLE_PASSENGER_DROPPED_OFF', handlePassengerDroppedOff);
         socketService.on('shuttle:polyline_updated', handlePolylineUpdated);
         socketService.on('eta:update', handleEtaUpdate);
 
@@ -118,6 +134,7 @@ export function useRideSocket({
             socketService.off('ride:proceeding', handleRideProceeding);
             socketService.off('attendance:marked', handleAttendanceMarked);
             socketService.off('RIDE_ENDED', handleRideEnded);
+            socketService.off('SHUTTLE_PASSENGER_DROPPED_OFF', handlePassengerDroppedOff);
             socketService.off('shuttle:polyline_updated', handlePolylineUpdated);
             socketService.off('eta:update', handleEtaUpdate);
             socketService.leaveRide();

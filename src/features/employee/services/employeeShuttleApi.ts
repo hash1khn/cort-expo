@@ -28,6 +28,10 @@ export type ShuttleTripForEmployee = {
   my_pickup_stop_id?: number | null;
   /** Full details of this employee's pickup stop (null if unassigned) */
   my_pickup_stop?: RouteStop | null;
+  /** This employee's own boarding/drop-off status on the trip ('BOARDED' | 'DROPPED_OFF' | 'ABSENT' | null).
+   * Only populated for currently STARTED/IN_PROGRESS trips — distinct from the trip-level `status`,
+   * since an evening trip can still be IN_PROGRESS for other riders after this employee is dropped off. */
+  my_boarding_status?: string | null;
   /** Last-known driver GPS position from Redis (shuttle:last_coord). Only populated for
    * trips currently STARTED/IN_PROGRESS; null otherwise. Seeded at trip start and updated
    * on every live location ping — used as the RideActive marker's initial position before

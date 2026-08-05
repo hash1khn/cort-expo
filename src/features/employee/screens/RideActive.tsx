@@ -370,6 +370,7 @@ export default function RideActive() {
     onRideProceeding: isChauffeurMode ? undefined : handleRideProceeding,
     onAttendanceMarked: isChauffeurMode ? undefined : handleAttendanceMarked,
     onRideEnded: isChauffeurMode ? undefined : handleRideEnded,
+    onPassengerDroppedOff: isChauffeurMode ? undefined : handleRideEnded,
     onPolylineUpdated: isChauffeurMode ? undefined : handleShuttlePolylineUpdated,
     onEtaUpdate: isChauffeurMode ? undefined : handleEtaUpdate,
   });

@@ -5,6 +5,7 @@ export const employee = {
   yourCaptain: 'آپ کا کیپٹن',
   tapForDetails: 'تفصیلات کے لیے ٹیپ کریں',
   inProgress: 'جاری ہے',
+  droppedOff: 'اتار دیا گیا',
   assigning: 'تفویض ہو رہا ہے...',
   pickup: 'پک اپ',
   stop: 'اسٹاپ',
