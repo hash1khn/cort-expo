@@ -179,6 +179,9 @@ export default function RideActive() {
   const apiDriverPhone = isChauffeurMode
     ? (activeChauffeurBooking?.users_chauffeur_bookings_driver_idTousers?.phone ?? null)
     : (activeTrip?.users?.phone ?? null);
+  const driverPictureUrl = isChauffeurMode
+    ? (activeChauffeurBooking?.users_chauffeur_bookings_driver_idTousers?.profile_picture_url ?? null)
+    : (activeTrip?.users?.profile_picture_url ?? null);
   const apiVehicle = isChauffeurMode ? activeChauffeurBooking?.vehicles : activeTrip?.routes?.vehicles;
   const apiVehicleDisplay = apiVehicle ? `${(apiVehicle as any).make ?? ''} ${(apiVehicle as any).model ?? ''}`.trim() : null;
   const apiVehiclePlate = isChauffeurMode
@@ -896,7 +899,15 @@ export default function RideActive() {
               <View style={styles.driverRow}>
                 <View style={styles.captainSection}>
                   <View style={styles.avatarCircle}>
-                    <Text style={styles.avatarInitials}>{driverInitials}</Text>
+                    {driverPictureUrl ? (
+                      <ExpoImage
+                        source={{ uri: driverPictureUrl }}
+                        style={{ width: 60, height: 60, borderRadius: 30 }}
+                        contentFit="cover"
+                      />
+                    ) : (
+                      <Text style={styles.avatarInitials}>{driverInitials}</Text>
+                    )}
                   </View>
                   <View style={styles.captainInfoBox}>
                     <Text style={styles.captainRole}>{vehicleDisplay}</Text>
@@ -924,7 +935,15 @@ export default function RideActive() {
                 </Text>
 
                 <View style={styles.avatarCircleBig}>
-                  <Text style={styles.avatarInitialsBig}>{driverInitials}</Text>
+                  {driverPictureUrl ? (
+                    <ExpoImage
+                      source={{ uri: driverPictureUrl }}
+                      style={{ width: 72, height: 72, borderRadius: 36 }}
+                      contentFit="cover"
+                    />
+                  ) : (
+                    <Text style={styles.avatarInitialsBig}>{driverInitials}</Text>
+                  )}
                 </View>
 
                 <Text style={styles.captainNameBig}>{driverName}</Text>
@@ -1115,6 +1134,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#000',
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
   },
   avatarInitials: {
     fontSize: 20,
@@ -1167,6 +1187,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#000',
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
     marginBottom: 4,
   },
   avatarInitialsBig: {
