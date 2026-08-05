@@ -705,14 +705,12 @@ export default function RideActive() {
       if (!tripId || tripId <= 0) return;
 
       const res = await createRideShareLink({ tripType, tripId }).unwrap();
-      // Android Share ignores `url`; put the link in `message` so both platforms work.
+      // Put the link only in `message`. Passing both `message` + `url` on iOS
+      // dumps a binary plist (`bplist00…`) into the shared text.
       const message =
         `I'm on my way! My ride details — Driver: ${driverName}, Vehicle: ${vehicleDisplay} (${vehiclePlate})\n\n` +
         `Track my ride: ${res.url}`;
-      await Share.share({
-        message,
-        url: res.url,
-      });
+      await Share.share({ message });
     } catch (err: any) {
       toast.show(
         <CustomToast
