@@ -1,12 +1,10 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Alert, AppState, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, View, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Feather from "@react-native-vector-icons/feather/static";
 import Ionicons from "@react-native-vector-icons/ionicons/static";
 import { router, useLocalSearchParams } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
-import { BottomSheetBackdrop, BottomSheetModal, BottomSheetView } from '@gorhom/bottom-sheet';
-import { SlideToStartTrip } from '../components';
 import {
   useGetTripEmployeesQuery,
   useGetTripAttendanceQuery,
@@ -33,18 +31,14 @@ const AppText = ({ style, ...props }: any) => (
 );
 
 type EmployeeStatus = 'present' | 'absent' | null;
-type AbsentReason = 'SELF_COMMUTE' | 'LATE' | 'SICK';
 
 type ReturnEmployee = {
   id: string;
   name: string;
   number: string;
   status: EmployeeStatus;
-  absentReason?: AbsentReason;
   stopId: number | null;
 };
-
-const ABSENT_REASON_VALUES: AbsentReason[] = ['SELF_COMMUTE', 'LATE', 'SICK'];
 
 /**
  * Drops any stop nobody needs today. A stop survives if at least one employee
@@ -68,10 +62,6 @@ function getInitials(name: string) {
     .toUpperCase();
 }
 
-function getAbsentReasonLabel(reason: AbsentReason, translate: (key: string) => string): string {
-  return translate(`shuttle:return.absentReasons.${reason}`);
-}
-
 export default function Return() {
   const { tripId: tripIdParam } = useLocalSearchParams<{ tripId?: string }>();
   const preferredTripId = tripIdParam ? Number.parseInt(tripIdParam, 10) : null;
@@ -79,8 +69,6 @@ export default function Return() {
   const { t, isRTL, language } = useLanguage();
   const tr = (key: string) => t(`shuttle:return.${key}`);
   const toast = useToast();
-  const absentSheetRef = useRef<BottomSheetModal>(null);
-  const absentSnapPoints = useMemo(() => ['40%'], []);
   const { activeTrip, tripId, stops, isLoading: isTripsLoading } = useActiveTrip(safePreferredTripId);
   const userId = useAppSelector((s) => s.auth.user?.id ?? '');
 
@@ -120,9 +108,8 @@ export default function Return() {
     onDisclosureDecline,
   } = useRiderLocationTracking();
 
-  // Track present/absent per employee for the return trip; default is absent.
+  // Track present/absent per employee for the return trip.
   const [employees, setEmployees] = useState<ReturnEmployee[]>([]);
-  const [employeeForAbsent, setEmployeeForAbsent] = useState<ReturnEmployee | null>(null);
   const [sliderKey, setSliderKey] = useState(0);
   const [locationPermissionWarning, setLocationPermissionWarning] = useState<
     'foreground' | 'background' | null
@@ -274,8 +261,6 @@ export default function Return() {
             entries: employees.map((emp) => ({
               employee_id: emp.id,
               status: emp.status === 'present' ? 'PRESENT' : 'ABSENT',
-              ...(emp.status === 'absent' &&
-                emp.absentReason && { absent_reason: emp.absentReason }),
             })),
           }).unwrap();
 
@@ -360,39 +345,20 @@ export default function Return() {
     t,
   ]);
 
-  React.useEffect(() => {
-    if (employeeForAbsent) {
-      absentSheetRef.current?.present();
-    }
-  }, [employeeForAbsent]);
-
   const handleMarkPresent = useCallback((employeeId: string) => {
     setEmployees((prev) =>
       prev.map((e) =>
-        e.id === employeeId ? { ...e, status: 'present' as const, absentReason: undefined } : e
+        e.id === employeeId ? { ...e, status: 'present' as const } : e
       )
     );
   }, []);
 
-  const handleMarkAbsent = useCallback((employee: ReturnEmployee) => {
-    setEmployeeForAbsent(employee);
-  }, []);
-
-  const handleSelectAbsentReason = useCallback((reason: AbsentReason) => {
-    if (!employeeForAbsent) return;
+  const handleMarkAbsent = useCallback((employeeId: string) => {
     setEmployees((prev) =>
       prev.map((e) =>
-        e.id === employeeForAbsent.id
-          ? { ...e, status: 'absent' as const, absentReason: reason }
-          : e
+        e.id === employeeId ? { ...e, status: 'absent' as const } : e
       )
     );
-    absentSheetRef.current?.dismiss();
-    setEmployeeForAbsent(null);
-  }, [employeeForAbsent]);
-
-  const handleDismissAbsentSheet = useCallback(() => {
-    setEmployeeForAbsent(null);
   }, []);
 
   const checkLocationPermission = useCallback(async (isStale: () => boolean) => {
@@ -585,16 +551,14 @@ export default function Return() {
                   </AppText>
                   <View className="flex-row items-center mt-1">
                     <AppText className="text-[#8E8E93] text-[15px] mr-2" numberOfLines={1}>
-                      {emp.status === 'absent' && emp.absentReason
-                        ? getAbsentReasonLabel(emp.absentReason, t)
-                        : (emp.number || 'No number')}
+                      {emp.number || 'No number'}
                     </AppText>
                   </View>
                 </View>
                 <View className="flex-row gap-3">
                   <Pressable
                     disabled={returnTripStarted}
-                    onPress={() => handleMarkAbsent(emp)}
+                    onPress={() => handleMarkAbsent(emp.id)}
                     className="w-[42px] h-[42px] rounded-full items-center justify-center border "
                     style={{
                       backgroundColor: emp.status === 'absent' ? '#D27360' : 'transparent',
@@ -681,58 +645,6 @@ export default function Return() {
           {/* <Ionicons name="chevron-forward" size={22} color="#FFF" /> */}
         </Pressable>
       </View>
-
-      {/* Absent reason bottom sheet */}
-      <BottomSheetModal
-        ref={absentSheetRef}
-        snapPoints={absentSnapPoints}
-        enablePanDownToClose
-        onDismiss={handleDismissAbsentSheet}
-        backdropComponent={(props) => (
-          <BottomSheetBackdrop {...props} disappearsOnIndex={-1} appearsOnIndex={0} />
-        )}
-        backgroundStyle={{ backgroundColor: '#FFFFFF' }}
-        handleIndicatorStyle={{ backgroundColor: 'rgba(55,65,81,0.25)' }}
-      >
-        <BottomSheetView style={styles.absentSheetContent}>
-          <View className="px-5 pb-8 ">
-            <AppText
-              className="text-lg font-bold mb-4 text-black"
-              style={isRTL ? { paddingVertical: 6 } : undefined}
-            >
-              {tr('whyAbsent')}
-            </AppText>
-
-
-            {ABSENT_REASON_VALUES.map((reason) => (
-              <Pressable
-                key={reason}
-                onPress={() => handleSelectAbsentReason(reason)}
-                className="py-3 rounded-xl items-center justify-center active:opacity-90 mb-3"
-                style={{
-                  backgroundColor: '#F5F5F2',
-                  borderWidth: 1,
-                  borderColor: 'rgba(209,213,219,1)',
-                }}
-              >
-                <AppText
-                  className="text-base font-semibold text-black"
-                  style={isRTL ? { paddingVertical: 6 } : undefined}
-                >
-                  {getAbsentReasonLabel(reason, t)}
-                </AppText>
-              </Pressable>
-            ))}
-          </View>
-        </BottomSheetView>
-      </BottomSheetModal>
     </SafeAreaView>
   );
 }
-
-const styles = StyleSheet.create({
-  absentSheetContent: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-  },
-});
