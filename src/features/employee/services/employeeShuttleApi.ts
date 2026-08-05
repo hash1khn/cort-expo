@@ -28,6 +28,13 @@ export type ShuttleTripForEmployee = {
   my_pickup_stop_id?: number | null;
   /** Full details of this employee's pickup stop (null if unassigned) */
   my_pickup_stop?: RouteStop | null;
+  /** Last-known driver GPS position from Redis (shuttle:last_coord). Only populated for
+   * trips currently STARTED/IN_PROGRESS; null otherwise. Seeded at trip start and updated
+   * on every live location ping — used as the RideActive marker's initial position before
+   * the first driver:location socket event of the session arrives. */
+  last_lat?: number | null;
+  last_lng?: number | null;
+  last_location_ts?: number | null;
   routes: {
     id: number;
     name: string;

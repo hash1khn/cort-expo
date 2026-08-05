@@ -188,7 +188,15 @@ function RootLayoutContent() {
         router.push('/shuttle/ride');
       }
     } else {
-      router.push({ pathname: '/employee/ride-active', params: { tripId: rideData.tripId } });
+      router.push({
+        pathname: '/employee/ride-active',
+        params: {
+          tripId: rideData.tripId,
+          ...(rideData.lastLat != null && rideData.lastLng != null
+            ? { lastLat: String(rideData.lastLat), lastLng: String(rideData.lastLng) }
+            : {}),
+        },
+      });
     }
   });
 

@@ -292,6 +292,9 @@ export default function NewHome() {
           vehicleDisplay: vehicle ? `${vehicle.make} ${vehicle.model}`.trim() : '',
           vehiclePlate: vehicle?.plate_number ?? '',
           direction: activeTrip.direction ?? '',
+          ...(activeTrip.last_lat != null && activeTrip.last_lng != null
+            ? { lastLat: String(activeTrip.last_lat), lastLng: String(activeTrip.last_lng) }
+            : {}),
         },
       });
       return; // Exit early after navigating
@@ -486,6 +489,12 @@ export default function NewHome() {
           vehicleDisplay,
           vehiclePlate,
           direction,
+          // Driver's start-trip GPS position (seeded into Redis by the backend) — lets
+          // RideActive show the real driver location on mount instead of the polyline's
+          // start point, before the first live driver:location socket tick arrives.
+          ...(data.lastLat != null && data.lastLng != null
+            ? { lastLat: String(data.lastLat), lastLng: String(data.lastLng) }
+            : {}),
         },
       });
     }, [router]),

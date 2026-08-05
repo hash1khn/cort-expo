@@ -131,6 +131,8 @@ export default function RideActive() {
     mode: modeParam,
     bookingId: bookingIdParam,
     bookingStatus: bookingStatusParam,
+    lastLat: lastLatParam,
+    lastLng: lastLngParam,
   } = useLocalSearchParams<{
     tripId?: string;
     myPickupStopId?: string;
@@ -142,6 +144,8 @@ export default function RideActive() {
     mode?: 'shuttle' | 'chauffeur';
     bookingId?: string;
     bookingStatus?: string;
+    lastLat?: string;
+    lastLng?: string;
   }>();
 
   const mode = modeParam ?? 'shuttle';
@@ -481,11 +485,36 @@ export default function RideActive() {
     return stopPolylineIndices[arrivedStopIdx] ?? null;
   }, [currentStopId, routeStops, stopPolylineIndices]);
 
-  // Use the live socket coord when available; fall back to allRoutePoints[0] which is
-  // the driver's GPS position at the moment they tapped "Start Trip". This gives a
-  // reasonable car position on a cold launch before the first socket emission arrives.
+  // Last-known driver position from Redis (shuttle:last_coord), seeded at trip start
+  // and updated on every live GPS ping — arrives either via the trip-list API (activeTrip
+  // .last_lat/.last_lng) or via the lastLat/lastLng route params some navigation paths
+  // (RIDE_STARTED socket listener, /shuttle-trips/active check) forward. This is almost
+  // always fresher than the polyline's own start point, which can be a generic route
+  // shape rather than the driver's real position. Kept as a plain derived fallback (not
+  // written into driverCoord state) so a live driver:location tick always wins regardless
+  // of arrival order — see the priority chain below.
+  const apiLastLat = !isChauffeurMode ? (activeTrip?.last_lat ?? null) : null;
+  const apiLastLng = !isChauffeurMode ? (activeTrip?.last_lng ?? null) : null;
+  const seededDriverCoord: LatLng | null = useMemo(() => {
+    if (apiLastLat != null && apiLastLng != null) {
+      return { latitude: apiLastLat, longitude: apiLastLng };
+    }
+    if (lastLatParam && lastLngParam) {
+      const lat = Number(lastLatParam);
+      const lng = Number(lastLngParam);
+      if (!Number.isNaN(lat) && !Number.isNaN(lng)) {
+        return { latitude: lat, longitude: lng };
+      }
+    }
+    return null;
+  }, [apiLastLat, apiLastLng, lastLatParam, lastLngParam]);
+
+  // Priority: live socket coord > last-known Redis coord (API or param) > polyline's
+  // own start point, which is the last resort — it may be a generic route shape rather
+  // than the driver's actual position if trip-specific polyline generation hasn't
+  // finished yet.
   const displayDriverCoord: LatLng | null =
-    driverCoord ?? (allRoutePoints.length > 0 ? allRoutePoints[0]! : null);
+    driverCoord ?? seededDriverCoord ?? (allRoutePoints.length > 0 ? allRoutePoints[0]! : null);
 
   const currentDriverPolylineIndex = useMemo(() => {
     if (!displayDriverCoord || !allRoutePoints.length) return null;

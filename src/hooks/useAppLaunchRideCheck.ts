@@ -10,6 +10,10 @@ interface ActiveRideData {
     vehicleInfo: string | null;
     currentStopId: number | null;
     direction: string | null;
+    /** Driver's last-known GPS position from Redis (shuttle:last_coord), seeded at trip
+     * start and updated on every live ping. Null if the driver hasn't sent a location yet. */
+    lastLat: number | null;
+    lastLng: number | null;
 }
 
 
