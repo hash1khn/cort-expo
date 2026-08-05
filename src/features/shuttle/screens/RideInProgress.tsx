@@ -373,8 +373,6 @@ export default function RideInProgress() {
             [{ text: 'OK' }],
           );
         }
-      } else {
-        openInMaps(currentStop);
       }
       return;
     }
@@ -387,6 +385,7 @@ export default function RideInProgress() {
           tripId: activeTrip.id,
           current_stop_id: currentStop.id,
         }).unwrap();
+        // Only after a successful 200: open attendance sheet (no optimistic UI).
         setAttendanceStopId(currentStop.id);
         arrivedStopSheetRef.current?.snapToIndex(0);
       } catch {
@@ -867,24 +866,22 @@ export default function RideInProgress() {
                   return;
                 }
 
-                // Persist EN_ROUTE on backend BEFORE closing the sheet.
-                // This ensures crash recovery won't re-show this stop's sheet.
-                if (activeTrip) {
-                  try {
-                    await proceedFromStop({ tripId: activeTrip.id }).unwrap();
-                  } catch {
-                    Alert.alert('Error', tr('failedProceed'));
-                    return;
-                  }
+                if (!activeTrip) return;
+
+                // Capture next stop before the API call so cache updates can't change it.
+                const nextDrivingStop = nextStopAfterCurrent;
+
+                try {
+                  await proceedFromStop({ tripId: activeTrip.id }).unwrap();
+                } catch {
+                  Alert.alert('Error', tr('failedProceed'));
+                  return;
                 }
 
+                // Only after a successful 200: close sheet and open Google Maps.
                 arrivedStopSheetRef.current?.close();
-                // Reset frozen stop so when it opens later it uses the new one
                 setAttendanceStopId(null);
 
-                // Find the next stop AFTER the one we just attended.
-                // When isAtStop is true, nextStopAfterCurrent holds the correct next one.
-                const nextDrivingStop = nextStopAfterCurrent;
                 if (nextDrivingStop) {
                   openInMaps(nextDrivingStop);
                 }

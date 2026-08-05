@@ -387,17 +387,23 @@ export const shuttleApi = baseApi.injectEndpoints({
         { tripId },
         { dispatch, queryFulfilled },
       ) {
-        // Optimistic update: immediately reflect EN_ROUTE in cache
-        const patch = dispatch(
-          shuttleApi.util.updateQueryData('getTodayTrip', undefined, (draft) => {
-            const trip = draft.find((t) => t.id === tripId);
-            if (trip) trip.current_stop_status = 'EN_ROUTE';
-          }),
-        );
+        // Only patch cache after a successful 200 — never optimistic.
         try {
-          await queryFulfilled;
+          const { data } = await queryFulfilled;
+          dispatch(
+            shuttleApi.util.updateQueryData('getTodayTrip', undefined, (draft) => {
+              const trip = draft.find((t) => t.id === tripId);
+              if (trip) {
+                trip.current_stop_status =
+                  data.current_stop_status ?? 'EN_ROUTE';
+                if (data.current_stop_id != null) {
+                  trip.current_stop_id = data.current_stop_id;
+                }
+              }
+            }),
+          );
         } catch {
-          patch.undo();
+          // Cache not patched on failure
         }
       },
     }),
