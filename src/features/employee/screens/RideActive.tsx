@@ -15,6 +15,7 @@ import { useChauffeurSocket } from '../../../hooks/useChauffeurSocket';
 import { useEtaCountdown } from '../../../hooks/useEtaCountdown';
 import { employeeShuttleApi, useGetShuttlePolylineQuery, useGetShuttleTripsForEmployeeQuery } from '../services/employeeShuttleApi';
 import { bookingsApi, useGetEmployeeActiveChauffeurBookingQuery, useGetChauffeurRoutePolylineQuery } from '../services/bookingsApi';
+import { useCreateRideShareLinkMutation } from '../services/ridesApi';
 import { fontFamily } from '@/core/theme';
 import { useScanBoardingMutation } from '../services/boardingApi';
 import { useToast } from '@/shared/ui/molecules/Toast';
@@ -235,6 +236,7 @@ export default function RideActive() {
   const [socketStopStatus, setSocketStopStatus] = useState<'AT_STOP' | 'EN_ROUTE' | null>(null);
   const [isCallingDriver, setIsCallingDriver] = useState(false);
   const [isSharingRide, setIsSharingRide] = useState(false);
+  const [createRideShareLink] = useCreateRideShareLinkMutation();
 
   // ── ETA state ─────────────────────────────────────────────────────────────
   const [etaSnapshot, setEtaSnapshot] = useState<{ etaMinutes: number; calculatedAt: string } | null>(null);
@@ -697,13 +699,41 @@ export default function RideActive() {
   const handleShareRide = useCallback(async () => {
     setIsSharingRide(true);
     try {
+      const tripType = isChauffeurMode ? 'chauffeur' : 'shuttle';
+      const tripId = isChauffeurMode ? activeChauffeurBookingId : activeTripId;
+
+      if (!tripId || tripId <= 0) return;
+
+      const res = await createRideShareLink({ tripType, tripId }).unwrap();
+      // Android Share ignores `url`; put the link in `message` so both platforms work.
+      const message =
+        `I'm on my way! My ride details — Driver: ${driverName}, Vehicle: ${vehicleDisplay} (${vehiclePlate})\n\n` +
+        `Track my ride: ${res.url}`;
       await Share.share({
-        message: `I'm on my way! My ride details - Driver: ${driverName}, Vehicle: ${vehicleDisplay} (${vehiclePlate})`,
+        message,
+        url: res.url,
       });
+    } catch (err: any) {
+      toast.show(
+        <CustomToast
+          type="error"
+          message={err?.data?.message ?? 'Could not generate tracking link'}
+        />,
+        { duration: 4000, position: 'top', backgroundColor: '#ff4545' },
+      );
     } finally {
       setIsSharingRide(false);
     }
-  }, [driverName, vehicleDisplay, vehiclePlate]);
+  }, [
+    createRideShareLink,
+    isChauffeurMode,
+    activeChauffeurBookingId,
+    activeTripId,
+    driverName,
+    vehicleDisplay,
+    vehiclePlate,
+    toast,
+  ]);
 
   const handleDevMarkOutstation = useCallback(() => {
     dispatch(setIsOutstationDev(true));
