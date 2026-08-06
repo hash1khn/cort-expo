@@ -323,12 +323,15 @@ export default function Return() {
         total_distance: 0,
       }).unwrap();
       await stopTracking().catch(console.warn);
-      setSliderKey((k) => k + 1);
+      router.push('/shuttle');
     } catch {
-      // On error, remount slider so user can retry; stay on screen
-      // Optionally show error
+      // Stay on screen and let the user retry; remount slider so it resets.
+      toast.show(
+        <CustomToast type="error" message={tr('failedComplete')} />,
+        { duration: 4000, position: 'top', backgroundColor: '#ff4545' }
+      );
+      setSliderKey((k) => k + 1);
     }
-    router.push('/shuttle');
   }, [
     tripId,
     activeTrip?.route_id,

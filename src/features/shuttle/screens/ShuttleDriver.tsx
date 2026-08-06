@@ -25,7 +25,7 @@ export function ShuttleDriver() {
   const navigation = useNavigation();
   const { t, isRTL, rtlFont, language, localeCode: locale } = useLanguage();
   const tr = (key: string) => t(`shuttle:routeDetails.${key}`);
-  const { data: todayTrips = [], isLoading: isTodayTripLoading, refetch } = useGetTodayTripQuery();
+  const { data: todayTrips = [], isLoading: isTodayTripLoading, isError: isTodayTripError, refetch } = useGetTodayTripQuery();
   useRefetchOnReconnect(refetch);
   const [triggerLoadEmployees] = useLazyGetTripEmployeesQuery();
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -373,8 +373,24 @@ export function ShuttleDriver() {
 
 
 
+        {/* Fetch failed (e.g. no internet) — don't claim "no rides" when we don't actually know */}
+        {isTodayTripError && (
+          <View className="mt-4 rounded-3xl bg-[#FFF1F0] px-5 py-6 items-center">
+            <Ionicons name="alert-circle-outline" size={36} color="#EF4444" />
+            <Text className="text-[#EF4444] font-semibold mt-2 text-center">
+              {tr('couldNotLoad')}
+            </Text>
+            <Pressable
+              onPress={refetch}
+              className="mt-4 px-6 py-2.5 rounded-xl bg-[#EF4444] active:opacity-80"
+            >
+              <Text className="text-white font-bold">{tr('retry')}</Text>
+            </Pressable>
+          </View>
+        )}
+
         {/* No rides message */}
-        {!hasTrips && (
+        {!hasTrips && !isTodayTripError && (
           <View className="mt-4 my-auto">
             <Text className={`py-2 font-medium text-black ${isRTL ? 'ml-auto text-2xl ' : 'text-base '}`}>
               {tr('noRides')}
@@ -382,7 +398,7 @@ export function ShuttleDriver() {
           </View>
         )}
 
-        {hasTrips && (
+        {hasTrips && !isTodayTripError && (
           <>
             {/* JOINT CARD: Status + Route Details */}
             <View className="mb-6 rounded-3xl bg-[#EDEDEB] p-6">

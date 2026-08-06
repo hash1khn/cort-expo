@@ -132,7 +132,8 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       [
         "expo-camera",
         {
-          cameraPermission: "Allow $(PRODUCT_NAME) to access your camera",
+          cameraPermission:
+            "$(PRODUCT_NAME) uses the camera to take photos of trip receipts (meter/toll etc) and verification documents (license, CNIC etc.) required to onboard & complete bookings.",
         },
       ],
       [

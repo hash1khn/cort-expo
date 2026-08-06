@@ -30,6 +30,8 @@ export const shuttle = {
     start: 'بدء الرحلة',
     today: 'اليوم',
     noRides: 'لا توجد رحلات اليوم.',
+    couldNotLoad: 'تعذّر تحميل رحلات اليوم',
+    retry: 'إعادة المحاولة',
     nextRide: 'الرحلة التالية',
     morning: 'صباحاً',
     evening: 'مساءً',
@@ -51,6 +53,7 @@ export const shuttle = {
     completing: 'جارٍ الإكمال...',
     markAllAttendance: 'سجّل الحضور للجميع لبدء الرحلة',
     couldNotStartRide: 'تعذّر بدء الرحلة',
+    failedComplete: 'تعذّر إكمال الرحلة. حاول مرة أخرى.',
     tooEarlyOfficeEnd: 'يمكن بدء رحلة المساء بعد {{time}} PKT.',
     tooEarlyOfficeEndFallback: 'لا يمكن بدء رحلة المساء قبل وقت القفل (PKT).',
     absentReasons: {

@@ -30,6 +30,8 @@ export const shuttle = {
     start: 'سفر کا آغاز',
     today: 'آج',
     noRides: 'آج کوئی سواری مقرر نہیں ہے',
+    couldNotLoad: 'آج کی سواریاں لوڈ نہ ہو سکیں',
+    retry: 'دوبارہ کوشش کریں',
     nextRide: 'اگلی سواری',
     morning: 'صبح',
     evening: 'شام',
@@ -51,6 +53,7 @@ export const shuttle = {
     completing: 'مکمل ہو رہا ہے...',
     markAllAttendance: 'شروع کرنے سے پہلے تمام حاضری درج کریں',
     couldNotStartRide: 'شروع نہ ہو سکی',
+    failedComplete: 'سفر مکمل نہ ہو سکا۔ دوبارہ کوشش کریں۔',
     tooEarlyOfficeEnd: 'شام کا سفر {{time}} PKT کے بعد شروع ہو سکتا ہے۔',
     tooEarlyOfficeEndFallback: 'شام کا سفر لاک وقت سے پہلے شروع نہیں ہو سکتا (PKT)۔',
     absentReasons: {

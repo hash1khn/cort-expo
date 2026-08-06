@@ -30,6 +30,8 @@ export const shuttle = {
     start: 'Start',
     today: 'Today',
     noRides: 'You have no rides for today.',
+    couldNotLoad: "Couldn't load today's rides",
+    retry: 'Retry',
     nextRide: 'Next Ride',
     morning: 'Morning',
     evening: 'Evening',
@@ -51,6 +53,7 @@ export const shuttle = {
     completing: 'Completing...',
     markAllAttendance: 'Mark all attendance to start ride',
     couldNotStartRide: 'Could not start ride',
+    failedComplete: 'Failed to complete trip. Please try again.',
     tooEarlyOfficeEnd: 'Evening trip can start after {{time}} PKT.',
     tooEarlyOfficeEndFallback: 'Evening trip cannot start before the lock time (PKT).',
     absentReasons: {
