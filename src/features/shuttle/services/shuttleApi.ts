@@ -47,6 +47,15 @@ type Route = {
   /** PKT HH:MM — evening return trips cannot start before this time */
   evening_lock_time?: string | null;
   route_stops: RouteStop[];
+  /** Stops fully excluded from route_stops above (every assigned employee absent) —
+   * surfaced separately, with their original sequence, so the driver's Route Overview
+   * can still show them (struck through, labeled "Skipped") instead of them silently
+   * disappearing. Works for both directions; empty/absent when nothing's excluded. */
+  excluded_stops?: { id: number; name: string; sequence_order: number }[];
+  /** The office stop (evening trips only) — excluded from route_stops/excluded_stops
+   * above since it's the return trip's starting point, not a navigation target or an
+   * absence-skip, but still surfaced here so Route Overview can show it for context. */
+  office_stop?: { id: number; name: string; morning_eta: string | null; evening_eta: string | null } | null;
   _count?: RouteCount;
   vehicles?: Vehicle | null;
 };
@@ -62,6 +71,16 @@ export type ShuttleTrip = {
   current_stop_arrived_at?: string | null;
   current_stop_status?: 'AT_STOP' | 'EN_ROUTE' | null;
   routes?: Route | null;
+};
+
+/** startTrip's response — extends ShuttleTrip with the exclusion-aware navigation target,
+ * resolved synchronously server-side (DB-only, no Google Directions call) so the client can
+ * navigate correctly without a race against a background cache refetch. `excluded_stops`
+ * carries names (not just ids) so the UI can tell the driver *why* Maps is pointing somewhere
+ * other than the route's usual first stop, before handing off to external navigation. */
+export type StartTripResponse = ShuttleTrip & {
+  first_stop: { id: number; name: string; lat: number; lng: number } | null;
+  excluded_stops: { id: number; name: string }[];
 };
 
 // Frontend-friendly shape for employees on a trip.
@@ -86,6 +105,9 @@ export type TripAttendance = {
   department: string | null;
   status: string | null;
   scannedAt: string | null;
+  /** Who last wrote this attendance row — 'EMPLOYEE' when self-reported (e.g. the
+   * morning "mark myself absent" flow), 'DRIVER' when marked from this screen. */
+  source?: 'EMPLOYEE' | 'DRIVER' | null;
 };
 
 export const shuttleApi = baseApi.injectEndpoints({
@@ -185,6 +207,7 @@ export const shuttleApi = baseApi.injectEndpoints({
             department: user.department ?? null,
             status: row.status ?? null,
             scannedAt: row.scanned_at ?? null,
+            source: row.source ?? null,
           } as TripAttendance;
         });
       },
@@ -218,8 +241,10 @@ export const shuttleApi = baseApi.injectEndpoints({
               shuttleTripId,
               (draft) => {
                 const i = draft.findIndex((e) => e.employeeId === employeeId);
-                if (i !== -1) draft[i].status = status;
-                else
+                if (i !== -1) {
+                  draft[i].status = status;
+                  draft[i].source = 'DRIVER';
+                } else
                   draft.push({
                     employeeId,
                     fullName: '',
@@ -227,6 +252,7 @@ export const shuttleApi = baseApi.injectEndpoints({
                     department: null,
                     status,
                     scannedAt: null,
+                    source: 'DRIVER',
                   });
               },
             ),
@@ -261,8 +287,10 @@ export const shuttleApi = baseApi.injectEndpoints({
               shuttleTripId,
               (draft) => {
                 const i = draft.findIndex((e) => e.employeeId === employeeId);
-                if (i !== -1) draft[i].status = status;
-                else
+                if (i !== -1) {
+                  draft[i].status = status;
+                  draft[i].source = 'DRIVER';
+                } else
                   draft.push({
                     employeeId,
                     fullName: '',
@@ -270,6 +298,7 @@ export const shuttleApi = baseApi.injectEndpoints({
                     department: null,
                     status,
                     scannedAt: null,
+                    source: 'DRIVER',
                   });
               },
             ),
@@ -280,7 +309,7 @@ export const shuttleApi = baseApi.injectEndpoints({
       },
     }),
     startTrip: builder.mutation<
-      ShuttleTrip,
+      StartTripResponse,
       { route_id: number; direction: 'MORNING' | 'EVENING'; lat?: number; lng?: number }
     >({
       query: ({ route_id, direction, lat, lng }) => {
@@ -311,7 +340,14 @@ export const shuttleApi = baseApi.injectEndpoints({
                 draft[i].status = data.status ?? draft[i].status;
                 if (data.route_id != null) draft[i].route_id = data.route_id;
                 if (data.direction != null) draft[i].direction = data.direction;
-                // Leave draft[i].routes unchanged so route_stops from getTodayTrips are preserved
+                // Deliberately NOT patching route_stops/excluded_stops here: this response only
+                // tells us the *first* navigable stop and which stops are currently excluded —
+                // not the full unfiltered stop list — so there's no way to correctly restore a
+                // stop that an earlier (now-stale) exclusion had removed (e.g. someone marked
+                // absent, then undid it before start). A partial patch can only ever remove
+                // stops, never add them back, which is exactly how this went stale. The caller
+                // (RideInProgress.tsx) triggers a full refetch of this query right after start,
+                // which recomputes both fields correctly from scratch.
               } else {
                 draft.unshift(data as ShuttleTrip);
               }

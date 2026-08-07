@@ -6,6 +6,7 @@ export const employee = {
   tapForDetails: 'اضغط للتفاصيل',
   inProgress: 'جارية',
   droppedOff: 'تم الإنزال',
+  notComingToday: 'لن يحضر اليوم',
   assigning: 'جارٍ التعيين...',
   pickup: 'الالتقاط',
   stop: 'المحطة',

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Alert, AppState, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, View, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Feather from "@react-native-vector-icons/feather/static";
@@ -11,10 +11,13 @@ import {
   useSubmitReturnAttendanceMutation,
   useCompleteTripMutation,
   useStartTripMutation,
+  useArriveAtStopMutation,
+  useProceedFromStopMutation,
   TripEmployee,
 } from '../services/shuttleApi';
-import { useActiveTrip, type Stop } from '../hooks/useActiveTrip';
-import { fontFamily } from '@/core/theme';
+import { useActiveTrip } from '../hooks/useActiveTrip';
+import { openInMaps } from '../utils/openInMaps';
+import { colors, fontFamily } from '@/core/theme';
 import { useToast } from '@/shared/ui/molecules/Toast';
 import { CustomToast } from '@/features/shared/components/CustomToast';
 import { useLanguage } from '@/i18n/useLanguage';
@@ -40,19 +43,6 @@ type ReturnEmployee = {
   stopId: number | null;
 };
 
-/**
- * Drops any stop nobody needs today. A stop survives if at least one employee
- * assigned to it is marked present; if employees hasn't loaded yet (e.g. called
- * defensively before data is ready) we fail open and keep every stop.
- */
-export function filterStopsByAttendance(stops: Stop[], employees: ReturnEmployee[]): Stop[] {
-  if (!employees.length) return stops;
-  const presentStopIds = new Set(
-    employees.filter((e) => e.status === 'present' && e.stopId != null).map((e) => e.stopId),
-  );
-  return stops.filter((stop) => presentStopIds.has(stop.id));
-}
-
 function getInitials(name: string) {
   return name
     .split(' ')
@@ -69,7 +59,19 @@ export default function Return() {
   const { t, isRTL, language } = useLanguage();
   const tr = (key: string) => t(`shuttle:return.${key}`);
   const toast = useToast();
-  const { activeTrip, tripId, stops, isLoading: isTripsLoading } = useActiveTrip(safePreferredTripId);
+  const {
+    activeTrip,
+    tripId,
+    stops,
+    displayStops,
+    officeStop,
+    currentStop,
+    nextStopAfterCurrent,
+    isLastStop,
+    rideStarted,
+    isLoading: isTripsLoading,
+    refetch: refetchActiveTrip,
+  } = useActiveTrip(safePreferredTripId);
   const userId = useAppSelector((s) => s.auth.user?.id ?? '');
 
   // Join the ride socket room as driver so the background location task's
@@ -97,8 +99,10 @@ export default function Return() {
   const [submitReturnAttendance, { isLoading: isSubmitting }] = useSubmitReturnAttendanceMutation();
   const [completeTrip, { isLoading: isCompletingTrip }] = useCompleteTripMutation();
   const [startTrip, { isLoading: isStartingTrip }] = useStartTripMutation();
+  const [arriveAtStop, { isLoading: isArrivingAtStop }] = useArriveAtStopMutation();
+  const [proceedFromStop, { isLoading: isProceeding }] = useProceedFromStopMutation();
 
-  const isActionLoading = isSubmitting || isStartingTrip || isCompletingTrip;
+  const isActionLoading = isSubmitting || isStartingTrip || isArrivingAtStop || isProceeding || isCompletingTrip;
 
   const {
     startTracking,
@@ -115,31 +119,20 @@ export default function Return() {
     'foreground' | 'background' | null
   >(null);
 
-  // Derive returnTripStarted from the persisted trip status so that on crash
-  // recovery the screen immediately shows "Complete Trip" (not "Begin ride").
-  const tripAlreadyStarted =
-    activeTrip?.status === 'STARTED' || activeTrip?.status === 'IN_PROGRESS';
-  const [returnTripStarted, setReturnTripStarted] = useState(false);
-
-  // Sync once the trip data arrives (covers the crash-recovery path where the
-  // component mounts before the RTK Query result is available).
-  useEffect(() => {
-    if (tripAlreadyStarted) {
-      setReturnTripStarted(true);
-    }
-  }, [tripAlreadyStarted]);
-
+  // rideStarted (from useActiveTrip, derived off activeTrip.started_at) is the single
+  // source of truth for crash recovery — no local mirror state needed, same as morning's
+  // RideInProgress.tsx.
   useEffect(() => {
     if (!tripEmployeesRaw.length) return;
     // Wait for attendance logs if the trip is already started
-    if (tripAlreadyStarted && isAttendanceLoading) return;
+    if (rideStarted && isAttendanceLoading) return;
 
     setEmployees((prev) => {
       // Initialize only once when we get data for this trip
       if (prev.length > 0) return prev;
 
       const attendanceMap = new Map();
-      if (tripAlreadyStarted) {
+      if (rideStarted) {
         tripAttendance.forEach((log) => {
           attendanceMap.set(log.employeeId, log);
         });
@@ -148,7 +141,7 @@ export default function Return() {
       return tripEmployeesRaw.map((emp: TripEmployee) => {
         let status: EmployeeStatus = null;
 
-        if (tripAlreadyStarted) {
+        if (rideStarted) {
           const log = attendanceMap.get(emp.id);
           if (log) {
             const normalized = log.status?.toUpperCase();
@@ -172,40 +165,26 @@ export default function Return() {
         };
       });
     });
-  }, [tripEmployeesRaw, tripAlreadyStarted, tripAttendance, isAttendanceLoading]);
+  }, [tripEmployeesRaw, rideStarted, tripAttendance, isAttendanceLoading]);
 
-  const openStopsInMaps = useCallback((tripStops: Stop[]) => {
-    if (!tripStops.length) return;
-
-    const validStops = tripStops.filter(
-      (stop) =>
-        typeof stop.lat === 'number' &&
-        typeof stop.lng === 'number' &&
-        !(stop.lat === 0 && stop.lng === 0),
-    );
-    if (!validStops.length) return;
-
-    const coords = validStops.map((s) => `${s.lat},${s.lng}`);
-    const origin = coords[0];
-    const destination = coords[coords.length - 1];
-    const waypoints = coords.length > 2 ? coords.slice(1, coords.length - 1) : [];
-
-    const iosUrl = destination
-      ? `maps://?${origin ? `saddr=${encodeURIComponent(origin)}&` : ''}daddr=${encodeURIComponent(destination)}&dirflg=d`
-      : null;
-
-    let androidUrl = 'https://www.google.com/maps/dir/?api=1&travelmode=driving';
-    if (origin) androidUrl += `&origin=${encodeURIComponent(origin)}`;
-    if (destination) androidUrl += `&destination=${encodeURIComponent(destination)}`;
-    if (waypoints.length > 0) androidUrl += `&waypoints=${encodeURIComponent(waypoints.join('|'))}`;
-
-    const url = Platform.OS === 'ios' ? iosUrl : androidUrl;
-    if (!url) return;
-
-    Linking.openURL(url).catch(() => {
-      // Swallow error; we don't want to block the UI if maps isn't available
+  // Live preview of which stops would be skipped, computed purely from the driver's
+  // in-progress tick/cross taps — before "Begin Ride", nothing has been submitted to
+  // the server yet, so the real `displayStops` (server-truth `excluded_stops`) can't
+  // reflect this. A stop shows as skipped once every employee assigned to it has been
+  // explicitly marked absent; unmarked employees never cause a false "skipped" preview.
+  const previewDisplayStops = useMemo(() => {
+    const navigableEntries = stops.map((stop) => {
+      const stopEmployees = employees.filter((e) => e.stopId === stop.id);
+      const skipped = stopEmployees.length > 0 && stopEmployees.every((e) => e.status === 'absent');
+      return { id: stop.id, name: stop.name, eta: stop.eta, skipped, isOffice: false };
     });
-  }, []);
+    return officeStop ? [officeStop, ...navigableEntries] : navigableEntries;
+  }, [stops, employees, officeStop]);
+
+  // Once the ride has started, switch to the real server-computed list (same as
+  // morning's RideInProgress.tsx) so the current-stop highlight advances as the
+  // driver marks arrived/proceeds through the route.
+  const routeOverviewStops = rideStarted ? displayStops : previewDisplayStops;
 
   const handleSlideReturnTrip = useCallback(async () => {
     if (!tripId) {
@@ -213,8 +192,10 @@ export default function Return() {
       return;
     }
 
-    // First slide: submit bulk return attendance and open maps with all stops
-    if (!returnTripStarted) {
+    // First tap: submit bulk return attendance, start the trip, and open Maps for
+    // the first stop only — subsequent stops are handled one at a time below, the
+    // same way morning's RideInProgress.tsx walks through its route.
+    if (!rideStarted) {
       // Last-resort: only when permanently denied (OS will no longer show its own
       // dialog) do we send the driver to Settings — otherwise let the normal
       // disclosure / native-dialog flow run so the OS can re-prompt.
@@ -277,16 +258,30 @@ export default function Return() {
               console.warn('Could not fetch location:', error);
             }
 
-            await startTrip({
+            const result = await startTrip({
               route_id: activeTrip.route_id,
               direction: 'EVENING',
               lat: driverLat,
               lng: driverLng,
             }).unwrap();
+
+            // Fire-and-forget: bring route_stops/excluded_stops fully up to date for the
+            // Route Overview list — startTrip's own onQueryStarted deliberately only patches
+            // started_at/status/route_id/direction (see its comment), not the stop lists, so
+            // without this refetch the UI would keep showing the pre-submission stop state
+            // (every stop non-skipped) even though the bulk attendance just submitted above
+            // already changed which stops are excluded server-side. Not awaited: the Maps
+            // handoff below already has everything it needs from `result`.
+            refetchActiveTrip();
+
+            // Stops where every assigned employee is absent are excluded server-side;
+            // first_stop is the resolved first navigable stop (null only if the whole
+            // route is absent today) — same as morning's goToFirstStop.
+            if (result.first_stop) {
+              openInMaps(result.first_stop);
+            }
           }
 
-          setReturnTripStarted(true);
-          openStopsInMaps(filterStopsByAttendance(stops, employees));
           setSliderKey((k) => k + 1);
         };
 
@@ -316,34 +311,66 @@ export default function Return() {
       return;
     }
 
-    // Second slide: complete the trip, invalidate caches via RTKQ tags, and go home
+    if (!currentStop || !stops.length) {
+      return;
+    }
+
+    // Last stop: mirror morning — skip the arrive/proceed step entirely and jump
+    // straight to completing the trip. The backend sweeps any employees still
+    // BOARDED at this stop to DROPPED_OFF as part of completeTrip, since this stop
+    // never goes through proceedFromStop (the only other place that transition fires).
+    if (isLastStop) {
+      try {
+        await completeTrip({
+          tripId,
+          total_distance: 0,
+        }).unwrap();
+        await stopTracking().catch(console.warn);
+        router.push('/shuttle');
+      } catch {
+        // Stay on screen and let the user retry; remount slider so it resets.
+        toast.show(
+          <CustomToast type="error" message={tr('failedComplete')} />,
+          { duration: 4000, position: 'top', backgroundColor: '#ff4545' }
+        );
+        setSliderKey((k) => k + 1);
+      }
+      return;
+    }
+
+    // Middle stop: mark arrived (flips this stop's present employees to
+    // DROPPED_OFF server-side — the manual replacement for the old GPS geofence),
+    // then hand off to Maps for the next stop. No attendance sheet here — everyone
+    // was already marked present/absent before the ride began.
     try {
-      await completeTrip({
-        tripId,
-        total_distance: 0,
-      }).unwrap();
-      await stopTracking().catch(console.warn);
-      router.push('/shuttle');
+      await arriveAtStop({ tripId, current_stop_id: currentStop.id }).unwrap();
+      await proceedFromStop({ tripId }).unwrap();
+      if (nextStopAfterCurrent) {
+        openInMaps(nextStopAfterCurrent);
+      }
     } catch {
-      // Stay on screen and let the user retry; remount slider so it resets.
       toast.show(
-        <CustomToast type="error" message={tr('failedComplete')} />,
+        <CustomToast type="error" message={tr('failedArrive')} />,
         { duration: 4000, position: 'top', backgroundColor: '#ff4545' }
       );
-      setSliderKey((k) => k + 1);
     }
   }, [
     tripId,
     activeTrip?.route_id,
     employees,
-    returnTripStarted,
+    rideStarted,
+    isLastStop,
+    currentStop,
+    nextStopAfterCurrent,
+    stops.length,
     submitReturnAttendance,
     startTrip,
+    refetchActiveTrip,
     startTracking,
     stopTracking,
     completeTrip,
-    openStopsInMaps,
-    stops,
+    arriveAtStop,
+    proceedFromStop,
     toast,
     t,
   ]);
@@ -419,7 +446,7 @@ export default function Return() {
   }, [checkLocationPermission]);
 
   // We should also suspend the screen UI while attendance is loading on crash recovery
-  if (isTripsLoading || isEmployeesLoading || (tripAlreadyStarted && isAttendanceLoading)) {
+  if (isTripsLoading || isEmployeesLoading || (rideStarted && isAttendanceLoading)) {
     return (
       <SafeAreaView className="flex-1 bg-[#FFFFFF]" edges={['top']}>
         <LocationDisclosureModal
@@ -488,7 +515,7 @@ export default function Return() {
         onAccept={onDisclosureAccept}
         onDecline={onDisclosureDecline}
       />
-      {!returnTripStarted && (
+      {!rideStarted && (
         <BackButton
           onPress={() => router.back()}
           anchored={false}
@@ -560,13 +587,13 @@ export default function Return() {
                 </View>
                 <View className="flex-row gap-3">
                   <Pressable
-                    disabled={returnTripStarted}
+                    disabled={rideStarted}
                     onPress={() => handleMarkAbsent(emp.id)}
                     className="w-[42px] h-[42px] rounded-full items-center justify-center border "
                     style={{
                       backgroundColor: emp.status === 'absent' ? '#D27360' : 'transparent',
                       borderColor: emp.status === 'absent' ? '#D27360' : emp.status === 'present' ? '#C0C0C0' : '#D27360',
-                      opacity: returnTripStarted ? 0.5 : 1,
+                      opacity: rideStarted ? 0.5 : 1,
                     }}
                   >
                     <Ionicons
@@ -576,13 +603,13 @@ export default function Return() {
                     />
                   </Pressable>
                   <Pressable
-                    disabled={returnTripStarted}
+                    disabled={rideStarted}
                     onPress={() => handleMarkPresent(emp.id)}
                     className="w-[42px] h-[42px] rounded-full items-center justify-center border"
                     style={{
                       backgroundColor: emp.status === 'present' ? '#4AA388' : 'transparent',
                       borderColor: emp.status === 'present' ? '#4AA388' : emp.status === 'absent' ? '#C0C0C0' : '#4AA388',
-                      opacity: returnTripStarted ? 0.5 : 1,
+                      opacity: rideStarted ? 0.5 : 1,
                     }}
                   >
                     <Ionicons
@@ -597,11 +624,71 @@ export default function Return() {
           </View>
         </View>
 
+        {/* Route Overview */}
+        <View className="mb-6">
+          <AppText
+            className={`mb-6 text-black ${isRTL ? 'font-bold' : 'text-xl font-bold'}`}
+            style={buildRtlSectionTitleStyle(language)}
+          >
+            {tr('routeOverview')}
+          </AppText>
+          <View className="ml-2">
+            {routeOverviewStops.map((stop, index) => {
+              const isLast = index === routeOverviewStops.length - 1;
+              // Office is where the driver actually is pre-ride, so it's "current" until
+              // Begin Ride is tapped — then the highlight hands off to whichever real stop
+              // the driver is heading to/at, same mechanism morning already uses.
+              const isCurrent = stop.isOffice
+                ? !rideStarted
+                : rideStarted && !stop.skipped && currentStop?.id === stop.id;
+
+              return (
+                <View key={stop.id || index} className="flex-row items-start">
+                  <View className="items-center mr-4">
+                    <View
+                      className={`rounded-full shadow-sm items-center justify-center ${
+                        stop.skipped ? 'w-4 h-4 bg-[#D32F2F]' : isCurrent ? 'w-5 h-5 bg-[#FF5A00]' : 'w-4 h-4 bg-[#A3A3A3]'
+                      }`}
+                      style={{ borderWidth: isCurrent ? 4 : 3, borderColor: '#FFF' }}
+                    />
+                    {!isLast && (
+                      <View className={`w-[2px] h-12 my-1 ${isCurrent ? 'bg-[#FF5A00]' : 'bg-[#E5E5E5]'}`} />
+                    )}
+                  </View>
+                  <View className={`flex-1 ${isCurrent ? 'mt-[-4px]' : 'mt-[-2px]'}`}>
+                    {stop.skipped ? (
+                      <AppText className="text-[17px] font-medium text-[#9CA3AF]">
+                        <AppText style={{ textDecorationLine: 'line-through' }}>{stop.name}</AppText>
+                        {'  '}
+                        <AppText className="font-extrabold" style={{ color: colors.red }}>Skipped</AppText>
+                      </AppText>
+                    ) : (
+                      <>
+                        <AppText className={`text-[17px] ${isCurrent ? 'font-bold text-black' : 'font-medium text-[#6B7280]'}`}>
+                          {stop.name}
+                          {stop.isOffice && (
+                            <AppText className="text-[13px] font-semibold text-[#9CA3AF]">
+                              {'  '}({tr('officeStart')})
+                            </AppText>
+                          )}
+                        </AppText>
+                        {stop.eta && (
+                          <AppText className="text-[13px] font-medium text-[#9CA3AF] mt-0.5">{stop.eta}</AppText>
+                        )}
+                      </>
+                    )}
+                  </View>
+                </View>
+              );
+            })}
+          </View>
+        </View>
+
         {/* Slide to complete */}
         {/* <View className="mb-8">
           <SlideToStartTrip
             key={sliderKey}
-            label={returnTripStarted ? 'Slide to complete trip' : 'Slide to begin trip'}
+            label={rideStarted ? 'Slide to complete trip' : 'Slide to begin trip'}
             onComplete={handleSlideReturnTrip}
           />
         </View> */}
@@ -626,13 +713,13 @@ export default function Return() {
           onPress={handleSlideReturnTrip}
           disabled={
             isActionLoading
-            || (!returnTripStarted && locationPermissionWarning !== null)
+            || (!rideStarted && locationPermissionWarning !== null)
           }
           className="bg-[#FF5A00] flex-row items-center justify-center py-4 rounded-xl active:opacity-90"
           style={{
             opacity:
               isActionLoading
-              || (!returnTripStarted && locationPermissionWarning !== null)
+              || (!rideStarted && locationPermissionWarning !== null)
                 ? 0.5
                 : 1,
           }}
@@ -641,9 +728,11 @@ export default function Return() {
             <ActivityIndicator size="small" color="#FFFFFF" style={{ marginRight: 8 }} />
           )}
           <AppText className="text-white text-[17px] font-bold mr-1">
-            {isActionLoading
-              ? (returnTripStarted ? tr('completing') : tr('beginning'))
-              : (returnTripStarted ? tr('completeTrip') : tr('beginRide'))}
+            {rideStarted
+              ? (isLastStop
+                ? (isActionLoading ? tr('completing') : tr('completeTrip'))
+                : (isActionLoading ? tr('markingArrived') : tr('markAsArrived')))
+              : (isActionLoading ? tr('beginning') : tr('beginRide'))}
           </AppText>
           {/* <Ionicons name="chevron-forward" size={22} color="#FFF" /> */}
         </Pressable>

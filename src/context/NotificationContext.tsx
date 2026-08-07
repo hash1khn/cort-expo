@@ -6,6 +6,7 @@ import React, {
   ReactNode,
 } from 'react';
 import * as Notifications from 'expo-notifications';
+import { router } from 'expo-router';
 import { registerForPushNotificationsAsync } from '../utils/registerForPushNotificationsAsync';
 import { tokenStorage } from '../features/auth/utils/tokenStorage';
 
@@ -62,6 +63,10 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
     const responseListener = Notifications.addNotificationResponseReceivedListener(
       (response) => {
         console.log('🔔 Notification Response:', response);
+        const data = response.notification.request.content.data as Record<string, unknown> | undefined;
+        if (data?.type === 'ATTENDANCE_REMINDER') {
+          router.push('/employee');
+        }
       },
     );
 

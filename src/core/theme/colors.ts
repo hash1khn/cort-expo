@@ -5,6 +5,9 @@ export const colors = {
   orange: '#FF5A00',
   purple: '#670e4c',
   red: '#D32F2F',
+  success: '#1B8A5A',
+  successBg: 'rgba(27, 138, 90, 0.08)',
+  dangerBg: 'rgba(211, 47, 47, 0.08)',
 
   // Text / UI
   text: '#0B1220',

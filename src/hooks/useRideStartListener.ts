@@ -10,6 +10,14 @@ export function useRideStartListener(onRideStarted: (data: {
     tripId: number;
     driverName: string;
     vehicleInfo: string;
+    /** This employee's own boarding status ('BOARDED' | 'DROPPED_OFF' | 'ABSENT' | null),
+     * computed server-side at the moment this event was emitted — the authoritative,
+     * zero-extra-request way to know whether this employee opted out of (or was marked
+     * absent from) this specific trip, without waiting on a client-side refetch. */
+    myBoardingStatus?: string | null;
+    lastLat?: number;
+    lastLng?: number;
+    lastLocationTs?: number;
 }) => void) {
     useEffect(() => {
         socketService.on('RIDE_STARTED', onRideStarted);

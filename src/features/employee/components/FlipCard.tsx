@@ -96,6 +96,9 @@ const FrontContent = ({ booking, shuttleTrip, isLoading, isChauffeurEnabled, isS
     // The trip can still be IN_PROGRESS for other riders on an evening route after this
     // employee has already been dropped off at their own stop.
     const isShuttleDroppedOff = shuttleTrip?.my_boarding_status === 'DROPPED_OFF';
+    // Morning self-service "not coming" — the trip may be STARTED/IN_PROGRESS for other
+    // riders, but this employee opted out, so the card shouldn't read as an active ride for them.
+    const isShuttleAbsent = shuttleTrip?.my_boarding_status === 'ABSENT' || !!shuttleTrip?.my_self_marked_absent;
     const shuttleDirection = shuttleTrip?.direction;
     const shuttlePickupEta = shuttleDirection === 'EVENING'
         ? (shuttleTrip?.my_pickup_stop?.evening_eta ?? null)
@@ -147,7 +150,13 @@ const FrontContent = ({ booking, shuttleTrip, isLoading, isChauffeurEnabled, isS
     const timeDisplay = booking
         ? (isChauffeurActive ? te('inProgress') : (booking.scheduled_for ? new Date(booking.scheduled_for).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'))
         : shuttleTrip
-            ? (isShuttleDroppedOff ? te('droppedOff') : isShuttleActive ? te('inProgress') : shuttlePickupTime)
+            ? (isShuttleDroppedOff
+                ? te('droppedOff')
+                : isShuttleAbsent
+                    ? te('notComingToday')
+                    : isShuttleActive
+                        ? te('inProgress')
+                        : shuttlePickupTime)
             : '—';
 
     return (
@@ -312,11 +321,13 @@ const BackContent = ({ booking, shuttleTrip, onClose, onRequestCaptain }: BackCo
                                     ? (isDroppedOff ? 'In Progress' : (booking!.scheduled_for ? new Date(booking!.scheduled_for).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'))
                                     : (shuttleTrip?.my_boarding_status === 'DROPPED_OFF'
                                         ? 'Dropped Off'
-                                        : shuttleTrip?.status?.toUpperCase() === 'STARTED' || shuttleTrip?.status?.toUpperCase() === 'IN_PROGRESS'
-                                            ? 'In Progress'
-                                            : formatEta(shuttleTrip?.direction === 'EVENING'
-                                                ? (shuttleTrip?.my_pickup_stop?.evening_eta ?? null)
-                                                : (shuttleTrip?.my_pickup_stop?.morning_eta ?? null)))}
+                                        : (shuttleTrip?.my_boarding_status === 'ABSENT' || !!shuttleTrip?.my_self_marked_absent)
+                                            ? 'Absent'
+                                            : shuttleTrip?.status?.toUpperCase() === 'STARTED' || shuttleTrip?.status?.toUpperCase() === 'IN_PROGRESS'
+                                                ? 'In Progress'
+                                                : formatEta(shuttleTrip?.direction === 'EVENING'
+                                                    ? (shuttleTrip?.my_pickup_stop?.evening_eta ?? null)
+                                                    : (shuttleTrip?.my_pickup_stop?.morning_eta ?? null)))}
                             </Text>
                             <Text style={styles.infoCellSub}>Today</Text>
                         </View>
@@ -329,12 +340,12 @@ const BackContent = ({ booking, shuttleTrip, onClose, onRequestCaptain }: BackCo
                                 <Ionicons name="location-outline" size={16} color="#000" />
                             </View>
                             <Text style={styles.infoCellLabel}>{isChauffeurMode ? 'Pickup' : 'Stop'}</Text>
-                            <Text style={[styles.infoCellValue, { textAlign: 'center' }]} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.7}>
+                            <Text style={styles.infoCellValue} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.7}>
                                 {isChauffeurMode
                                     ? (booking!.pickup_address?.split(',')[0] ?? '—')
                                     : (shuttleTrip?.my_pickup_stop?.name ?? '—')}
                             </Text>
-                            <Text style={styles.infoCellSub}>
+                            <Text style={styles.infoCellSub} numberOfLines={2}>
                                 {isChauffeurMode ? '' : (shuttleTrip?.routes?.name ?? '')}
                             </Text>
                         </View>
@@ -1337,12 +1348,16 @@ const styles = StyleSheet.create({
         color: "#000",
         letterSpacing: -0.2,
         fontFamily,
+        textAlign: "center",
+        alignSelf: "stretch",
     },
     infoCellSub: {
         fontSize: 11,
         fontWeight: "500",
         color: "rgba(0,0,0,0.5)",
         fontFamily,
+        textAlign: "center",
+        alignSelf: "stretch",
     },
     gridSeparator: {
         width: 1,

@@ -167,6 +167,18 @@ export default function RideActive() {
     [shuttleTrips, activeTripId],
   );
 
+  // Belt-and-suspenders: regardless of how this screen was reached (a stale push
+  // notification tap, restored navigation state, a race with the "not coming" toggle,
+  // etc.), never show live ride tracking to an employee who has opted out of this trip —
+  // send them back home instead. The two navigation triggers on the home screen already
+  // avoid pushing here in the first place; this guards the destination itself.
+  useEffect(() => {
+    if (isChauffeurMode || isTripsLoading || !activeTrip) return;
+    if (activeTrip.my_self_marked_absent || activeTrip.my_boarding_status === 'ABSENT') {
+      router.replace('/employee');
+    }
+  }, [isChauffeurMode, isTripsLoading, activeTrip]);
+
   const { data: activeChauffeurBooking, isLoading: isChauffeurLoading, refetch: refetchActiveChauffeurBooking } =
     useGetEmployeeActiveChauffeurBookingQuery(
       { companyId },

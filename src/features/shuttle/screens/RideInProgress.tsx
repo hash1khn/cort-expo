@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
+  Animated,
   AppState,
   Linking,
   Platform,
@@ -41,7 +42,8 @@ import {
   formatShuttleVehicleLabel,
   formatShuttleVehiclePlate,
 } from '../services/shuttleApi';
-import { useActiveTrip, type Stop } from '../hooks/useActiveTrip';
+import { useActiveTrip } from '../hooks/useActiveTrip';
+import { openInMaps } from '../utils/openInMaps';
 import { useRideSocket } from '@/hooks/useRideSocket';
 import { useAppSelector } from '@/store/hooks';
 import { store } from '@/store';
@@ -51,7 +53,17 @@ import { BackButton } from '@/components/BackButton';
 
 type EmployeeStatus = 'present' | 'absent';
 
-type StopEmployee = { id: string; name: string; number: string; status: EmployeeStatus };
+type StopEmployee = {
+  id: string;
+  name: string;
+  number: string;
+  status: EmployeeStatus;
+  /** True once a real attendance record exists for this trip (self-reported or driver-marked) —
+   * distinct from `status`, which defaults to 'absent' purely for display before anyone acts. */
+  hasRecord: boolean;
+  /** Who last set this status — 'EMPLOYEE' when self-reported (e.g. morning "not coming"). */
+  source: 'EMPLOYEE' | 'DRIVER' | null;
+};
 
 // Per-employee loading state: which action is in flight
 type EmployeeLoadingAction = 'scanning' | 'marking_absent' | null;
@@ -63,6 +75,26 @@ function getInitials(name: string) {
     .join('')
     .slice(0, 2)
     .toUpperCase();
+}
+
+/** Simple pulsing placeholder — shown while the pre-start screen is refetching trip/stop
+ * data (e.g. after resuming from background) so the driver sees "this is loading," not a
+ * stale or blank Route Overview while the refresh is in flight. */
+function SkeletonBar({ width, height = 14, radius = 6 }: { width: number | `${number}%`; height?: number; radius?: number }) {
+  const opacity = useRef(new Animated.Value(0.3)).current;
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(opacity, { toValue: 0.7, duration: 700, useNativeDriver: true }),
+        Animated.timing(opacity, { toValue: 0.3, duration: 700, useNativeDriver: true }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [opacity]);
+  return (
+    <Animated.View style={{ width, height, borderRadius: radius, backgroundColor: '#E5E7EB', opacity }} />
+  );
 }
 
 export default function RideInProgress() {
@@ -77,6 +109,7 @@ export default function RideInProgress() {
     activeTrip,
     tripId,
     stops,
+    displayStops,
     currentStop,
     nextStopAfterCurrent,
     nextStopIndex,
@@ -84,6 +117,8 @@ export default function RideInProgress() {
     rideStarted,
     isAtStop,
     isLoading: isTripsLoading,
+    isFetching: isTripsFetching,
+    refetch: refetchActiveTrip,
   } = useActiveTrip(safePreferredTripId);
 
   const vehicle = activeTrip?.routes?.vehicles ?? null;
@@ -96,24 +131,24 @@ export default function RideInProgress() {
   // Patch attendance cache in real time when server broadcasts an update
   // Track employees who self-scanned via WebSocket — these are the only ones whose buttons lock
   const [selfScannedIds, setSelfScannedIds] = useState<Set<string>>(new Set());
-  // Track employees the driver has manually marked (present or absent) — used for proceed validation
-  const [driverMarkedIds, setDriverMarkedIds] = useState<Set<string>>(new Set());
 
   const handleAttendanceMarked = useCallback(
-    (data: { employeeId: string; employeeName: string; markedBy: string; timestamp: string }) => {
+    (data: { employeeId: string; employeeName: string; markedBy: string; status?: string; timestamp: string }) => {
       if (!tripId) return;
-      // Only lock buttons when the employee boarded themselves (self-scan)
-      if (data.markedBy === 'self') {
+      // This event also fires for the morning "mark myself absent" self-service flow now —
+      // don't assume markedBy === 'self' always means a physical boarding scan.
+      const status = data.status === 'ABSENT' ? 'ABSENT' : 'PRESENT';
+      // Only lock buttons for a genuine physical self-scan (boarded), not a pre-trip
+      // self-reported absence — the driver must still be able to override the latter.
+      if (data.markedBy === 'self' && status === 'PRESENT') {
         setSelfScannedIds((prev) => new Set(prev).add(data.employeeId));
-        // Also count as driver-marked for proceed validation purposes
-        setDriverMarkedIds((prev) => new Set(prev).add(data.employeeId));
       }
       store.dispatch(
         shuttleApi.util.updateQueryData('getTripAttendance', tripId as number, (draft) => {
           const i = draft.findIndex((e) => e.employeeId === data.employeeId);
-          const status = 'PRESENT';
           if (i !== -1) {
             draft[i].status = status;
+            if (data.markedBy === 'self') draft[i].source = 'EMPLOYEE';
           } else {
             draft.push({
               employeeId: data.employeeId,
@@ -122,6 +157,7 @@ export default function RideInProgress() {
               department: null,
               status,
               scannedAt: data.timestamp,
+              source: data.markedBy === 'self' ? 'EMPLOYEE' : 'DRIVER',
             });
           }
         }),
@@ -194,30 +230,77 @@ export default function RideInProgress() {
     }, [checkLocationPermission]),
   );
 
-  // Catch permission changes that happen while the app is merely backgrounded
-  // (OS/OEM auto-revoke, user editing Settings and switching back) rather than
-  // only re-checking on React Navigation focus events.
-  useEffect(() => {
-    const subscription = AppState.addEventListener('change', (nextState) => {
-      if (nextState === 'active') {
-        let cancelled = false;
-        checkLocationPermission(() => cancelled);
-      }
-    });
-    return () => subscription.remove();
-  }, [checkLocationPermission]);
-
-  const { data: realEmployees = [], isLoading: isEmployeesLoading } = useGetTripEmployeesQuery(
+  const { data: realEmployees = [], isLoading: isEmployeesLoading, isFetching: isEmployeesFetching, refetch: refetchTripEmployees } = useGetTripEmployeesQuery(
     tripId as number,
     { skip: !tripId },
   );
 
   const tripEmployeesRaw = realEmployees;
 
-  const { data: tripAttendance = [], isFetching: isAttendanceFetching } = useGetTripAttendanceQuery(
+  const { data: tripAttendance = [], isFetching: isAttendanceFetching, refetch: refetchTripAttendance } = useGetTripAttendanceQuery(
     tripId as number,
     { skip: !tripId },
   );
+
+  // True while any of the three pre-start queries are (re)fetching — covers both the initial
+  // mount and the AppState-triggered background→active refetch below. Only meaningful pre-start:
+  // once the ride is STARTED, self-mark-absent is locked and nothing here changes underneath the
+  // driver, so we never want to show a loading state or lock the button post-start for this reason.
+  const isPreStartRefreshing = !rideStarted && (isTripsFetching || isEmployeesFetching || isAttendanceFetching);
+
+  // Catch permission changes that happen while the app is merely backgrounded
+  // (OS/OEM auto-revoke, user editing Settings and switching back) rather than
+  // only re-checking on React Navigation focus events. Also: if the driver backgrounded
+  // the app before starting the trip (e.g. opened it at 6am, someone self-marks absent
+  // later, driver resumes at 7:05 and taps Begin Ride), the pre-start screen could be
+  // showing a stale Route Overview for a real stretch of time — unlike the post-start
+  // "just came back from Google Maps" case, where nothing can have changed (self-mark-absent
+  // is locked the instant the trip starts) and refetching would be pure waste. Gating on
+  // `!rideStarted` targets exactly the case that can actually go stale.
+  const rideStartedRef = useRef(rideStarted);
+  rideStartedRef.current = rideStarted;
+
+  const refreshPreStartData = useCallback(() => {
+    if (rideStartedRef.current) return;
+    // getTodayTrip takes no args — it's the exact same cache entry ShuttleDriver.tsx (the
+    // home screen) already uses. If that screen was open before an employee's absence
+    // changed, this cache is already warm, and simply mounting here would just serve the
+    // stale value — RTK Query doesn't refetch an already-cached query on its own. Explicitly
+    // forcing it here (not just on AppState resume below) covers the much more common path:
+    // driver taps into this screen straight from Home.
+    refetchActiveTrip();
+    if (tripId) {
+      refetchTripEmployees();
+      refetchTripAttendance();
+    }
+  }, [refetchActiveTrip, refetchTripEmployees, refetchTripAttendance, tripId]);
+
+  // Force a fresh read every time this screen is focused — not just once on mount. This
+  // screen almost certainly never actually unmounts when the driver navigates back to Home
+  // (Drawer/Tab navigators keep screens alive for fast switching), so a mount-only effect
+  // would only ever fire once per app session and miss every subsequent "left, then came
+  // back" cycle (e.g. Home → RideInProgress → Home → RideInProgress). useFocusEffect fires on
+  // every such re-focus, including the initial one, so it fully replaces a separate mount
+  // effect. This is a distinct trigger from the AppState listener below — that one covers the
+  // OS backgrounding the whole app (e.g. Google Maps and back); this one covers in-app
+  // navigation away and back without ever leaving the app. Both are safe post-start for the
+  // same reason: refreshPreStartData no-ops instantly via rideStartedRef once the ride starts.
+  useFocusEffect(
+    useCallback(() => {
+      refreshPreStartData();
+    }, [refreshPreStartData]),
+  );
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      if (nextState === 'active') {
+        let cancelled = false;
+        checkLocationPermission(() => cancelled);
+        refreshPreStartData();
+      }
+    });
+    return () => subscription.remove();
+  }, [checkLocationPermission, refreshPreStartData]);
 
   const [scanPassenger, { isLoading: isScanning }] = useScanPassengerMutation();
   const [markPassengerAbsent, { isLoading: isMarkingAbsent }] =
@@ -229,27 +312,22 @@ export default function RideInProgress() {
 
   const isActionLoading = isStartingTrip || isArrivingAtStop || isCompletingTrip;
 
-  // Single source of truth: derive present/absent from server manifest only.
+  // Single source of truth: derive present/absent from server manifest only. Presence of an
+  // entry in this map (not just its status) distinguishes a genuine attendance record from
+  // the 'absent' default shown for employees nobody has acted on yet.
   const attendanceStatusByEmployeeId = useMemo(() => {
-    const map: Record<string, EmployeeStatus> = {};
+    const map: Record<string, { status: EmployeeStatus; source: 'EMPLOYEE' | 'DRIVER' | null }> = {};
     tripAttendance.forEach((log) => {
       const normalized = log.status?.toUpperCase();
-      map[log.employeeId] =
-        normalized === 'PRESENT' || normalized === 'BOARDED' ? 'present' : 'absent';
+      map[log.employeeId] = {
+        status: normalized === 'PRESENT' || normalized === 'BOARDED' ? 'present' : 'absent',
+        source: log.source ?? null,
+      };
     });
     return map;
   }, [tripAttendance]);
 
   const [attendanceStopId, setAttendanceStopId] = useState<number | null>(null);
-
-  // Reset per-stop tracking when the sheet opens at a new stop
-  const prevAttendanceStopIdRef = useRef<number | null>(null);
-  useEffect(() => {
-    if (attendanceStopId !== null && attendanceStopId !== prevAttendanceStopIdRef.current) {
-      prevAttendanceStopIdRef.current = attendanceStopId;
-      setDriverMarkedIds(new Set());
-    }
-  }, [attendanceStopId]);
 
   const arrivedStopSheetRef = useRef<BottomSheet>(null);
   const arrivedStopSnapPoints = useMemo(() => ['60%'], []);
@@ -288,16 +366,6 @@ export default function RideInProgress() {
     }
   }, []);
 
-  const openInMaps = useCallback((stop: Stop) => {
-    const appleUrl = `maps://?daddr=${stop.lat},${stop.lng}&dirflg=d`;
-    const androidUrl = `geo:0,0?q=${stop.lat},${stop.lng}(${encodeURIComponent(stop.name)})`;
-    const url = Platform.OS === 'ios' ? appleUrl : androidUrl;
-
-    Linking.openURL(url).catch(() => {
-      // swallow error; we don't want to block the UI if maps isn't available
-    });
-  }, []);
-
   const stopForAttendance = useMemo(
     () => stops.find((s) => s.id === attendanceStopId) ?? currentStop,
     [stops, attendanceStopId, currentStop]
@@ -306,12 +374,17 @@ export default function RideInProgress() {
   const employeesAtCurrentStop: StopEmployee[] = useMemo(() => {
     if (!stopForAttendance) return [];
     const list = tripEmployeesRaw.filter((emp: TripEmployee) => emp.pickupStopId === stopForAttendance.id);
-    return list.map((emp) => ({
-      id: emp.id,
-      name: emp.fullName,
-      number: emp.phone ?? '',
-      status: attendanceStatusByEmployeeId[emp.id] ?? 'absent',
-    }));
+    return list.map((emp) => {
+      const record = attendanceStatusByEmployeeId[emp.id];
+      return {
+        id: emp.id,
+        name: emp.fullName,
+        number: emp.phone ?? '',
+        status: record?.status ?? 'absent',
+        hasRecord: record !== undefined,
+        source: record?.source ?? null,
+      };
+    });
   }, [stopForAttendance, tripEmployeesRaw, attendanceStatusByEmployeeId]);
 
   const handleSlideComplete = useCallback(async () => {
@@ -358,8 +431,79 @@ export default function RideInProgress() {
             } catch (e) {
               console.warn('Could not read GPS for trip start', e);
             }
-            await startTrip({ route_id: routeId, direction, lat: driverLat, lng: driverLng }).unwrap();
-            openInMaps(currentStop);
+            // Capture what the driver was actually just looking at (Route Overview's skipped
+            // stops) before calling startTrip — needed below to detect a stop flipping back
+            // from skipped to visited, which is just as worth a heads-up as a new skip: the
+            // driver already built a mental model from what was on screen a moment ago.
+            const previouslyExcludedStops = activeTrip?.routes?.excluded_stops ?? [];
+            const result = await startTrip({ route_id: routeId, direction, lat: driverLat, lng: driverLng }).unwrap();
+            // Fire-and-forget: bring Route Overview's route_stops/excluded_stops fully up to
+            // date (e.g. an earlier absence that got undone before start, which a partial patch
+            // can't correct — see the comment on startTrip's onQueryStarted). Not awaited: the
+            // driver's Maps handoff below already has everything it needs from `result` and
+            // must not wait on this: Route Overview is something the driver checks back in the
+            // app later, not during the handoff itself, so an eventually-consistent refresh
+            // here costs nothing.
+            refetchActiveTrip();
+            // Use the trip-start response's own resolved first stop — computed synchronously,
+            // server-side, from the same absence data that decides stop exclusion — instead of
+            // `currentStop` (a value from before the trip started). Relying on `currentStop`
+            // here would race a fully-absent stop just getting excluded: cache invalidation
+            // alone can't win against this very next line running synchronously. `first_stop`
+            // is only null when every stop on the route is fully absent — in that rare case
+            // there's genuinely nowhere to navigate to, so we deliberately don't fall back to
+            // the stale `currentStop` (which could be exactly the excluded stop).
+            const goToFirstStop = () => {
+              if (result.first_stop) {
+                openInMaps(result.first_stop);
+              }
+            };
+            // A driver who isn't told about a route change will either see Maps head straight
+            // to "stop 2" with no explanation (a new skip), or — just as confusing — see it
+            // head to a stop they just watched get struck through on Route Overview a moment
+            // ago (a restored stop, e.g. the rider undid their absence right before Begin Ride).
+            // Neither is legible from inside Maps itself, so we interrupt here, before handing
+            // off — but only when the route actually differs from what the driver was just
+            // shown on Route Overview. A stop that was *already* correctly displayed as
+            // skipped isn't news; re-alerting about it every single time Begin Ride is tapped
+            // would just be redundant friction for something the driver already knows.
+            const previouslyExcludedIds = new Set(previouslyExcludedStops.map((s) => s.id));
+            const stillExcludedIds = new Set(result.excluded_stops.map((s) => s.id));
+            const newlySkippedStops = result.excluded_stops.filter((s) => !previouslyExcludedIds.has(s.id));
+            const restoredStops = previouslyExcludedStops.filter((s) => !stillExcludedIds.has(s.id));
+            const hasNewSkip = newlySkippedStops.length > 0;
+            const hasRestored = restoredStops.length > 0;
+
+            if (hasNewSkip || hasRestored) {
+              const skippedNames = newlySkippedStops.map((s) => s.name).join(', ');
+              const restoredNames = restoredStops.map((s) => s.name).join(', ');
+              let title: string;
+              let body: string;
+
+              if (hasNewSkip && hasRestored) {
+                title = 'Route updated';
+                body = `Skipping ${skippedNames}. ${restoredNames} is no longer skipped.`
+                  + (result.first_stop ? ` Next: ${result.first_stop.name}.` : '');
+              } else if (hasNewSkip) {
+                title = newlySkippedStops.length > 1
+                  ? `Skipping ${newlySkippedStops.length} stops`
+                  : `Skipping ${skippedNames}`;
+                body = result.first_stop
+                  ? (newlySkippedStops.length > 1
+                      ? `${skippedNames} — no passengers today. Next: ${result.first_stop.name}.`
+                      : `No passengers today — next stop is ${result.first_stop.name}.`)
+                  : 'Everyone on this route is absent.';
+              } else {
+                title = restoredStops.length > 1
+                  ? `${restoredStops.length} stops no longer skipped`
+                  : `${restoredNames} no longer skipped`;
+                body = `A rider marked themselves present — ${restoredNames} is back on the route.`;
+              }
+
+              Alert.alert(title, body, [{ text: 'OK', onPress: goToFirstStop }]);
+            } else {
+              goToFirstStop();
+            }
           };
           const trackingStarted = await startTracking(tripId ?? 0, afterTrackingReady, 'shuttle');
           // false = Android disclosure shown, or iOS permission flow did not complete — do not treat as error.
@@ -421,6 +565,7 @@ export default function RideInProgress() {
     arriveAtStop,
     completeTrip,
     stops.length,
+    refetchActiveTrip,
   ]);
 
   return (
@@ -473,7 +618,11 @@ export default function RideInProgress() {
               <Ionicons name="location-outline" size={16} color="#000" />
             </View>
             <Text className="text-[10px] font-semibold text-black/50 uppercase tracking-[0.8px]">{tr('stops')}</Text>
-            <Text className="text-[13px] font-extrabold text-[#000] tracking-[-0.2px]">{stops.length}</Text>
+            {isPreStartRefreshing ? (
+              <SkeletonBar width={20} height={16} />
+            ) : (
+              <Text className="text-[13px] font-extrabold text-[#000] tracking-[-0.2px]">{stops.length}</Text>
+            )}
           </View>
 
           <View className="w-[1px] h-[80%] self-center bg-black/10" />
@@ -484,7 +633,11 @@ export default function RideInProgress() {
               <Ionicons name="people-outline" size={16} color="#000" />
             </View>
             <Text className="text-[10px] font-semibold text-black/50 uppercase tracking-[0.8px]">{tr('employees')}</Text>
-            <Text className="text-[13px] font-extrabold text-[#000] tracking-[-0.2px]">{tripEmployeesRaw.length}</Text>
+            {isPreStartRefreshing ? (
+              <SkeletonBar width={20} height={16} />
+            ) : (
+              <Text className="text-[13px] font-extrabold text-[#000] tracking-[-0.2px]">{tripEmployeesRaw.length}</Text>
+            )}
           </View>
         </View>
 
@@ -494,34 +647,63 @@ export default function RideInProgress() {
             {tr('routeOverview')}
           </Text>
           <View className="ml-2">
-            {stops.map((stop, index) => {
-              const isLast = index === stops.length - 1;
-              const isCurrent = currentStop?.id === stop.id;
-
-              return (
-                <View key={stop.id || index} className="flex-row items-start">
+            {isPreStartRefreshing ? (
+              [0, 1, 2].map((i) => (
+                <View key={i} className="flex-row items-start">
                   <View className="items-center mr-4">
-                    {/* Dot */}
-                    <View
-                      className={`rounded-full shadow-sm items-center justify-center ${isCurrent ? 'w-5 h-5 bg-[#FF5A00]' : 'w-4 h-4 bg-[#A3A3A3]'}`}
-                      style={{ borderWidth: isCurrent ? 4 : 3, borderColor: '#FFF' }}
-                    />
-                    {/* Line */}
-                    {!isLast && (
-                      <View className={`w-[2px] h-12 my-1 ${isCurrent ? 'bg-[#FF5A00]' : 'bg-[#E5E5E5]'}`} />
-                    )}
+                    <View className="w-4 h-4 rounded-full bg-[#E5E7EB]" style={{ borderWidth: 3, borderColor: '#FFF' }} />
+                    {i < 2 && <View className="w-[2px] h-12 my-1 bg-[#E5E5E5]" />}
                   </View>
-                  <View className={`flex-1 ${isCurrent ? 'mt-[-4px]' : 'mt-[-2px]'}`}>
-                    <Text className={`text-[17px] ${isCurrent ? 'font-bold text-black' : 'font-medium text-[#6B7280]'}`}>
-                      {stop.name}
-                    </Text>
-                    {stop.eta && (
-                      <Text className="text-[13px] font-medium text-[#9CA3AF] mt-0.5">{stop.eta}</Text>
-                    )}
+                  <View className="flex-1 mt-[-2px] gap-2">
+                    <SkeletonBar width="60%" height={17} />
+                    <SkeletonBar width="30%" height={13} />
                   </View>
                 </View>
-              );
-            })}
+              ))
+            ) : (
+              displayStops.map((stop, index) => {
+                const isLast = index === displayStops.length - 1;
+                // A skipped stop (everyone assigned there is absent) can never be "current" —
+                // it's excluded from `stops`/navigation entirely, this is display-only.
+                const isCurrent = !stop.skipped && currentStop?.id === stop.id;
+
+                return (
+                  <View key={stop.id || index} className="flex-row items-start">
+                    <View className="items-center mr-4">
+                      {/* Dot */}
+                      <View
+                        className={`rounded-full shadow-sm items-center justify-center ${
+                          stop.skipped ? 'w-4 h-4 bg-[#D32F2F]' : isCurrent ? 'w-5 h-5 bg-[#FF5A00]' : 'w-4 h-4 bg-[#A3A3A3]'
+                        }`}
+                        style={{ borderWidth: isCurrent ? 4 : 3, borderColor: '#FFF' }}
+                      />
+                      {/* Line */}
+                      {!isLast && (
+                        <View className={`w-[2px] h-12 my-1 ${isCurrent ? 'bg-[#FF5A00]' : 'bg-[#E5E5E5]'}`} />
+                      )}
+                    </View>
+                    <View className={`flex-1 ${isCurrent ? 'mt-[-4px]' : 'mt-[-2px]'}`}>
+                      {stop.skipped ? (
+                        <Text className="text-[17px] font-medium text-[#9CA3AF]">
+                          <Text style={{ textDecorationLine: 'line-through' }}>{stop.name}</Text>
+                          {'  '}
+                          <Text className="font-extrabold" style={{ color: colors.red }}>Skipped</Text>
+                        </Text>
+                      ) : (
+                        <>
+                          <Text className={`text-[17px] ${isCurrent ? 'font-bold text-black' : 'font-medium text-[#6B7280]'}`}>
+                            {stop.name}
+                          </Text>
+                          {stop.eta && (
+                            <Text className="text-[13px] font-medium text-[#9CA3AF] mt-0.5">{stop.eta}</Text>
+                          )}
+                        </>
+                      )}
+                    </View>
+                  </View>
+                );
+              })
+            )}
           </View>
         </View>
 
@@ -663,21 +845,23 @@ export default function RideInProgress() {
         )}
         <Pressable
           onPress={handleSlideComplete}
-          disabled={isActionLoading || (!rideStarted && locationPermissionWarning !== null)}
+          disabled={isActionLoading || isPreStartRefreshing || (!rideStarted && locationPermissionWarning !== null)}
           className="bg-[#FF5A00] flex-row items-center justify-center py-6 rounded-xl active:opacity-90"
           style={{
-            opacity: isActionLoading ? 0.7 : (!rideStarted && locationPermissionWarning !== null) ? 0.5 : 1,
+            opacity: (isActionLoading || isPreStartRefreshing) ? 0.7 : (!rideStarted && locationPermissionWarning !== null) ? 0.5 : 1,
           }}
         >
-          {isActionLoading && (
+          {(isActionLoading || isPreStartRefreshing) && (
             <ActivityIndicator size="small" color="#FFFFFF" style={{ marginRight: 8 }} />
           )}
           <Text className="text-white text-[17px] font-bold mr-1">
-            {isActionLoading
-              ? tr('processing')
-              : (rideStarted
-                ? (isLastStop ? tr('completeTrip') : tr('markAsArrived'))
-                : tr('beginRide'))}
+            {isPreStartRefreshing
+              ? tr('refreshing')
+              : isActionLoading
+                ? tr('processing')
+                : (rideStarted
+                  ? (isLastStop ? tr('completeTrip') : tr('markAsArrived'))
+                  : tr('beginRide'))}
           </Text>
         </Pressable>
       </View>
@@ -724,8 +908,13 @@ export default function RideInProgress() {
                 const loadingAction = employeeLoadingMap[emp.id] ?? null;
                 // Buttons only lock when employee self-scanned via WebSocket
                 const selfScanned = selfScannedIds.has(emp.id);
-                const isAbsentBtn = emp.status === 'absent' && driverMarkedIds.has(emp.id);
-                const isPresentBtn = emp.status === 'present' && (driverMarkedIds.has(emp.id) || selfScanned);
+                // Filled state reflects the real attendance record (self-reported or driver-marked),
+                // not just "did the driver press this button in the current session" — otherwise an
+                // employee who self-marked absent before the driver ever opened this sheet shows
+                // with an unfilled, ambiguous-looking button despite already having a resolved status.
+                const isAbsentBtn = emp.status === 'absent' && emp.hasRecord;
+                const isPresentBtn = emp.status === 'present' && emp.hasRecord;
+                const isSelfReportedAbsent = emp.status === 'absent' && emp.hasRecord && emp.source === 'EMPLOYEE';
 
                 return (
                   <View
@@ -750,8 +939,16 @@ export default function RideInProgress() {
                         {emp.name}
                       </Text>
                       <View className="flex-row items-center mt-1">
-                        <Text className="text-[#8E8E93] text-[15px] mr-2" numberOfLines={1}>
-                          {emp.status === 'present' ? tr('present') : emp.status === 'absent' ? tr('absent') : (emp.number || t('common:noNumber'))}
+                        <Text
+                          className="text-[15px] mr-2"
+                          style={{ color: isSelfReportedAbsent ? colors.red : '#8E8E93' }}
+                          numberOfLines={1}
+                        >
+                          {emp.status === 'present'
+                            ? tr('present')
+                            : emp.status === 'absent'
+                              ? (isSelfReportedAbsent ? tr('notComing') : tr('absent'))
+                              : (emp.number || t('common:noNumber'))}
                         </Text>
                       </View>
                     </View>
@@ -782,7 +979,6 @@ export default function RideInProgress() {
                               shuttleTripId: activeTrip.id,
                               employeeId: emp.id,
                             }).unwrap();
-                            setDriverMarkedIds((prev) => new Set(prev).add(emp.id));
                           } catch {
                             Alert.alert('Error', tr('couldNotMarkAbsent'));
                           } finally {
@@ -819,7 +1015,6 @@ export default function RideInProgress() {
                               employeeId: emp.id,
                               status: 'PRESENT',
                             }).unwrap();
-                            setDriverMarkedIds((prev) => new Set(prev).add(emp.id));
                           } catch {
                             Alert.alert('Error', tr('couldNotMarkPresent'));
                           } finally {
@@ -851,10 +1046,10 @@ export default function RideInProgress() {
             <Pressable
               onPress={async () => {
                 if (isProceeding) return;
-                // Validate all employees at this stop have been marked
-                const unmarked = employeesAtCurrentStop.filter(
-                  (e) => !driverMarkedIds.has(e.id) && !selfScannedIds.has(e.id),
-                );
+                // Validate all employees at this stop have a resolved attendance record —
+                // includes ones already self-marked absent before the driver even arrived,
+                // not just ones acted on in this session (driverMarkedIds/selfScannedIds).
+                const unmarked = employeesAtCurrentStop.filter((e) => !e.hasRecord);
                 if (unmarked.length > 0) {
                   toast.show(
                     <CustomToast

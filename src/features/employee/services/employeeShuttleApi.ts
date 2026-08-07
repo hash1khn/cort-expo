@@ -32,6 +32,11 @@ export type ShuttleTripForEmployee = {
    * Only populated for currently STARTED/IN_PROGRESS trips — distinct from the trip-level `status`,
    * since an evening trip can still be IN_PROGRESS for other riders after this employee is dropped off. */
   my_boarding_status?: string | null;
+  /** True when this employee is currently, effectively marked absent for this trip
+   * (derived server-side from shuttle_boarding_logs.status === 'ABSENT'). Populated for
+   * all trip statuses, not just active ones — the morning "mark myself absent" toggle
+   * needs this while the trip is still SCHEDULED. Self-service is morning-only. */
+  my_self_marked_absent?: boolean;
   /** Last-known driver GPS position from Redis (shuttle:last_coord). Only populated for
    * trips currently STARTED/IN_PROGRESS; null otherwise. Seeded at trip start and updated
    * on every live location ping — used as the RideActive marker's initial position before
@@ -128,3 +133,23 @@ export const {
   useGetShuttleTripsForEmployeeQuery,
   useGetShuttlePolylineQuery,
 } = employeeShuttleApi;
+
+/**
+ * Picks the trip the morning attendance toggle should act on. Deliberately distinct from
+ * a generic "first non-completed trip" picker (which could return an EVENING trip) — self
+ * service attendance is morning-only. Keeps STARTED/IN_PROGRESS in scope (not just
+ * SCHEDULED) so the toggle stays visible-but-locked once the ride starts, rather than
+ * disappearing.
+ */
+export function selectMorningAttendanceTrip(
+  trips: ShuttleTripForEmployee[] | undefined,
+): ShuttleTripForEmployee | null {
+  if (!trips) return null;
+  return (
+    trips.find(
+      (t) =>
+        t.direction === 'MORNING' &&
+        (t.status === 'SCHEDULED' || t.status === 'STARTED' || t.status === 'IN_PROGRESS'),
+    ) ?? null
+  );
+}

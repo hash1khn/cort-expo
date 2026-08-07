@@ -6,6 +6,7 @@ export const employee = {
   tapForDetails: 'Tap for details',
   inProgress: 'In Progress',
   droppedOff: 'Dropped Off',
+  notComingToday: 'Absent today',
   assigning: 'Assigning...',
   pickup: 'Pickup',
   stop: 'Stop',

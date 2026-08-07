@@ -56,7 +56,8 @@ import { useAppDispatch, useAppSelector } from '../../../store/hooks';
 import { useRouter, useNavigation, router, useLocalSearchParams } from 'expo-router';
 import { DrawerActions, useIsFocused } from '@react-navigation/native';
 import { useGetChauffeurBookingsQuery, useGetEmployeeActiveChauffeurBookingQuery } from '../services/bookingsApi';
-import { useGetShuttleTripsForEmployeeQuery } from '../services/employeeShuttleApi';
+import { useGetShuttleTripsForEmployeeQuery, selectMorningAttendanceTrip } from '../services/employeeShuttleApi';
+import { ShuttleAttendanceToggle } from '../components/ShuttleAttendanceToggle';
 import { useChauffeurStatusListener } from '../../../hooks/useChauffeurStatusListener';
 import { CompactRideHistoryCard } from '../components/CompactRideHistoryCard';
 import { CompactRideHistoryCardSkeleton } from '../components/CompactRideHistoryCardSkeleton';
@@ -180,6 +181,11 @@ export default function NewHome() {
     return shuttleTrips.find((trip) => trip.status !== 'COMPLETED') ?? null;
   }, [hasShuttle, shuttleTrips]);
 
+  const morningAttendanceTrip = useMemo(() => {
+    if (!hasShuttle) return null;
+    return selectMorningAttendanceTrip(shuttleTrips);
+  }, [hasShuttle, shuttleTrips]);
+
   const shouldShowChauffeurCard = hasChauffeur;
   const shouldShowShuttleCard = hasShuttle;
   const completedChauffeurRides = useMemo(
@@ -275,10 +281,15 @@ export default function NewHome() {
     if (!companyId || !employeeId) return;
 
     // ── Check Shuttle ──
-    // Skip trips where this employee has already been dropped off — the trip itself can
-    // still be STARTED/IN_PROGRESS for other riders on an evening route.
+    // Skip trips where this employee has already been dropped off, or has opted out via the
+    // morning "not coming" self-service toggle (or been marked absent) — the trip itself can
+    // still be STARTED/IN_PROGRESS for other riders.
     const activeTrip = shuttleTrips.find(
-      (t) => (t.status === 'STARTED' || t.status === 'IN_PROGRESS') && t.my_boarding_status !== 'DROPPED_OFF'
+      (t) =>
+        (t.status === 'STARTED' || t.status === 'IN_PROGRESS') &&
+        t.my_boarding_status !== 'DROPPED_OFF' &&
+        t.my_boarding_status !== 'ABSENT' &&
+        !t.my_self_marked_absent
     );
 
     if (activeTrip) {
@@ -468,8 +479,23 @@ export default function NewHome() {
   // Navigate to active ride screen the moment a driver starts any shuttle trip.
   useRideStartListener(
     useCallback((data: any) => {
+      // The backend now includes this employee's own boarding status directly in their
+      // personal RIDE_STARTED payload (computed fresh, server-side, at the moment of emit) —
+      // this is the authoritative, zero-latency source of truth. markPassengerAbsent /
+      // bulkSubmitAttendance (evening bulk-attendance flow in Return.tsx) never otherwise
+      // notify the employee's own device, so our locally cached shuttleTripsRef snapshot can
+      // be stale right up until this event (e.g. driver marks bulk attendance, then
+      // immediately hits "Begin Ride"). Falling back to the cached trip only covers the case
+      // where an older/unexpected payload is missing the field.
       const trips = shuttleTripsRef.current;
       const matchingTrip = trips.find((t: any) => t.id === data.tripId);
+      const myBoardingStatus = data.myBoardingStatus ?? matchingTrip?.my_boarding_status ?? null;
+      // Don't pull an employee into ride-active tracking for a trip they opted out of via
+      // the morning "not coming" toggle (or were marked absent) — matches the same skip
+      // already applied to the polling-based navigation effect above.
+      if (myBoardingStatus === 'ABSENT' || matchingTrip?.my_self_marked_absent) {
+        return;
+      }
       const myPickupStopId = matchingTrip?.my_pickup_stop_id ?? null;
       const driverPhone = matchingTrip?.users?.phone ?? '';
       const vehicle = matchingTrip?.routes?.vehicles;
@@ -644,15 +670,6 @@ export default function NewHome() {
           />
         </View> */}
         <View className="gap-4">
-          {shouldShowChauffeurCard ? (
-            <FlipCard
-              booking={chauffeurCardBooking}
-              shuttleTrip={null}
-              isLoading={isActiveBookingLoading || isActiveBookingFetching}
-              isChauffeurEnabled
-              isShuttleEnabled={false}
-            />
-          ) : null}
           {shouldShowShuttleCard ? (
             <FlipCard
               booking={null}
@@ -660,6 +677,18 @@ export default function NewHome() {
               isLoading={isShuttleTripsLoading || isShuttleTripsFetching}
               isChauffeurEnabled={false}
               isShuttleEnabled
+            />
+          ) : null}
+          {morningAttendanceTrip ? (
+            <ShuttleAttendanceToggle trip={morningAttendanceTrip} />
+          ) : null}
+          {shouldShowChauffeurCard ? (
+            <FlipCard
+              booking={chauffeurCardBooking}
+              shuttleTrip={null}
+              isLoading={isActiveBookingLoading || isActiveBookingFetching}
+              isChauffeurEnabled
+              isShuttleEnabled={false}
             />
           ) : null}
         </View>

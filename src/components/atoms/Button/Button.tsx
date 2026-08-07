@@ -1,7 +1,7 @@
 import React from "react";
 import { ActivityIndicator, Pressable, Text } from "react-native";
 
-type Variant = "primary" | "navy" | "outline";
+type Variant = "primary" | "navy" | "outline" | "danger" | "success";
 
 type Props = {
   title: string;
@@ -16,12 +16,16 @@ const VARIANT_CONTAINER: Record<Variant, string> = {
   primary: "bg-[#FF5A00]",
   navy: "bg-[#0B1C2D]",
   outline: "bg-transparent border-2 border-red-500",
+  danger: "bg-[#D32F2F]",
+  success: "bg-[#1B8A5A]",
 };
 
 const VARIANT_TEXT: Record<Variant, string> = {
   primary: "text-white",
   navy: "text-white",
   outline: "text-red-500",
+  danger: "text-white",
+  success: "text-white",
 };
 
 export function CortButton({

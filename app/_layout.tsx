@@ -187,7 +187,7 @@ function RootLayoutContent() {
       } else {
         router.push('/shuttle/ride');
       }
-    } else if (rideData.myBoardingStatus !== 'DROPPED_OFF') {
+    } else if (rideData.myBoardingStatus !== 'DROPPED_OFF' && rideData.myBoardingStatus !== 'ABSENT') {
       router.push({
         pathname: '/employee/ride-active',
         params: {

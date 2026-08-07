@@ -41,8 +41,55 @@ function buildStops(activeTrip: ShuttleTrip | null): Stop[] {
   }));
 }
 
+export type DisplayStop = { id: number; name: string; eta: string; skipped: boolean; isOffice?: boolean };
+
+/** Route Overview display list: navigable stops plus fully-excluded ("skipped") ones,
+ * interleaved in their real route order — display-only, never used for navigation/current-stop
+ * logic (that stays on `stops` above, which correctly omits skipped stops entirely). */
+function buildDisplayStops(activeTrip: ShuttleTrip | null): DisplayStop[] {
+  const direction = activeTrip?.direction ?? 'MORNING';
+  const routeStopsRaw = activeTrip?.routes?.route_stops ?? [];
+  const excludedRaw = activeTrip?.routes?.excluded_stops ?? [];
+  const navigable = routeStopsRaw.map((s) => ({
+    id: s.id,
+    name: s.name,
+    eta: formatEta(s, direction),
+    skipped: false,
+    sequence_order: s.sequence_order,
+  }));
+  const skipped = excludedRaw.map((s) => ({
+    id: s.id,
+    name: s.name,
+    eta: '—',
+    skipped: true,
+    sequence_order: s.sequence_order,
+  }));
+  const rest = [...navigable, ...skipped]
+    .sort((a, b) => a.sequence_order - b.sequence_order)
+    .map(({ id, name, eta, skipped }) => ({ id, name, eta, skipped }));
+  const office = buildOfficeDisplayStop(activeTrip);
+  // Office is always evening_sequence = 1 by convention — guaranteed to sort before every
+  // real stop — so it's simplest to just prepend it rather than fold it into the sort above.
+  return office ? [office, ...rest] : rest;
+}
+
+/** The office stop (evening trips only) — never part of `stops`/navigation, but still shown
+ * on Route Overview for context so the driver sees where the return trip actually starts. */
+function buildOfficeDisplayStop(activeTrip: ShuttleTrip | null): DisplayStop | null {
+  const officeRaw = activeTrip?.routes?.office_stop;
+  if (!officeRaw) return null;
+  const direction = activeTrip?.direction ?? 'MORNING';
+  return {
+    id: officeRaw.id,
+    name: officeRaw.name,
+    eta: formatEta(officeRaw, direction),
+    skipped: false,
+    isOffice: true,
+  };
+}
+
 export function useActiveTrip(preferredTripId?: number | null) {
-  const { data: todayTrips = [], isLoading } = useGetTodayTripQuery();
+  const { data: todayTrips = [], isLoading, isFetching, refetch } = useGetTodayTripQuery();
   const activeTrip: ShuttleTrip | null = (() => {
     if (preferredTripId != null) {
       const matched = todayTrips.find((trip) => trip.id === preferredTripId);
@@ -51,6 +98,11 @@ export function useActiveTrip(preferredTripId?: number | null) {
     return todayTrips.length > 0 ? todayTrips[0] : null;
   })();
   const tripId = activeTrip?.id;
+
+  const displayStops = useMemo(() => buildDisplayStops(activeTrip), [activeTrip]);
+  /** Additive — display-only, for consumers (e.g. Return.tsx's pre-start preview) that
+   * need the office entry on its own rather than folded into displayStops. */
+  const officeStop = useMemo(() => buildOfficeDisplayStop(activeTrip), [activeTrip]);
 
   const { stops, currentStop, nextStopAfterCurrent, nextStopIndex, isLastStop, rideStarted, isAtStop } = useMemo(() => {
     const stops = buildStops(activeTrip);
@@ -113,6 +165,10 @@ export function useActiveTrip(preferredTripId?: number | null) {
     activeTrip,
     tripId,
     stops,
+    /** Display-only — see buildDisplayStops. Additive; existing consumers unaffected. */
+    displayStops,
+    /** Display-only — see buildOfficeDisplayStop. Additive; existing consumers unaffected. */
+    officeStop,
     currentStop,
     nextStopAfterCurrent,
     nextStopIndex,
@@ -120,5 +176,11 @@ export function useActiveTrip(preferredTripId?: number | null) {
     rideStarted,
     isAtStop,
     isLoading,
+    /** True during any fetch of getTodayTrip — initial load or a background refetch alike.
+     * Additive, like `refetch` below — existing consumers are unaffected unless they opt in. */
+    isFetching,
+    /** Refetches the underlying getTodayTrip query. Additive — existing consumers of this
+     * hook (Return.tsx, RideInProgress.tsx) are unaffected unless they opt in to using it. */
+    refetch,
   };
 }
