@@ -872,28 +872,40 @@ const PickupSheet = ({ visible, screenHeight, booking, onClose, onDone }: Pickup
 const CARD_WIDTH = 370;
 const CARD_HEIGHT = 420;
 
+/** Same outer width FlipCard uses when not embedded — keep the attendance pocket aligned. */
+export function getFlipCardOuterWidth(screenWidth: number): number {
+    if (Platform.OS !== 'android') return CARD_WIDTH;
+    const horizontalMargin = 32;
+    return Math.min(CARD_WIDTH, Math.max(300, screenWidth - horizontalMargin));
+}
+
 export default function CorporateShuttleCard({
     booking = null,
     shuttleTrip = null,
     isLoading = false,
     isChauffeurEnabled = false,
     isShuttleEnabled = false,
+    embedded = false,
 }: {
     booking?: EmployeeActiveChauffeurBooking | null;
     shuttleTrip?: ShuttleTripForEmployee | null;
     isLoading?: boolean;
     isChauffeurEnabled?: boolean;
     isShuttleEnabled?: boolean;
+    /** Tighter outer padding when nested in the shuttle attendance pocket. */
+    embedded?: boolean;
 }) {
     const showBack = !!booking || !!shuttleTrip; // Allow flipping when any trip data is present
 
     const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = useWindowDimensions();
+    const [embeddedWidth, setEmbeddedWidth] = React.useState(0);
     const cardWidth = React.useMemo(() => {
-        if (Platform.OS !== 'android') return CARD_WIDTH;
+        // Inside the attendance pocket, fill the padded content area.
+        if (embedded && embeddedWidth > 0) return embeddedWidth;
 
-        const horizontalMargin = 32;
-        return Math.min(CARD_WIDTH, Math.max(300, SCREEN_WIDTH - horizontalMargin));
-    }, [SCREEN_WIDTH]);
+        // Standalone cards keep the original fixed-width look.
+        return getFlipCardOuterWidth(SCREEN_WIDTH);
+    }, [SCREEN_WIDTH, embedded, embeddedWidth]);
     const cardRef = React.useRef<View>(null);
 
     const [modalVisible, setModalVisible] = useState(false);
@@ -1018,7 +1030,13 @@ export default function CorporateShuttleCard({
     });
 
     return (
-        <View style={styles.safeArea}>
+        <View
+            style={[styles.safeArea, embedded && styles.safeAreaEmbedded]}
+            onLayout={embedded ? (e) => {
+                const next = e.nativeEvent.layout.width;
+                if (next > 0 && next !== embeddedWidth) setEmbeddedWidth(next);
+            } : undefined}
+        >
             {/* Inline PlaceHolder / Wrapper */}
             <Animated.View ref={cardRef} style={[{ width: cardWidth, height: CARD_HEIGHT }, inlineCardStyle]}>
                 <Pressable onPress={openModal} style={{ flex: 1 }}>
@@ -1100,6 +1118,11 @@ const styles = StyleSheet.create({
         alignItems: "center",
         justifyContent: "center",
         paddingVertical: 8,
+    },
+    safeAreaEmbedded: {
+        paddingVertical: 0,
+        width: '100%',
+        alignSelf: 'stretch',
     },
     cardWrapper: {
         overflow: "visible",

@@ -12,8 +12,18 @@ import {
   Image,
   RefreshControl,
   InteractionManager,
+  useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming,
+  interpolate,
+  interpolateColor,
+  Extrapolation,
+  Easing,
+} from 'react-native-reanimated';
 import AntDesign from "@react-native-vector-icons/ant-design/static";
 import Entypo from "@react-native-vector-icons/entypo/static";
 import Ionicons from "@react-native-vector-icons/ionicons/static";
@@ -69,7 +79,7 @@ import {
 } from '../store';
 import { useRideStartListener } from '../../../hooks/useRideStartListener';
 import { useNotification } from '../../../context/NotificationContext';
-import FlipCard from '../components/FlipCard';
+import FlipCard, { getFlipCardOuterWidth } from '../components/FlipCard';
 import { AppHeader } from '../../shared/components/AppHeader';
 import BottomSheet from '@gorhom/bottom-sheet';
 import RideReviewSheet from '../components/RideReviewSheet';
@@ -531,7 +541,63 @@ export default function NewHome() {
   const { t, isRTL, rtlRowStyle, language } = useLanguage();
 
   const insets = useSafeAreaInsets();
+  const { width: screenWidth } = useWindowDimensions();
+  const flipCardOuterWidth = useMemo(
+    () => getFlipCardOuterWidth(screenWidth),
+    [screenWidth],
+  );
   const scrollViewRef = useRef<ScrollView>(null);
+
+  // Entrance reveal for the shuttle attendance pocket: the black drawer-color
+  // container fades in behind the card while it settles from a slight
+  // overshoot scale, and the "Mark as absent" button slides/fades up after.
+  // All driven by a single shared value on the UI thread (no JS-thread layout
+  // animation) so it stays smooth regardless of what the JS thread is doing.
+  const shuttlePocketReveal = useSharedValue(0);
+  const hasMorningAttendanceTrip = !!morningAttendanceTrip;
+  useEffect(() => {
+    if (!hasMorningAttendanceTrip) return;
+    shuttlePocketReveal.value = 0;
+    shuttlePocketReveal.value = withTiming(1, {
+      duration: 480,
+      easing: Easing.out(Easing.cubic),
+    });
+  }, [hasMorningAttendanceTrip, shuttlePocketReveal]);
+
+  const shuttlePocketBgStyle = useAnimatedStyle(() => ({
+    backgroundColor: interpolateColor(
+      shuttlePocketReveal.value,
+      [0, 1],
+      ['rgba(31,31,29,0)', '#1F1F1D'],
+    ),
+  }));
+
+  const shuttleCardRevealStyle = useAnimatedStyle(() => ({
+    transform: [
+      {
+        scale: interpolate(
+          shuttlePocketReveal.value,
+          [0, 1],
+          [1.05, 1],
+          Extrapolation.CLAMP,
+        ),
+      },
+    ],
+  }));
+
+  const shuttleFooterRevealStyle = useAnimatedStyle(() => ({
+    opacity: shuttlePocketReveal.value,
+    transform: [
+      {
+        translateY: interpolate(
+          shuttlePocketReveal.value,
+          [0, 1],
+          [12, 0],
+          Extrapolation.CLAMP,
+        ),
+      },
+    ],
+  }));
 
   const [isCalling, setIsCalling] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -671,16 +737,36 @@ export default function NewHome() {
         </View> */}
         <View className="gap-4">
           {shouldShowShuttleCard ? (
-            <FlipCard
-              booking={null}
-              shuttleTrip={shuttleCardTrip}
-              isLoading={isShuttleTripsLoading || isShuttleTripsFetching}
-              isChauffeurEnabled={false}
-              isShuttleEnabled
-            />
-          ) : null}
-          {morningAttendanceTrip ? (
-            <ShuttleAttendanceToggle trip={morningAttendanceTrip} />
+            morningAttendanceTrip ? (
+              <Animated.View
+                style={[styles.shuttlePocket, { width: flipCardOuterWidth }, shuttlePocketBgStyle]}
+              >
+                <Animated.View style={shuttleCardRevealStyle}>
+                  <FlipCard
+                    booking={null}
+                    shuttleTrip={shuttleCardTrip}
+                    isLoading={isShuttleTripsLoading || isShuttleTripsFetching}
+                    isChauffeurEnabled={false}
+                    isShuttleEnabled
+                    embedded
+                  />
+                </Animated.View>
+                <Animated.View style={[styles.shuttlePocketFooter, shuttleFooterRevealStyle]}>
+                  <ShuttleAttendanceToggle
+                    trip={morningAttendanceTrip}
+                    variant="pocket"
+                  />
+                </Animated.View>
+              </Animated.View>
+            ) : (
+              <FlipCard
+                booking={null}
+                shuttleTrip={shuttleCardTrip}
+                isLoading={isShuttleTripsLoading || isShuttleTripsFetching}
+                isChauffeurEnabled={false}
+                isShuttleEnabled
+              />
+            )
           ) : null}
           {shouldShowChauffeurCard ? (
             <FlipCard
@@ -941,6 +1027,16 @@ function InfoRow({
 const CIRCLE_SIZE = 56;
 
 const styles = StyleSheet.create({
+  shuttlePocket: {
+    backgroundColor: '#1F1F1D',
+    borderRadius: 32,
+    padding: 12,
+    overflow: 'hidden',
+    alignSelf: 'center',
+  },
+  shuttlePocketFooter: {
+    marginTop: 12,
+  },
   circleButton: {
     width: CIRCLE_SIZE,
     height: CIRCLE_SIZE,
