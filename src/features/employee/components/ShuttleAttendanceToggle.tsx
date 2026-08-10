@@ -40,11 +40,13 @@ export function ShuttleAttendanceToggle({ trip, variant = 'default' }: Props) {
 
   // Derived locally (not passed as props) so the confirmed-success cache patch in
   // boardingApi.ts can target the exact same getShuttleTripsForEmployee cache key that
-  // ShuttleEmployee.tsx queried with — that screen derives these identically.
+  // ShuttleEmployee.tsx queried with (companyId, employeeId, todayOnly: true) — must be
+  // kept in sync with that screen's useGetShuttleTripsForEmployeeQuery call args, since
+  // RTK Query keys the cache on the full serialized args object.
   const user = useAppSelector((state) => state.auth.user);
   const companyId = (user?.company_id ?? 0) as number;
   const employeeId = (user?.id ?? '') as string;
-  const queryArgs = { companyId, employeeId };
+  const queryArgs = { companyId, employeeId, todayOnly: true };
 
   const isLocked = trip.status !== 'SCHEDULED';
   const isAbsent = !!trip.my_self_marked_absent;

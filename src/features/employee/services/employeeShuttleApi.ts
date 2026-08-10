@@ -70,7 +70,10 @@ export type GetShuttleTripsForEmployeeParams = {
   page?: number;
   /** Optional page size. When omitted the server returns all trips. */
   limit?: number;
-  /** When true, restricts results to today's trips only (used by the home screen). */
+  /** When true, restricts results to the latest available trip date at or after today
+   * (not strictly the current calendar day) — used by the home screen so past trips
+   * aren't shown, while a trip the nightly cron already created for tomorrow still
+   * shows immediately instead of waiting for the calendar day to turn over. */
   todayOnly?: boolean;
 };
 
