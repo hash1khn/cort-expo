@@ -553,16 +553,20 @@ export default function NewHome() {
   // overshoot scale, and the "Mark as absent" button slides/fades up after.
   // All driven by a single shared value on the UI thread (no JS-thread layout
   // animation) so it stays smooth regardless of what the JS thread is doing.
+  // Only when the *displayed* card is the morning trip — otherwise an evening
+  // card can sit above a still-active morning attendance trip and wrongly
+  // pick up the pocket.
   const shuttlePocketReveal = useSharedValue(0);
-  const hasMorningAttendanceTrip = !!morningAttendanceTrip;
+  const showShuttleAttendancePocket =
+    !!morningAttendanceTrip && shuttleCardTrip?.id === morningAttendanceTrip.id;
   useEffect(() => {
-    if (!hasMorningAttendanceTrip) return;
+    if (!showShuttleAttendancePocket) return;
     shuttlePocketReveal.value = 0;
     shuttlePocketReveal.value = withTiming(1, {
       duration: 480,
       easing: Easing.out(Easing.cubic),
     });
-  }, [hasMorningAttendanceTrip, shuttlePocketReveal]);
+  }, [showShuttleAttendancePocket, shuttlePocketReveal]);
 
   const shuttlePocketBgStyle = useAnimatedStyle(() => ({
     backgroundColor: interpolateColor(
@@ -737,7 +741,7 @@ export default function NewHome() {
         </View> */}
         <View className="gap-4">
           {shouldShowShuttleCard ? (
-            morningAttendanceTrip ? (
+            showShuttleAttendancePocket ? (
               <Animated.View
                 style={[styles.shuttlePocket, { width: flipCardOuterWidth }, shuttlePocketBgStyle]}
               >
