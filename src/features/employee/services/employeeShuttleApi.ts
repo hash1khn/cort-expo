@@ -70,6 +70,8 @@ export type GetShuttleTripsForEmployeeParams = {
   page?: number;
   /** Optional page size. When omitted the server returns all trips. */
   limit?: number;
+  /** When true, restricts results to today's trips only (used by the home screen). */
+  todayOnly?: boolean;
 };
 
 export type ShuttleTripsForEmployeePagination = {
@@ -100,13 +102,14 @@ export const employeeShuttleApi = baseApi.injectEndpoints({
       ShuttleTripForEmployee[],
       GetShuttleTripsForEmployeeParams
     >({
-      query: ({ companyId, employeeId, page, limit }) => ({
+      query: ({ companyId, employeeId, page, limit, todayOnly }) => ({
         url: '/shuttle-trips/for-employee',
         params: {
           company_id: companyId,
           employee_id: employeeId,
           ...(page != null ? { page } : {}),
           ...(limit != null ? { limit } : {}),
+          ...(todayOnly ? { today_only: true } : {}),
         },
       }),
       // Backend now always returns { data: [...], pagination: {...} }

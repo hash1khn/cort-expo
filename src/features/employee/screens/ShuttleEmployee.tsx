@@ -130,7 +130,7 @@ export default function NewHome() {
     isFetching: isShuttleTripsFetching,
     refetch: refetchShuttleTrips,
   } = useGetShuttleTripsForEmployeeQuery(
-    { companyId, employeeId },
+    { companyId, employeeId, todayOnly: true },
     { skip: !companyId || !employeeId || !hasShuttle },
   );
 
