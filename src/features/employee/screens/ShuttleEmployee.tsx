@@ -316,7 +316,13 @@ export default function NewHome() {
           vehiclePlate: vehicle?.plate_number ?? '',
           direction: activeTrip.direction ?? '',
           ...(activeTrip.last_lat != null && activeTrip.last_lng != null
-            ? { lastLat: String(activeTrip.last_lat), lastLng: String(activeTrip.last_lng) }
+            ? {
+                lastLat: String(activeTrip.last_lat),
+                lastLng: String(activeTrip.last_lng),
+                ...(activeTrip.last_location_ts != null
+                  ? { lastLocationTs: String(activeTrip.last_location_ts) }
+                  : {}),
+              }
             : {}),
         },
       });
@@ -531,7 +537,11 @@ export default function NewHome() {
           // RideActive show the real driver location on mount instead of the polyline's
           // start point, before the first live driver:location socket tick arrives.
           ...(data.lastLat != null && data.lastLng != null
-            ? { lastLat: String(data.lastLat), lastLng: String(data.lastLng) }
+            ? {
+                lastLat: String(data.lastLat),
+                lastLng: String(data.lastLng),
+                ...(data.lastLocationTs != null ? { lastLocationTs: String(data.lastLocationTs) } : {}),
+              }
             : {}),
         },
       });

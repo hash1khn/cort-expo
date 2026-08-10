@@ -81,6 +81,12 @@ export const employee = {
   status: 'الحالة',
   completed: 'مكتملة',
   numberPlate: 'رقم اللوحة',
+  lastUpdatedLabel: 'آخر تحديث',
+  lastUpdatedJustNow: 'الآن',
+  lastUpdatedMinutes: 'قبل {{count}} دقيقة',
+  lastUpdatedHours: 'قبل {{count}} ساعة',
+  lastUpdatedDays: 'قبل {{count}} يوم',
+  lastUpdatedUnknown: 'وقت الموقع غير متاح',
   issueTypes: {
     app_issue: 'مشكلة في التطبيق',
     ride_issue: 'مشكلة في الرحلة',

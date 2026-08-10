@@ -83,6 +83,12 @@ export const employee = {
   status: 'Status',
   completed: 'Completed',
   numberPlate: 'Number Plate',
+  lastUpdatedLabel: 'Last updated',
+  lastUpdatedJustNow: 'Just now',
+  lastUpdatedMinutes: '{{count}}m ago',
+  lastUpdatedHours: '{{count}}h ago',
+  lastUpdatedDays: '{{count}}d ago',
+  lastUpdatedUnknown: 'Location time unavailable',
   issueTypes: {
     app_issue: 'App issue',
     ride_issue: 'Ride issue',

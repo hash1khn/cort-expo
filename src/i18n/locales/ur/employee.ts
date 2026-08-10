@@ -81,6 +81,12 @@ export const employee = {
   status: 'حالت',
   completed: 'مکمل',
   numberPlate: 'نمبر پلیٹ',
+  lastUpdatedLabel: 'آخری اپ ڈیٹ',
+  lastUpdatedJustNow: 'ابھی ابھی',
+  lastUpdatedMinutes: '{{count}} منٹ پہلے',
+  lastUpdatedHours: '{{count}} گھنٹے پہلے',
+  lastUpdatedDays: '{{count}} دن پہلے',
+  lastUpdatedUnknown: 'مقام کا وقت دستیاب نہیں',
   issueTypes: {
     app_issue: 'ایپ کا مسئلہ',
     ride_issue: 'سواری کا مسئلہ',

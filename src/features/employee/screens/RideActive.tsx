@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState, } from 'react';
 import { Linking, Platform, Pressable, StyleSheet, Text as RNText, View, ActivityIndicator, Image, Dimensions, Share } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
-import MapView, { Marker, MarkerAnimated, AnimatedRegion, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
+import MapView, { Marker, MarkerAnimated, AnimatedRegion, Polyline, PROVIDER_GOOGLE, Callout } from 'react-native-maps';
 import Ionicons from "@react-native-vector-icons/ionicons/static";
 import MaterialCommunityIcons from "@react-native-vector-icons/material-design-icons/static";
 import Octicons from "@react-native-vector-icons/octicons/static";
@@ -133,6 +133,7 @@ export default function RideActive() {
     bookingStatus: bookingStatusParam,
     lastLat: lastLatParam,
     lastLng: lastLngParam,
+    lastLocationTs: lastLocationTsParam,
   } = useLocalSearchParams<{
     tripId?: string;
     myPickupStopId?: string;
@@ -146,6 +147,7 @@ export default function RideActive() {
     bookingStatus?: string;
     lastLat?: string;
     lastLng?: string;
+    lastLocationTs?: string;
   }>();
 
   const mode = modeParam ?? 'shuttle';
@@ -248,6 +250,11 @@ export default function RideActive() {
 
   // ── Real-time state ───────────────────────────────────────────────────────
   const [driverCoord, setDriverCoord] = useState<LatLng | null>(null);
+  // Wall-clock time this device received the last live driver:location tick — used
+  // for the "last updated" callout on the car marker. Not the GPS fix's own
+  // timestamp (which can be missing/skewed); receipt time is what riders actually
+  // care about ("how stale is what I'm looking at right now").
+  const [driverCoordUpdatedAt, setDriverCoordUpdatedAt] = useState<number | null>(null);
   const [socketStopId, setSocketStopId] = useState<number | null>(null);
   const [socketStopStatus, setSocketStopStatus] = useState<'AT_STOP' | 'EN_ROUTE' | null>(null);
   const [isCallingDriver, setIsCallingDriver] = useState(false);
@@ -308,6 +315,7 @@ export default function RideActive() {
   const handleLocationUpdate = useCallback(
     (data: { lat: number; lng: number }) => {
       setDriverCoord({ latitude: data.lat, longitude: data.lng });
+      setDriverCoordUpdatedAt(Date.now());
     },
     [],
   );
@@ -508,6 +516,7 @@ export default function RideActive() {
   // of arrival order — see the priority chain below.
   const apiLastLat = !isChauffeurMode ? (activeTrip?.last_lat ?? null) : null;
   const apiLastLng = !isChauffeurMode ? (activeTrip?.last_lng ?? null) : null;
+  const apiLastLocationTs = !isChauffeurMode ? (activeTrip?.last_location_ts ?? null) : null;
   const seededDriverCoord: LatLng | null = useMemo(() => {
     if (apiLastLat != null && apiLastLng != null) {
       return { latitude: apiLastLat, longitude: apiLastLng };
@@ -522,12 +531,43 @@ export default function RideActive() {
     return null;
   }, [apiLastLat, apiLastLng, lastLatParam, lastLngParam]);
 
+  // Timestamp paired with seededDriverCoord — same source priority (API field, then
+  // the route param a navigation path forwarded). Whichever one produced the coord
+  // above is the one whose timestamp we want here, so the two stay in sync.
+  const seededUpdatedAt: number | null = useMemo(() => {
+    if (apiLastLat != null && apiLastLng != null) {
+      return apiLastLocationTs ?? null;
+    }
+    if (lastLatParam && lastLngParam && lastLocationTsParam) {
+      const ts = Number(lastLocationTsParam);
+      if (!Number.isNaN(ts)) return ts;
+    }
+    return null;
+  }, [apiLastLat, apiLastLng, apiLastLocationTs, lastLatParam, lastLngParam, lastLocationTsParam]);
+
   // Priority: live socket coord > last-known Redis coord (API or param) > polyline's
   // own start point, which is the last resort — it may be a generic route shape rather
   // than the driver's actual position if trip-specific polyline generation hasn't
   // finished yet.
   const displayDriverCoord: LatLng | null =
     driverCoord ?? seededDriverCoord ?? (allRoutePoints.length > 0 ? allRoutePoints[0]! : null);
+
+  // Mirrors displayDriverCoord's priority chain — null only when we're showing the
+  // polyline-start fallback, which has no real-world timestamp at all.
+  const displayLastUpdatedAt: number | null = driverCoordUpdatedAt ?? seededUpdatedAt ?? null;
+
+  const lastUpdatedText = useMemo(() => {
+    if (displayLastUpdatedAt == null) return te('lastUpdatedUnknown');
+    const diffMs = Date.now() - displayLastUpdatedAt;
+    const diffMin = Math.floor(diffMs / 60_000);
+    if (diffMin < 1) return te('lastUpdatedJustNow');
+    if (diffMin < 60) return te('lastUpdatedMinutes', { count: diffMin });
+    const diffHr = Math.floor(diffMin / 60);
+    if (diffHr < 24) return te('lastUpdatedHours', { count: diffHr });
+    const diffDay = Math.floor(diffHr / 24);
+    return te('lastUpdatedDays', { count: diffDay });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [displayLastUpdatedAt]);
 
   const currentDriverPolylineIndex = useMemo(() => {
     if (!displayDriverCoord || !allRoutePoints.length) return null;
@@ -906,6 +946,12 @@ export default function RideActive() {
               source={require('../../../../assets/car_birdeye.png')}
               style={{ width: 60, height: 60, resizeMode: 'contain' }}
             />
+            <Callout tooltip={true} style={styles.lastUpdatedCalloutWrapper}>
+              <View style={styles.lastUpdatedCallout}>
+                <Text style={styles.lastUpdatedCalloutLabel}>{te('lastUpdatedLabel')}</Text>
+                <Text style={styles.lastUpdatedCalloutValue}>{lastUpdatedText}</Text>
+              </View>
+            </Callout>
           </Marker>
         )}
         {displayDriverCoord && animatedDriverRegion && Platform.OS !== 'android' && (
@@ -922,6 +968,12 @@ export default function RideActive() {
               source={require('../../../../assets/car_birdeye.png')}
               style={{ width: 60, height: 60, resizeMode: 'contain' }}
             />
+            <Callout tooltip={true} style={styles.lastUpdatedCalloutWrapper}>
+              <View style={styles.lastUpdatedCallout}>
+                <Text style={styles.lastUpdatedCalloutLabel}>{te('lastUpdatedLabel')}</Text>
+                <Text style={styles.lastUpdatedCalloutValue}>{lastUpdatedText}</Text>
+              </View>
+            </Callout>
           </MarkerAnimated>
         )}
       </MapView>
@@ -1072,6 +1124,35 @@ const styles = StyleSheet.create({
   },
   map: {
     ...StyleSheet.absoluteFillObject,
+  },
+  lastUpdatedCalloutWrapper: {
+    // Shadow lives here, on a box with no overflow clipping — a shadow and
+    // overflow:hidden on the same view cancel each other out (the shadow
+    // renders outside the view's own bounds, so hidden overflow erases it).
+    // The rounding + background clip happen one level down instead.
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    elevation: 6,
+  },
+  lastUpdatedCallout: {
+    minWidth: 120,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    overflow: 'hidden',
+  },
+  lastUpdatedCalloutLabel: {
+    fontSize: 11,
+    color: '#6B6B6B',
+  },
+  lastUpdatedCalloutValue: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#0C225E',
+    marginTop: 2,
   },
   vehicleMarker: {
     width: 44,
