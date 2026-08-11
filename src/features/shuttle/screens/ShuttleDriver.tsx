@@ -26,7 +26,24 @@ export function ShuttleDriver() {
   const { t, isRTL, rtlFont, language, localeCode: locale } = useLanguage();
   const tr = (key: string) => t(`shuttle:routeDetails.${key}`);
   const { data: todayTrips = [], isLoading: isTodayTripLoading, isError: isTodayTripError, refetch } = useGetTodayTripQuery();
-  useRefetchOnReconnect(refetch);
+
+  // Reconnect-triggered refetches must not clobber an in-progress ride: this
+  // screen stays mounted behind the Ride screen (drawer nav never unmounts
+  // it), so a refetch landing here mid-ride can overwrite the ride screen's
+  // more recent local progress with a stale snapshot. Skip it while a trip
+  // is actively STARTED/IN_PROGRESS; the ride screen owns the source of
+  // truth until then, and this screen refreshes normally once it's done.
+  const todayTripsRef = React.useRef(todayTrips);
+  todayTripsRef.current = todayTrips;
+  const refetchIfNoActiveRide = useCallback(() => {
+    const hasActiveRide = todayTripsRef.current.some(
+      (trip) => trip.status === 'STARTED' || trip.status === 'IN_PROGRESS',
+    );
+    if (!hasActiveRide) {
+      refetch();
+    }
+  }, [refetch]);
+  useRefetchOnReconnect(refetchIfNoActiveRide);
   const [triggerLoadEmployees] = useLazyGetTripEmployeesQuery();
   const [isRefreshing, setIsRefreshing] = useState(false);
 

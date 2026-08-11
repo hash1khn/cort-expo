@@ -38,8 +38,14 @@ export async function startLocationTracking(tripId: string | number, tripType?: 
   // Flush now — queue only contains points for the current trip.
   flushOfflineLocationQueue().catch(() => null);
 
+  // A registered task doesn't guarantee live GPS delivery — after sitting
+  // idle overnight (Doze / OEM battery managers), the subscription can go
+  // stale while still reporting as registered, silently dropping the next
+  // trip's location updates. Restart it so every new ride starts fresh.
   const alreadyRunning = await TaskManager.isTaskRegisteredAsync(RIDER_LOCATION_TASK);
-  if (alreadyRunning) return;
+  if (alreadyRunning) {
+    await Location.stopLocationUpdatesAsync(RIDER_LOCATION_TASK);
+  }
 
   await Location.startLocationUpdatesAsync(RIDER_LOCATION_TASK, {
     // BestForNavigation gives the highest possible accuracy and is the
