@@ -187,6 +187,9 @@ export const authApi = baseApi.injectEndpoints({
           url: '/drivers/apply-chauffeur',
           method: 'POST',
           body: formData,
+          // Uploads 6 photos at once — the 20s app-wide default can be too tight
+          // on a slow connection.
+          timeout: 90000,
         };
       },
     }),

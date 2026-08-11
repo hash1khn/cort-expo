@@ -550,7 +550,7 @@ export default function RideInProgress() {
       await stopTracking().catch(console.warn);
       router.push('/shuttle');
     } catch {
-      Alert.alert('Error', tr('failedComplete'));
+      Alert.alert(tr('failedCompleteTitle'), tr('failedComplete'), [{ text: 'OK' }]);
     }
   }, [
     rideStarted,

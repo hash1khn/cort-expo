@@ -5,8 +5,16 @@ import { triggerOnUnauthorized } from './client';
 
 const baseUrl = env.API_URL.replace(/\/$/, '');
 
+// Without this, a dropped/stalled connection leaves `fetch` hanging forever —
+// RTK Query's isLoading never resolves, so screens like Return.tsx (complete
+// trip) can appear "stuck" indefinitely with no error surfaced to the driver.
+// Individual queries can still override this via `timeout` in their `query()`
+// return value (e.g. photo uploads need more than 20s on a slow connection).
+const DEFAULT_REQUEST_TIMEOUT_MS = 20000;
+
 const baseQuery = fetchBaseQuery({
   baseUrl,
+  timeout: DEFAULT_REQUEST_TIMEOUT_MS,
   prepareHeaders: async (headers) => {
     const token = await tokenStorage.getAccessToken();
     if (token) {

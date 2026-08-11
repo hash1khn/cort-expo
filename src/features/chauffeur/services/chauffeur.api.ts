@@ -204,6 +204,8 @@ export const chauffeurApi = baseApi.injectEndpoints({
           url: `/driver/bookings/${bookingId}/start`,
           method: 'PATCH',
           body: formData,
+          // Photo upload — the 20s app-wide default can be too tight on a slow connection.
+          timeout: 60000,
         };
       },
       invalidatesTags: ['ChauffeurBooking'],
@@ -358,6 +360,9 @@ export const chauffeurApi = baseApi.injectEndpoints({
           // Sending an empty FormData on Android causes "Network request failed".
           // Only use FormData when there are actual fields; otherwise send no body.
           ...(hasFields ? { body: formData } : {}),
+          // Can carry several photos (meter + toll + parking) — the 20s app-wide
+          // default can be too tight on a slow connection.
+          timeout: 60000,
         };
       },
       invalidatesTags: ['ChauffeurBooking'],

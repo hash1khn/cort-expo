@@ -352,11 +352,13 @@ export default function Return() {
         await stopTracking().catch(console.warn);
         router.push('/shuttle');
       } catch {
+        // A toast alone is too easy to miss (e.g. driver already looked away,
+        // or the app was backgrounded while the request was in flight) — that's
+        // how a failed "complete trip" can go unnoticed and look like it silently
+        // worked. A blocking alert forces acknowledgment before the driver can
+        // move on, same as the morning trip screen already does for this case.
+        Alert.alert(tr('failedCompleteTitle'), tr('failedComplete'), [{ text: 'OK' }]);
         // Stay on screen and let the user retry; remount slider so it resets.
-        toast.show(
-          <CustomToast type="error" message={tr('failedComplete')} />,
-          { duration: 4000, position: 'top', backgroundColor: '#ff4545' }
-        );
         setSliderKey((k) => k + 1);
       }
       return;
