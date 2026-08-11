@@ -74,6 +74,15 @@ export default function Return() {
   } = useActiveTrip(safePreferredTripId);
   const userId = useAppSelector((s) => s.auth.user?.id ?? '');
 
+  // The last stop still needs its own "Mark as Arrived" confirmation like any
+  // other stop — current_stop_id only catches up to equal the last stop's own
+  // id (with status EN_ROUTE) once arriveAtStop + proceedFromStop have
+  // actually run for it. Only then does the button switch to "Complete Trip".
+  const lastStopDropConfirmed =
+    isLastStop
+    && activeTrip?.current_stop_id === currentStop?.id
+    && activeTrip?.current_stop_status === 'EN_ROUTE';
+
   // Join the ride socket room as driver so the background location task's
   // socketService.sendLocationUpdate() is broadcast to employees in real time.
   // Without this, socket.role is never set to 'driver' and the gateway silently
@@ -315,11 +324,26 @@ export default function Return() {
       return;
     }
 
-    // Last stop: mirror morning — skip the arrive/proceed step entirely and jump
-    // straight to completing the trip. The backend sweeps any employees still
-    // BOARDED at this stop to DROPPED_OFF as part of completeTrip, since this stop
-    // never goes through proceedFromStop (the only other place that transition fires).
+    // Last stop: "Mark as Arrived" first, same as any other stop — this
+    // confirms its drop-off with a real timestamp instead of relying on the
+    // straggler sweep. Only once that's done does the button become
+    // "Complete Trip", tapped later once the driver is actually home.
     if (isLastStop) {
+      if (!lastStopDropConfirmed) {
+        // Same confirmation as any other stop — no Maps hand-off, there's no next stop.
+        try {
+          await arriveAtStop({ tripId, current_stop_id: currentStop.id }).unwrap();
+          await proceedFromStop({ tripId }).unwrap();
+        } catch {
+          toast.show(
+            <CustomToast type="error" message={tr('failedArrive')} />,
+            { duration: 4000, position: 'top', backgroundColor: '#ff4545' }
+          );
+        }
+        return;
+      }
+
+      // Driver has reached home and is ending the trip for real.
       try {
         await completeTrip({
           tripId,
@@ -357,6 +381,8 @@ export default function Return() {
   }, [
     tripId,
     activeTrip?.route_id,
+    activeTrip?.current_stop_id,
+    activeTrip?.current_stop_status,
     employees,
     rideStarted,
     isLastStop,
@@ -634,13 +660,14 @@ export default function Return() {
           </AppText>
           <View className="ml-2">
             {routeOverviewStops.map((stop, index) => {
-              const isLast = index === routeOverviewStops.length - 1;
               // Office is where the driver actually is pre-ride, so it's "current" until
               // Begin Ride is tapped — then the highlight hands off to whichever real stop
-              // the driver is heading to/at, same mechanism morning already uses.
+              // the driver is heading to/at, same mechanism morning already uses. Once the
+              // last stop's drop-off is confirmed, the highlight hands off again to the
+              // Home step below rather than staying stuck on the last stop.
               const isCurrent = stop.isOffice
                 ? !rideStarted
-                : rideStarted && !stop.skipped && currentStop?.id === stop.id;
+                : rideStarted && !stop.skipped && currentStop?.id === stop.id && !lastStopDropConfirmed;
 
               return (
                 <View key={stop.id || index} className="flex-row items-start">
@@ -651,9 +678,8 @@ export default function Return() {
                       }`}
                       style={{ borderWidth: isCurrent ? 4 : 3, borderColor: '#FFF' }}
                     />
-                    {!isLast && (
-                      <View className={`w-[2px] h-12 my-1 ${isCurrent ? 'bg-[#FF5A00]' : 'bg-[#E5E5E5]'}`} />
-                    )}
+                    {/* Always connects onward — the Home step below is appended after every stop. */}
+                    <View className={`w-[2px] h-12 my-1 ${isCurrent ? 'bg-[#FF5A00]' : 'bg-[#E5E5E5]'}`} />
                   </View>
                   <View className={`flex-1 ${isCurrent ? 'mt-[-4px]' : 'mt-[-2px]'}`}>
                     {stop.skipped ? (
@@ -681,6 +707,25 @@ export default function Return() {
                 </View>
               );
             })}
+            {/* Final step, symbolic rather than a real route_stop — the driver drives home
+                after the last stop and taps Complete Trip there, not at the last stop itself. */}
+            <View className="flex-row items-start">
+              <View className="items-center mr-4">
+                <View
+                  className={`rounded-full shadow-sm items-center justify-center ${
+                    lastStopDropConfirmed ? 'w-5 h-5 bg-[#FF5A00]' : 'w-4 h-4 bg-[#A3A3A3]'
+                  }`}
+                  style={{ borderWidth: lastStopDropConfirmed ? 4 : 3, borderColor: '#FFF' }}
+                >
+                  <Ionicons name="home" size={lastStopDropConfirmed ? 11 : 9} color="#FFF" />
+                </View>
+              </View>
+              <View className={`flex-1 ${lastStopDropConfirmed ? 'mt-[-4px]' : 'mt-[-2px]'}`}>
+                <AppText className={`text-[17px] ${lastStopDropConfirmed ? 'font-bold text-black' : 'font-medium text-[#6B7280]'}`}>
+                  {tr('homeAfterStop')}
+                </AppText>
+              </View>
+            </View>
           </View>
         </View>
 
@@ -729,7 +774,7 @@ export default function Return() {
           )}
           <AppText className="text-white text-[17px] font-bold mr-1">
             {rideStarted
-              ? (isLastStop
+              ? (lastStopDropConfirmed
                 ? (isActionLoading ? tr('completing') : tr('completeTrip'))
                 : (isActionLoading ? tr('markingArrived') : tr('markAsArrived')))
               : (isActionLoading ? tr('beginning') : tr('beginRide'))}

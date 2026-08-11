@@ -48,6 +48,7 @@ export const shuttle = {
     title: 'رحلة العودة',
     routeOverview: 'نظرة على المسار',
     officeStart: 'البداية',
+    homeAfterStop: 'ثم التوجه إلى المنزل',
     markAttendance: 'تسجيل الحضور',
     markAttendanceSubtitle: 'حدّد حضور أو غياب الموظفين لرحلة العودة',
     whyAbsent: 'لماذا هذا الشخص غائب؟',

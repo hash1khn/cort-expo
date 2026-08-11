@@ -48,6 +48,7 @@ export const shuttle = {
     title: 'واپسی کا سفر',
     routeOverview: 'راستے کا جائزہ',
     officeStart: 'آغاز',
+    homeAfterStop: 'پھر گھر جائیں',
     markAttendance: 'حاضری',
     markAttendanceSubtitle: 'افراد کی حاضری یا غیر حاضری مقرر کریں',
     whyAbsent: 'یہ شخص غیر حاضر کیوں ہے؟',
