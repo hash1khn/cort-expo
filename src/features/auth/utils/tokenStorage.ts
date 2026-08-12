@@ -29,8 +29,22 @@ const webStorage = {
   },
 };
 
+/**
+ * Result of a refresh attempt.
+ *  - `reason: 'invalid'`  → the refresh token itself was rejected by the
+ *    server (expired / revoked / never existed). The session is genuinely
+ *    over — callers should log the user out.
+ *  - `reason: 'network'`  → we couldn't get a definitive answer (offline,
+ *    timeout, 5xx, malformed response). The session might still be fine;
+ *    callers should NOT log the user out, just fail the current request and
+ *    let the next attempt retry.
+ */
+export type RefreshResult =
+  | { ok: true; accessToken: string }
+  | { ok: false; reason: 'invalid' | 'network' };
+
 /** In-flight refresh promise — prevents concurrent refresh races that revoke each other. */
-let refreshInFlight: Promise<string | null> | null = null;
+let refreshInFlight: Promise<RefreshResult> | null = null;
 
 export const tokenStorage = {
   async getAccessToken(): Promise<string | null> {
@@ -91,45 +105,88 @@ export const tokenStorage = {
 
   /**
    * Uses the stored refresh token to obtain a new access token from the
-   * backend, persists both new tokens, and returns the new access token.
-   * Returns null if the refresh token is missing or the request fails.
-   *
-   * Single-flight: concurrent callers share one refresh request. The backend
-   * rotates (revokes) refresh tokens, so parallel refreshes would otherwise
-   * log the user out after ~15m when access tokens expire.
+   * backend, persists both new tokens, and returns the new access token (or
+   * null on any failure). Kept for callers that don't need to distinguish
+   * failure reasons (socket, offline location queue) — they already treat
+   * `null` as "couldn't refresh right now" without logging the user out.
    */
   async refreshAccessToken(): Promise<string | null> {
+    const result = await this.refreshAccessTokenDetailed();
+    return result.ok ? result.accessToken : null;
+  },
+
+  /**
+   * Same as `refreshAccessToken()` but returns a discriminated result (see
+   * `RefreshResult`) so callers that DO decide whether to log the user out
+   * (RTK Query's reauth wrapper, `apiFetch`) can tell a real "you're logged
+   * out" apart from a transient failure that shouldn't wipe the session.
+   *
+   * Single-flight *within this JS instance*: concurrent callers here share
+   * one refresh request. Note this does NOT protect against a background
+   * task running in a separate JS instance (e.g. Android headless location
+   * task) refreshing at the same time — that race is instead tolerated by
+   * the backend's short reuse-grace-window, and mitigated here by checking
+   * whether another instance already rotated the token out from under us
+   * before giving up.
+   */
+  async refreshAccessTokenDetailed(): Promise<RefreshResult> {
     if (refreshInFlight) return refreshInFlight;
 
-    refreshInFlight = (async () => {
-      const refreshToken = await this.getRefreshToken();
-      if (!refreshToken) return null;
+    const inFlight = (async (): Promise<RefreshResult> => {
+      const refreshTokenAtStart = await this.getRefreshToken();
+      if (!refreshTokenAtStart) return { ok: false, reason: 'invalid' };
 
       try {
         const base = env.API_URL.replace(/\/$/, '');
         const res = await fetch(`${base}/auth/refresh-token`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ refreshToken }),
+          body: JSON.stringify({ refreshToken: refreshTokenAtStart }),
         });
 
-        if (!res.ok) return null;
+        if (res.status === 401 || res.status === 403) {
+          // Another JS instance (e.g. the background location task, which
+          // can run in its own headless runtime) may have already rotated
+          // this exact refresh token a moment ago. If storage now holds a
+          // *different* refresh token than the one we sent, that rotation
+          // already happened and our session is fine — just use the token
+          // that's already there instead of forcing a logout.
+          const currentRefreshToken = await this.getRefreshToken();
+          const currentAccessToken = await this.getAccessToken();
+          if (
+            currentAccessToken &&
+            currentRefreshToken &&
+            currentRefreshToken !== refreshTokenAtStart
+          ) {
+            return { ok: true, accessToken: currentAccessToken };
+          }
+          return { ok: false, reason: 'invalid' };
+        }
+
+        if (!res.ok) {
+          // 5xx / 429 / etc — server or network trouble, not a rejected
+          // token. Don't touch stored tokens; let the caller retry later.
+          return { ok: false, reason: 'network' };
+        }
 
         const json = await res.json();
         const accessToken: string | undefined = json?.data?.session?.access_token;
         const newRefreshToken: string | undefined = json?.data?.session?.refresh_token;
 
-        if (!accessToken) return null;
+        if (!accessToken) return { ok: false, reason: 'network' };
 
-        await this.setTokens(accessToken, newRefreshToken ?? refreshToken);
-        return accessToken;
+        await this.setTokens(accessToken, newRefreshToken ?? refreshTokenAtStart);
+        return { ok: true, accessToken };
       } catch {
-        return null;
+        // Offline / timeout / parse error — ambiguous, not a confirmed
+        // rejection. Treat as transient.
+        return { ok: false, reason: 'network' };
       }
     })().finally(() => {
       refreshInFlight = null;
     });
 
-    return refreshInFlight;
+    refreshInFlight = inFlight;
+    return inFlight;
   },
 };

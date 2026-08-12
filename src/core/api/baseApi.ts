@@ -27,17 +27,31 @@ const baseQuery = fetchBaseQuery({
   },
 });
 
+// Endpoints that are hit while the user has no valid session yet (or is in
+// the middle of establishing one). A 401 here means "wrong credentials" /
+// "bad ticket", not "your session expired" — it must never trigger a token
+// refresh + forced logout, which would be confusing (and could wipe tokens
+// left over from a previous session while the user is just mistyping a
+// password on the login screen).
+const NO_REAUTH_PATHS = ['/auth/login', '/auth/signup', '/auth/impersonate/exchange'];
+
 const baseQueryWithReauth = async (args: any, api: any, extraOptions: any) => {
   let result = await baseQuery(args, api, extraOptions);
 
-  if (result.error && result.error.status === 401) {
+  const url: string = typeof args === 'string' ? args : args?.url ?? '';
+  const skipReauth = NO_REAUTH_PATHS.some((path) => url.includes(path));
+
+  if (!skipReauth && result.error && result.error.status === 401) {
     // Single-flight refresh — shared with apiFetch + socket so concurrent
     // 401s don't revoke each other's refresh tokens and force logout.
-    const newAccessToken = await tokenStorage.refreshAccessToken();
+    const refreshResult = await tokenStorage.refreshAccessTokenDetailed();
 
-    if (newAccessToken) {
+    if (refreshResult.ok) {
       result = await baseQuery(args, api, extraOptions);
-    } else {
+    } else if (refreshResult.reason === 'invalid') {
+      // Only a confirmed-invalid refresh token means the session is really
+      // over. A network/server hiccup while refreshing should not log the
+      // user out — just surface this request's error and retry next time.
       await tokenStorage.clearTokens();
       triggerOnUnauthorized();
     }

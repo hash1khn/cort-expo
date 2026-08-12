@@ -3,26 +3,41 @@ import { AppState, AppStateStatus } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import NetInfo from '@react-native-community/netinfo';
 import { socketService } from '../services/socket.service';
+import { tokenStorage } from '../features/auth/utils/tokenStorage';
 import { ACTIVE_RIDE_KEY } from '../services/location/backgroundLocationTask';
 import { flushOfflineLocationQueue, resetFlushBackoff } from '../services/location/offlineLocationQueue';
 
 /**
+ * Reads the freshest access token from storage and connects. We deliberately
+ * do NOT trust a token value handed down from a parent component's state —
+ * that value is only set once (e.g. on login/isLoggedIn change) and goes
+ * stale the moment a background 401 triggers a refresh elsewhere. Reading
+ * SecureStore right before every connect attempt means we always hand the
+ * gateway the token that's actually current, avoiding needless
+ * unauthorized-connect/disconnect churn around each ~15m token expiry.
+ */
+async function connectWithLatestToken() {
+    const token = await tokenStorage.getAccessToken();
+    if (token && !socketService.isConnected()) {
+        socketService.connect(token);
+    }
+}
+
+/**
  * Manages the socket connection lifecycle.
- * - Connects on mount with the provided token
+ * - Connects on mount (and whenever `enabled` becomes true)
  * - Reconnects when app comes to foreground
  * - Disconnects when app goes to background
  * Returns isConnected boolean.
  */
-export function useSocketConnection(token: string | null | undefined) {
+export function useSocketConnection(enabled: boolean) {
     const [isConnected, setIsConnected] = useState(socketService.isConnected());
     const appStateRef = useRef<AppStateStatus>(AppState.currentState);
 
     useEffect(() => {
-        if (!token) return;
+        if (!enabled) return;
 
-        if (!socketService.isConnected()) {
-            socketService.connect(token);
-        }
+        connectWithLatestToken();
 
         const onConnect = () => setIsConnected(true);
         const onDisconnect = () => setIsConnected(false);
@@ -34,10 +49,8 @@ export function useSocketConnection(token: string | null | undefined) {
             appStateRef.current = nextState;
 
             if (nextState === 'active' && prev !== 'active') {
-                // Came to foreground — reconnect if needed
-                if (token && !socketService.isConnected()) {
-                    socketService.connect(token);
-                }
+                // Came to foreground — reconnect (with the latest token) if needed
+                connectWithLatestToken();
                 // Clear any backoff that built up during a background network
                 // outage so the queue flushes immediately on foreground.
                 resetFlushBackoff();
@@ -71,20 +84,18 @@ export function useSocketConnection(token: string | null | undefined) {
             socketService.off('disconnect', onDisconnect);
             subscription.remove();
         };
-    }, [token]);
+    }, [enabled]);
 
     // Reconnect socket when network comes back online
     useEffect(() => {
-        if (!token) return;
+        if (!enabled) return;
         return NetInfo.addEventListener((state) => {
-            if (state.isConnected && !socketService.isConnected()) {
-                socketService.connect(token);
-            }
             if (state.isConnected) {
+                connectWithLatestToken();
                 flushOfflineLocationQueue().catch(() => null);
             }
         });
-    }, [token]);
+    }, [enabled]);
 
     return { isConnected };
 }

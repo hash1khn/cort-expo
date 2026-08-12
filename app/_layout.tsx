@@ -1,6 +1,6 @@
 import { Stack, usePathname, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { stopLocationTracking } from '../src/services/location/riderLocationService';
 import { RIDER_LOCATION_TASK, ACTIVE_RIDE_KEY } from '../src/services/location/backgroundLocationTask';
@@ -43,7 +43,7 @@ import { useSocketConnection } from '../src/hooks/useSocketConnection';
 import { useNetworkToast } from '../src/hooks/useNetworkToast';
 import { useAppLaunchRideCheck } from '../src/hooks/useAppLaunchRideCheck';
 import { useProfileSync } from '../src/hooks/useProfileSync';
-import { tokenStorage } from '../src/features/auth/utils/tokenStorage';
+import { socketService } from '../src/services/socket.service';
 import { router } from 'expo-router';
 import { Platform } from 'react-native';
 import { apiFetch } from '../src/services/api';
@@ -157,11 +157,13 @@ function RootLayoutContent() {
     return () => setOnUnauthorized(null);
   }, []);
 
-  // Load token once auth is hydrated and user is logged in
-  const [authToken, setAuthToken] = useState<string | null>(null);
+  // Tear the socket down as soon as the session ends, whether that's a
+  // manual logout or the auto-logout above — otherwise it can keep
+  // reconnecting with a now-cleared/stale token.
   useEffect(() => {
-    if (!isLoggedIn) return;
-    tokenStorage.getAccessToken().then((t) => setAuthToken(t ?? null));
+    if (!isLoggedIn) {
+      socketService.disconnect();
+    }
   }, [isLoggedIn]);
 
   const { expoPushToken } = useNotification();
@@ -175,8 +177,10 @@ function RootLayoutContent() {
     }).catch((err) => console.warn('[PushToken] register failed:', err));
   }, [isLoggedIn, expoPushToken]);
 
-  // Manage socket connection lifecycle (foreground/background)
-  useSocketConnection(authToken);
+  // Manage socket connection lifecycle (foreground/background). The hook
+  // reads the freshest token from SecureStore itself right before every
+  // connect attempt, so it never relies on a stale token snapshot here.
+  useSocketConnection(isLoggedIn);
   useNetworkToast();
   useProfileSync();
 
