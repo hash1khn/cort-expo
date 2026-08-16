@@ -167,13 +167,21 @@ export const shuttleApi = baseApi.injectEndpoints({
         return rawRows.map((row) => {
           const user = row.users ?? {};
           const stop = row.route_stops ?? {};
+          const OVERRIDE_STOP_ID_OFFSET = 2_000_000_000;
+          const rawPickup = row.pickup_stop_id ?? null;
+          const pickupStopId =
+            rawPickup != null && rawPickup >= OVERRIDE_STOP_ID_OFFSET
+              ? rawPickup
+              : row.is_override && row.override?.id
+                ? OVERRIDE_STOP_ID_OFFSET + row.override.id
+                : rawPickup;
           return {
             id: user.id ?? row.user_id,
             fullName: user.full_name ?? '',
             phone: user.phone ?? null,
             department: user.department ?? null,
-            pickupStopId: row.pickup_stop_id ?? null,
-            pickupStopName: stop.name ?? null,
+            pickupStopId,
+            pickupStopName: stop.name ?? row.stop_name ?? null,
             pickupStopOrder:
               typeof stop.sequence_order === 'number' ? stop.sequence_order : null,
           } as TripEmployee;
