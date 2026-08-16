@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { useGetTodayTripQuery } from '../services/shuttleApi';
+import { useGetTodayTripQuery, getCurrentStopId } from '../services/shuttleApi';
 import type { ShuttleTrip } from '../services/shuttleApi';
 
 export type Stop = {
@@ -121,7 +121,7 @@ export function useActiveTrip(preferredTripId?: number | null) {
       };
     }
 
-    const currentStopId = activeTrip?.current_stop_id ?? null;
+    const currentStopId = getCurrentStopId(activeTrip);
     const indexOfCurrent = currentStopId == null ? -1 : stops.findIndex((s) => s.id === currentStopId);
 
     // AT_STOP means the driver is physically at current_stop_id, attendance sheet should be shown.

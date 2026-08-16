@@ -1,5 +1,10 @@
 import { baseApi } from '../../../core/api/baseApi';
 
+/** Real route_stops ids never reach this range (a Postgres serial) — used to tell a synthetic
+ *  daily-override stop id apart from a real one. Must match OVERRIDE_STOP_ID_OFFSET in
+ *  cort-backend's shuttle-trips.service.ts. */
+export const OVERRIDE_STOP_ID_OFFSET = 2_000_000_000;
+
 type RouteStop = {
   id: number;
   route_id: number;
@@ -12,6 +17,8 @@ type RouteStop = {
   evening_eta: string | null;
   lat: number | null;
   lng: number | null;
+  /** True for a synthetic stop backed by a same-day route override, not a real route_stops row. */
+  is_override?: boolean;
 };
 
 type RouteCount = {
@@ -68,10 +75,23 @@ export type ShuttleTrip = {
   started_at?: string | null;
   completed_at?: string | null;
   current_stop_id?: number | null;
+  /** Set instead of current_stop_id when the driver is at a daily-override stop (current_stop_id
+   *  is FK'd to route_stops, which an override stop is not a row of). At most one of the two
+   *  is ever set. Resolve via getCurrentStopId() below rather than reading either field directly. */
+  current_override_stop_id?: number | null;
   current_stop_arrived_at?: string | null;
   current_stop_status?: 'AT_STOP' | 'EN_ROUTE' | null;
   routes?: Route | null;
 };
+
+/** Resolves the trip's current stop id in the same id-space `routes.route_stops[]` uses —
+ *  real stops keep their id, an override stop is OVERRIDE_STOP_ID_OFFSET + current_override_stop_id. */
+export function getCurrentStopId(trip: Pick<ShuttleTrip, 'current_stop_id' | 'current_override_stop_id'> | null | undefined): number | null {
+  if (!trip) return null;
+  if (trip.current_stop_id != null) return trip.current_stop_id;
+  if (trip.current_override_stop_id != null) return OVERRIDE_STOP_ID_OFFSET + trip.current_override_stop_id;
+  return null;
+}
 
 /** startTrip's response — extends ShuttleTrip with the exclusion-aware navigation target,
  * resolved synchronously server-side (DB-only, no Google Directions call) so the client can
@@ -407,7 +427,11 @@ export const shuttleApi = baseApi.injectEndpoints({
             shuttleApi.util.updateQueryData('getTodayTrip', undefined, (draft) => {
               const trip = draft.find((t) => t.id === tripId);
               if (trip) {
-                trip.current_stop_id = data.current_stop_id ?? trip.current_stop_id;
+                // Assign directly, not `?? trip.current_stop_id` — arriving at an override
+                // stop returns current_stop_id: null (it lives in current_override_stop_id
+                // instead), and the fallback would otherwise keep showing the old stop.
+                trip.current_stop_id = data.current_stop_id ?? null;
+                trip.current_override_stop_id = data.current_override_stop_id ?? null;
                 trip.current_stop_arrived_at =
                   data.current_stop_arrived_at ?? trip.current_stop_arrived_at;
                 trip.current_stop_status = 'AT_STOP';

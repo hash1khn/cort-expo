@@ -13,6 +13,7 @@ import {
   useStartTripMutation,
   useArriveAtStopMutation,
   useProceedFromStopMutation,
+  getCurrentStopId,
   TripEmployee,
 } from '../services/shuttleApi';
 import { useActiveTrip } from '../hooks/useActiveTrip';
@@ -75,12 +76,17 @@ export default function Return() {
   const userId = useAppSelector((s) => s.auth.user?.id ?? '');
 
   // The last stop still needs its own "Mark as Arrived" confirmation like any
-  // other stop — current_stop_id only catches up to equal the last stop's own
-  // id (with status EN_ROUTE) once arriveAtStop + proceedFromStop have
-  // actually run for it. Only then does the button switch to "Complete Trip".
+  // other stop — the trip's current stop only catches up to equal the last
+  // stop's own id (with status EN_ROUTE) once arriveAtStop + proceedFromStop
+  // have actually run for it. Only then does the button switch to "Complete
+  // Trip". Must resolve via getCurrentStopId, not the raw current_stop_id
+  // field — a daily-override stop is tracked in current_override_stop_id
+  // instead (current_stop_id is FK'd to real route_stops and stays null for
+  // one), so comparing the raw field never matched and this flag got stuck
+  // false forever whenever the last stop was an override.
   const lastStopDropConfirmed =
     isLastStop
-    && activeTrip?.current_stop_id === currentStop?.id
+    && getCurrentStopId(activeTrip) === currentStop?.id
     && activeTrip?.current_stop_status === 'EN_ROUTE';
 
   // Join the ride socket room as driver so the background location task's
