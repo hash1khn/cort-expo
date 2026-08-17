@@ -39,13 +39,15 @@ import { useAppSelector } from '../src/store/hooks';
 import { logOut } from '../src/features/auth/store/auth.slice';
 import { setOnUnauthorized } from '../src/services/api';
 import { useSplashPrefetch } from '../src/features/employee/hooks/useSplashPrefetch';
+import { useAppConfigGate } from '../src/features/app-config/useAppConfigGate';
+import { AppBlockedScreen } from '../src/features/app-config/AppBlockedScreen';
 import { useSocketConnection } from '../src/hooks/useSocketConnection';
 import { useNetworkToast } from '../src/hooks/useNetworkToast';
 import { useAppLaunchRideCheck } from '../src/hooks/useAppLaunchRideCheck';
 import { useProfileSync } from '../src/hooks/useProfileSync';
 import { socketService } from '../src/services/socket.service';
 import { router } from 'expo-router';
-import { Platform } from 'react-native';
+import { Platform, View } from 'react-native';
 import { apiFetch } from '../src/services/api';
 import { useNotification } from '../src/context/NotificationContext';
 import { refreshAvailableLanguages } from '../src/i18n/region';
@@ -96,6 +98,7 @@ function RootLayoutContent() {
   const role = useAppSelector((s) => s.auth.role);
   const user = useAppSelector((s) => s.auth.user);
   const hasHydrated = useAppSelector((s) => s.auth._hasHydrated);
+  const { ready: appConfigReady, gate } = useAppConfigGate();
 
   // Handle both null and undefined, and wait for hydration
   // Use != null to check for both null and undefined
@@ -143,7 +146,7 @@ function RootLayoutContent() {
     });
   }, []);
 
-  useSplashPrefetch(fontsLoaded, hasHydrated);
+  useSplashPrefetch(fontsLoaded, hasHydrated, appConfigReady);
 
   // Fire-and-forget: resolve region from IP to decide which languages to
   // offer (e.g. Pakistan -> EN/UR, Saudi Arabia -> EN/AR). No permission
@@ -205,7 +208,7 @@ function RootLayoutContent() {
   });
 
 
-  if (!fontsLoaded || !hasHydrated) {
+  if (!fontsLoaded || !hasHydrated || !appConfigReady) {
     return null;
   }
   return (
@@ -235,6 +238,11 @@ function RootLayoutContent() {
 
               <Stack.Screen name="+not-found" />
             </Stack>
+            {gate ? (
+              <View className="absolute inset-0 z-50" pointerEvents="auto">
+                <AppBlockedScreen gate={gate} />
+              </View>
+            ) : null}
           </BottomSheetModalProvider>
         </SafeAreaProvider>
       </ToastProviderWithViewport>

@@ -24,4 +24,9 @@ export const common = {
   guest: 'Guest',
   noInternet: 'No Internet Connection',
   backOnline: 'Back Online',
+  maintenanceTitle: "We'll be back soon",
+  maintenanceBody: 'Traflinq is temporarily unavailable. Please try again shortly.',
+  forceUpdateTitle: 'Update required',
+  forceUpdateBody: 'A new version of Traflinq is required. Please update to continue.',
+  updateApp: 'Update',
 } as const;

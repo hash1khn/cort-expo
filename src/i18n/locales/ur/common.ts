@@ -24,4 +24,9 @@ export const common = {
   guest: 'مہمان',
   noInternet: 'انٹرنیٹ کنکشن نہیں',
   backOnline: 'دوبارہ آن لائن',
+  maintenanceTitle: 'ہم جلد واپس آ رہے ہیں',
+  maintenanceBody: 'Traflinq عارضی طور پر دستیاب نہیں۔ براہ کرم کچھ دیر بعد کوشش کریں۔',
+  forceUpdateTitle: 'اپ ڈیٹ ضروری ہے',
+  forceUpdateBody: 'Traflinq کا نیا ورژن درکار ہے۔ جاری رکھنے کے لیے براہ کرم اپ ڈیٹ کریں۔',
+  updateApp: 'اپ ڈیٹ کریں',
 } as const;
