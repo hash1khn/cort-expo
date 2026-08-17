@@ -5,7 +5,8 @@ import { fetchMobileAppConfig } from './api';
 import { isVersionBelow } from './compareVersion';
 import type { AppConfigGate, MobileAppConfig } from './types';
 
-const POLL_MS = 60_000;
+/** Skip a foreground refetch if a successful fetch landed within this window. */
+const CLIENT_TTL_MS = 60_000;
 const FIRST_FETCH_TIMEOUT_MS = 4_000;
 
 function installedVersion(): string {
@@ -39,20 +40,26 @@ export function useAppConfigGate() {
   const [gate, setGate] = useState<AppConfigGate | null>(null);
   const inFlight = useRef(false);
   const lastSuccessBlocked = useRef(false);
+  const lastSuccessAt = useRef(0);
 
-  const refresh = useCallback(async (timeoutMs?: number) => {
+  const refresh = useCallback(async (opts?: { timeoutMs?: number; force?: boolean }) => {
     if (inFlight.current) return;
+    if (!opts?.force && Date.now() - lastSuccessAt.current < CLIENT_TTL_MS) {
+      return;
+    }
+
     inFlight.current = true;
     const controller = new AbortController();
     const timer =
-      timeoutMs != null
-        ? setTimeout(() => controller.abort(), timeoutMs)
+      opts?.timeoutMs != null
+        ? setTimeout(() => controller.abort(), opts.timeoutMs)
         : undefined;
 
     try {
       const config = await fetchMobileAppConfig(controller.signal);
       const next = decideGate(config);
       lastSuccessBlocked.current = next != null;
+      lastSuccessAt.current = Date.now();
       setGate(next);
     } catch {
       if (!lastSuccessBlocked.current) {
@@ -64,13 +71,13 @@ export function useAppConfigGate() {
       inFlight.current = false;
       setReady(true);
       if (aborted) {
-        void refresh();
+        void refresh({ force: true });
       }
     }
   }, []);
 
   useEffect(() => {
-    void refresh(FIRST_FETCH_TIMEOUT_MS);
+    void refresh({ timeoutMs: FIRST_FETCH_TIMEOUT_MS, force: true });
   }, [refresh]);
 
   useEffect(() => {
@@ -80,14 +87,8 @@ export function useAppConfigGate() {
       }
     };
     const sub = AppState.addEventListener('change', onAppState);
-    const interval = setInterval(() => {
-      if (AppState.currentState === 'active') {
-        void refresh();
-      }
-    }, POLL_MS);
     return () => {
       sub.remove();
-      clearInterval(interval);
     };
   }, [refresh]);
 
