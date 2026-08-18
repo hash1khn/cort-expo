@@ -68,6 +68,11 @@ type StopEmployee = {
 // Per-employee loading state: which action is in flight
 type EmployeeLoadingAction = 'scanning' | 'marking_absent' | null;
 
+function getApiErrorMessage(error: unknown): string | null {
+  const maybe = error as { data?: { message?: string }; message?: string } | undefined;
+  return maybe?.data?.message || maybe?.message || null;
+}
+
 function getInitials(name: string) {
   return name
     .split(' ')
@@ -589,8 +594,12 @@ export default function RideInProgress() {
       }).unwrap();
       await stopTracking().catch(console.warn);
       router.push('/shuttle');
-    } catch {
-      Alert.alert(tr('failedCompleteTitle'), tr('failedComplete'), [{ text: 'OK' }]);
+    } catch (error) {
+      Alert.alert(
+        tr('failedCompleteTitle'),
+        getApiErrorMessage(error) || tr('failedComplete'),
+        [{ text: 'OK' }],
+      );
     }
   }, [
     rideStarted,

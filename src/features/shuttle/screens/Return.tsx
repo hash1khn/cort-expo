@@ -45,6 +45,11 @@ type ReturnEmployee = {
   stopId: number | null;
 };
 
+function getApiErrorMessage(error: unknown): string | null {
+  const maybe = error as { data?: { message?: string }; message?: string } | undefined;
+  return maybe?.data?.message || maybe?.message || null;
+}
+
 function getInitials(name: string) {
   return name
     .split(' ')
@@ -736,13 +741,17 @@ export default function Return() {
         }).unwrap();
         await stopTracking().catch(console.warn);
         router.push('/shuttle');
-      } catch {
+      } catch (error) {
         // A toast alone is too easy to miss (e.g. driver already looked away,
         // or the app was backgrounded while the request was in flight) — that's
         // how a failed "complete trip" can go unnoticed and look like it silently
         // worked. A blocking alert forces acknowledgment before the driver can
         // move on, same as the morning trip screen already does for this case.
-        Alert.alert(tr('failedCompleteTitle'), tr('failedComplete'), [{ text: 'OK' }]);
+        Alert.alert(
+          tr('failedCompleteTitle'),
+          getApiErrorMessage(error) || tr('failedComplete'),
+          [{ text: 'OK' }],
+        );
         // Stay on screen and let the user retry; remount slider so it resets.
         setSliderKey((k) => k + 1);
       }
