@@ -1,7 +1,6 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, AppState, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, View, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Feather from "@react-native-vector-icons/feather/static";
 import Ionicons from "@react-native-vector-icons/ionicons/static";
 import { router, useLocalSearchParams } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
@@ -13,6 +12,8 @@ import {
   useStartTripMutation,
   useArriveAtStopMutation,
   useProceedFromStopMutation,
+  useScanPassengerMutation,
+  useMarkPassengerAbsentMutation,
   getCurrentStopId,
   TripEmployee,
 } from '../services/shuttleApi';
@@ -51,6 +52,90 @@ function getInitials(name: string) {
     .join('')
     .slice(0, 2)
     .toUpperCase();
+}
+
+// One row shape, used to render whichever office's attendance is currently nested
+// under its own row in Route Overview — the pre-trip start office before Begin Ride,
+// or whichever office the driver has just arrived at mid-route. Local-only: tapping
+// never hits an API, the whole roster is submitted as one bulk call elsewhere.
+function AttendanceRow({
+  emp,
+  isLast,
+  onMarkAbsent,
+  onMarkPresent,
+  disabled = false,
+}: {
+  emp: ReturnEmployee;
+  isLast: boolean;
+  onMarkAbsent: (id: string) => void;
+  onMarkPresent: (id: string) => void;
+  /** Read-only historical view — this office's attendance was already submitted
+   *  (pre-trip, or a prior mid-route arrival) and just stays visible for reference. */
+  disabled?: boolean;
+}) {
+  return (
+    <View
+      className="flex-row items-center py-4"
+      style={
+        !isLast
+          ? { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: 'rgba(156,163,175,0.35)' }
+          : undefined
+      }
+    >
+      <View
+        className="w-14 h-14 rounded-full items-center justify-center mr-3 bg-gray-200"
+        style={{ borderWidth: 2, borderColor: '#FF5A00' }}
+      >
+        <AppText className="text-black font-semibold text-lg">
+          {getInitials(emp.name)}
+        </AppText>
+      </View>
+      <View className="flex-1 min-w-0 mr-2">
+        <AppText className="text-black font-bold text-[17px]" numberOfLines={1}>
+          {emp.name}
+        </AppText>
+        <View className="flex-row items-center mt-1">
+          <AppText className="text-[#8E8E93] text-[15px] mr-2" numberOfLines={1}>
+            {emp.number || 'No number'}
+          </AppText>
+        </View>
+      </View>
+      <View className="flex-row gap-3">
+        <Pressable
+          disabled={disabled}
+          onPress={() => onMarkAbsent(emp.id)}
+          className="w-[42px] h-[42px] rounded-full items-center justify-center border"
+          style={{
+            backgroundColor: emp.status === 'absent' ? '#D27360' : 'transparent',
+            borderColor: emp.status === 'absent' ? '#D27360' : emp.status === 'present' ? '#C0C0C0' : '#D27360',
+            opacity: disabled ? 0.6 : 1,
+          }}
+        >
+          <Ionicons
+            name="close"
+            size={24}
+            color={emp.status === 'absent' ? '#FFF' : emp.status === 'present' ? '#C0C0C0' : '#D27360'}
+          />
+        </Pressable>
+        <Pressable
+          disabled={disabled}
+          onPress={() => onMarkPresent(emp.id)}
+          className="w-[42px] h-[42px] rounded-full items-center justify-center border"
+          style={{
+            backgroundColor: emp.status === 'present' ? '#4AA388' : 'transparent',
+            borderColor: emp.status === 'present' ? '#4AA388' : emp.status === 'absent' ? '#C0C0C0' : '#4AA388',
+            opacity: disabled ? 0.6 : 1,
+          }}
+        >
+          <Ionicons
+            name="checkmark"
+            size={24}
+            color={emp.status === 'present' ? '#FFF' : emp.status === 'absent' ? '#C0C0C0' : '#4AA388'}
+          />
+        </Pressable>
+      </View>
+    </View>
+  );
 }
 
 export default function Return() {
@@ -111,13 +196,148 @@ export default function Return() {
   );
 
   const tripEmployeesRaw = realTripEmployeesRaw;
+  // Shared by the office-roster init effect below and the historical (read-only,
+  // post-Proceed) roster render — hoisted so it's built once per tripAttendance
+  // change instead of once per office row on every render.
+  const attendanceByEmployeeId = useMemo(
+    () => new Map(tripAttendance.map((log) => [log.employeeId, log])),
+    [tripAttendance],
+  );
   const [submitReturnAttendance, { isLoading: isSubmitting }] = useSubmitReturnAttendanceMutation();
   const [completeTrip, { isLoading: isCompletingTrip }] = useCompleteTripMutation();
   const [startTrip, { isLoading: isStartingTrip }] = useStartTripMutation();
   const [arriveAtStop, { isLoading: isArrivingAtStop }] = useArriveAtStopMutation();
   const [proceedFromStop, { isLoading: isProceeding }] = useProceedFromStopMutation();
 
-  const isActionLoading = isSubmitting || isStartingTrip || isArrivingAtStop || isProceeding || isCompletingTrip;
+  // The office-confirm tap runs submitReturnAttendance THEN proceedFromStop, sequentially
+  // awaited — two independent RTK Query mutations, each with its own isLoading flag. Right
+  // between them (first one's isLoading has already dropped to false, second one's hasn't
+  // flipped true yet) there's a real gap where isActionLoading itself is false, even though
+  // the driver's tap is still very much in flight — during that gap the button falls back to
+  // its plain, non-loading label for a beat. This flag spans the whole sequence as one
+  // atomic operation from the UI's perspective, closing that gap.
+  const [isConfirmingOffice, setIsConfirmingOffice] = useState(false);
+
+  const isActionLoading =
+    isSubmitting || isStartingTrip || isArrivingAtStop || isProceeding || isCompletingTrip || isConfirmingOffice;
+
+  // ── Mid-route OFFICE stop attendance (evening equivalent of RideInProgress.tsx's
+  // morning PICKUP attendance sheet) — an additional office stop (2nd, 3rd...) on a
+  // multi-office route requires attendance just like a home stop does in the morning,
+  // scoped to whichever employees board from that specific office (office_stop_id).
+  //
+  // No modal here — the roster renders inline, nested under this stop's own row in
+  // Route Overview below, exactly like the first office's roster nests under its row.
+  // And no per-tap API call: tick/cross only update local state; the actual
+  // submitReturnAttendance (bulk) call fires once, from handleSlideReturnTrip, when the
+  // driver taps the main action button — same "accumulate locally, commit as one batch"
+  // shape the pre-trip office already uses, instead of the morning pickup sheet's
+  // per-tap immediacy (which exists there for a reason that doesn't apply here:
+  // self-scan boarding, the thing that needs instant server-truth, is disabled for the
+  // whole evening direction).
+  //
+  // Derived straight from server state (current_stop_status/currentStop), not a local
+  // "sheet open" flag — so on app relaunch mid-attendance this is simply true again on
+  // its own, no explicit crash-recovery re-open step needed.
+  const isAtOfficeAwaitingAttendance =
+    rideStarted
+    && currentStop?.stopType === 'OFFICE'
+    && getCurrentStopId(activeTrip) === currentStop?.id
+    && activeTrip?.current_stop_status === 'AT_STOP';
+
+  // Clears isConfirmingOffice only once a render actually observes that
+  // isAtOfficeAwaitingAttendance has flipped false — NOT the instant our own
+  // `.unwrap()` promise resolves. Those are two independent things racing off the same
+  // proceedFromStop request (our await, vs. its onQueryStarted patching current_stop_status
+  // into the cache), with no guaranteed order between them; clearing the flag from the
+  // handler itself can win that race and reopen the exact gap this flag exists to close.
+  useEffect(() => {
+    if (isConfirmingOffice && !isAtOfficeAwaitingAttendance) {
+      setIsConfirmingOffice(false);
+    }
+  }, [isConfirmingOffice, isAtOfficeAwaitingAttendance]);
+
+  // Snapshot of every office's roster+status, taken the instant it's actually confirmed
+  // (Begin Ride's bulk submit for the first office, or a mid-route Confirm & Proceed for
+  // any later office) — keyed by office stop id. Historical rows read from here first,
+  // never from tripAttendance directly: we already know the exact values we just
+  // submitted, so there's no reason to wait for that submission's own invalidation to
+  // round-trip back through a refetch before displaying it. That round trip is a real,
+  // observable gap (submitReturnAttendance's tag invalidation kicks off a background
+  // refetch that isn't awaited anywhere in this flow) during which attendanceByEmployeeId
+  // can still be missing some or all of the records we just wrote, which is what was
+  // rendering as tick/cross going blank right after a confirm. Falls back to
+  // attendanceByEmployeeId only for a stop with no local snapshot at all (e.g. the driver
+  // force-quit and reopened mid-trip, so this state is gone and server truth is all
+  // that's left) — see isHistoricalOfficeRow below.
+  const [confirmedOfficeRosters, setConfirmedOfficeRosters] = useState<Record<number, ReturnEmployee[]>>({});
+
+  const [officeSheetEmployees, setOfficeSheetEmployees] = useState<ReturnEmployee[]>([]);
+  // Which stop officeSheetEmployees was last (re)built for — guards the init effect
+  // below so it only runs once per arrival, not on every tripAttendance refetch while
+  // attendance is pending (which would otherwise clobber in-progress local taps).
+  const initializedOfficeStopIdRef = useRef<number | null>(null);
+
+  // Set the instant an office-confirm tap determines (via computeNextNavigableStopAfter,
+  // using the same live-preview data already driving the "Skipped" labels) that nothing
+  // navigable is left. The real, server-truth `lastStopDropConfirmed` below needs
+  // route_stops/excluded_stops to actually refetch and reflect this stop's just-submitted
+  // absences before it agrees — a real network round trip, not instant. Without this
+  // override the button falls through to "Mark as Arrived" for that whole gap (current
+  // AT_STOP has already cleared, but isLastStop hasn't caught up yet) before correcting
+  // itself to "Complete Trip". This skips straight there instead of visibly flickering.
+  const [confirmedLastStopOverride, setConfirmedLastStopOverride] = useState(false);
+  // Drives every DISPLAY use of "have we reached the point of showing Complete Trip"
+  // (button label, stepper highlight, Home step styling) — the one CONTROL-FLOW use
+  // (deciding whether a tap should call completeTrip vs arriveAtStop) deliberately keeps
+  // using the plain server-truth value below, unaffected by this override.
+  const effectiveLastStopDropConfirmed = lastStopDropConfirmed || confirmedLastStopOverride;
+
+  // Initialize this office's roster once per arrival — pre-filling status from any
+  // existing attendance record (crash-recovery: the driver reopened the app after a
+  // Proceed tap that had already committed server-side) and leaving everyone else
+  // unmarked, same as the pre-trip office's own initialization below.
+  useEffect(() => {
+    if (!isAtOfficeAwaitingAttendance || !currentStop) {
+      initializedOfficeStopIdRef.current = null;
+      return;
+    }
+    if (initializedOfficeStopIdRef.current === currentStop.id) return;
+    if (isAttendanceLoading) return;
+
+    const stopId = currentStop.id;
+    initializedOfficeStopIdRef.current = stopId;
+    const roster = tripEmployeesRaw.filter((emp: TripEmployee) => emp.officeStopId === stopId);
+    setOfficeSheetEmployees(
+      roster.map((emp) => {
+        const log = attendanceByEmployeeId.get(emp.id);
+        let status: EmployeeStatus = null;
+        if (log) {
+          const normalized = log.status?.toUpperCase();
+          status = normalized === 'PRESENT' || normalized === 'BOARDED' ? 'present' : normalized === 'ABSENT' ? 'absent' : null;
+        }
+        return {
+          id: emp.id,
+          name: emp.fullName,
+          number: emp.phone ?? '',
+          status,
+          stopId,
+        };
+      }),
+    );
+  }, [isAtOfficeAwaitingAttendance, currentStop, tripEmployeesRaw, attendanceByEmployeeId, isAttendanceLoading]);
+
+  const handleMarkOfficeSheetPresent = useCallback((employeeId: string) => {
+    setOfficeSheetEmployees((prev) =>
+      prev.map((e) => (e.id === employeeId ? { ...e, status: 'present' as const } : e)),
+    );
+  }, []);
+
+  const handleMarkOfficeSheetAbsent = useCallback((employeeId: string) => {
+    setOfficeSheetEmployees((prev) =>
+      prev.map((e) => (e.id === employeeId ? { ...e, status: 'absent' as const } : e)),
+    );
+  }, []);
 
   const {
     startTracking,
@@ -137,6 +357,15 @@ export default function Return() {
   // rideStarted (from useActiveTrip, derived off activeTrip.started_at) is the single
   // source of truth for crash recovery — no local mirror state needed, same as morning's
   // RideInProgress.tsx.
+  //
+  // Scoped to the FIRST office stop's roster only (by evening_sequence — the one the
+  // backend excludes from route_stops and surfaces via routes.office_stop / officeStop
+  // here) — that's the only office whose attendance is handled upfront, before startTrip.
+  // Any additional office stop on a multi-office route is a normal mid-route stop the
+  // driver arrives at later; its riders get their attendance sheet then (see the office
+  // attendance sheet below), not here. Employees with a null officeStopId (legacy/
+  // pre-backfill assignments) fall back to belonging to this first office, matching the
+  // backend's own fallback — this keeps single-office routes behaving exactly as before.
   useEffect(() => {
     if (!tripEmployeesRaw.length) return;
     // Wait for attendance logs if the trip is already started
@@ -153,7 +382,14 @@ export default function Return() {
         });
       }
 
-      return tripEmployeesRaw.map((emp: TripEmployee) => {
+      const firstOfficeId = officeStop?.id ?? null;
+      const firstOfficeRoster = firstOfficeId == null
+        ? tripEmployeesRaw
+        : tripEmployeesRaw.filter(
+          (emp: TripEmployee) => emp.officeStopId == null || emp.officeStopId === firstOfficeId,
+        );
+
+      return firstOfficeRoster.map((emp: TripEmployee) => {
         let status: EmployeeStatus = null;
 
         if (rideStarted) {
@@ -180,7 +416,7 @@ export default function Return() {
         };
       });
     });
-  }, [tripEmployeesRaw, rideStarted, tripAttendance, isAttendanceLoading]);
+  }, [tripEmployeesRaw, rideStarted, tripAttendance, isAttendanceLoading, officeStop?.id]);
 
   // Live preview of which stops would be skipped, computed purely from the driver's
   // in-progress tick/cross taps — before "Begin Ride", nothing has been submitted to
@@ -191,15 +427,81 @@ export default function Return() {
     const navigableEntries = stops.map((stop) => {
       const stopEmployees = employees.filter((e) => e.stopId === stop.id);
       const skipped = stopEmployees.length > 0 && stopEmployees.every((e) => e.status === 'absent');
-      return { id: stop.id, name: stop.name, eta: stop.eta, skipped, isOffice: false };
+      return { id: stop.id, name: stop.name, eta: stop.eta, skipped, isOffice: stop.stopType === 'OFFICE' };
     });
     return officeStop ? [officeStop, ...navigableEntries] : navigableEntries;
   }, [stops, employees, officeStop]);
 
+  // Same live-preview idea as previewDisplayStops above, but for mid-route: the
+  // currently-open office's tick/cross taps (officeSheetEmployees) haven't been
+  // submitted yet, so the server-truth `displayStops.skipped` can't reflect them
+  // either — a home stop whose only rider was just marked absent here should show
+  // as skipped immediately, not only after "Confirm attendance & proceed" round-trips
+  // to the server. Server-confirmed skips (already-submitted offices) still come
+  // through untouched via stop.skipped; this only ever adds a preview, never removes one.
+  const effectiveStatusByEmployeeId = useMemo(() => {
+    const map = new Map<string, EmployeeStatus>();
+    tripAttendance.forEach((log) => {
+      const normalized = log.status?.toUpperCase();
+      map.set(
+        log.employeeId,
+        normalized === 'PRESENT' || normalized === 'BOARDED' ? 'present' : normalized === 'ABSENT' ? 'absent' : null,
+      );
+    });
+    // Pending local edits for the office currently being marked win over server
+    // truth — they haven't hit the server yet, so this is the freshest info we have.
+    officeSheetEmployees.forEach((emp) => {
+      map.set(emp.id, emp.status);
+    });
+    return map;
+  }, [tripAttendance, officeSheetEmployees]);
+
+  const displayStopsWithLivePreview = useMemo(() => {
+    if (!isAtOfficeAwaitingAttendance) return displayStops;
+    return displayStops.map((stop) => {
+      if (stop.skipped || stop.isOffice) return stop;
+      const occupants = tripEmployeesRaw.filter((emp: TripEmployee) => emp.pickupStopId === stop.id);
+      const livePreviewSkipped =
+        occupants.length > 0 && occupants.every((emp) => effectiveStatusByEmployeeId.get(emp.id) === 'absent');
+      return livePreviewSkipped ? { ...stop, skipped: true } : stop;
+    });
+  }, [displayStops, isAtOfficeAwaitingAttendance, tripEmployeesRaw, effectiveStatusByEmployeeId]);
+
   // Once the ride has started, switch to the real server-computed list (same as
   // morning's RideInProgress.tsx) so the current-stop highlight advances as the
   // driver marks arrived/proceeds through the route.
-  const routeOverviewStops = rideStarted ? displayStops : previewDisplayStops;
+  const routeOverviewStops = rideStarted ? displayStopsWithLivePreview : previewDisplayStops;
+
+  // `stops`/`isLastStop`/`nextStopAfterCurrent` (from useActiveTrip) only reflect
+  // exclusions the server already knows about — they can't see an office's pending,
+  // not-yet-submitted attendance taps. Confirming that office is exactly the moment
+  // those taps are about to change what "next stop" even means (e.g. the only stop
+  // left turns out to be one every occupant was just marked absent for), so the Maps
+  // hand-off has to be decided from the same live-preview data already on screen,
+  // not the stale hook values — otherwise the driver gets sent to a stop that was
+  // already showing "Skipped" right in front of them.
+  const computeNextNavigableStopAfter = useCallback(
+    (afterStopId: number): { nextStop: typeof stops[number] | null; isLast: boolean } => {
+      const idx = stops.findIndex((s) => s.id === afterStopId);
+      if (idx === -1) return { nextStop: null, isLast: true };
+      for (let i = idx + 1; i < stops.length; i++) {
+        const candidate = stops[i];
+        if (candidate.stopType === 'OFFICE') {
+          return { nextStop: candidate, isLast: false };
+        }
+        const occupants = tripEmployeesRaw.filter((emp: TripEmployee) => emp.pickupStopId === candidate.id);
+        const wouldBeSkipped =
+          occupants.length > 0 && occupants.every((emp) => effectiveStatusByEmployeeId.get(emp.id) === 'absent');
+        if (!wouldBeSkipped) {
+          return { nextStop: candidate, isLast: false };
+        }
+        // Every remaining occupant of this stop is (about to be) absent — keep
+        // looking past it instead of navigating there.
+      }
+      return { nextStop: null, isLast: true };
+    },
+    [stops, tripEmployeesRaw, effectiveStatusByEmployeeId],
+  );
 
   const handleSlideReturnTrip = useCallback(async () => {
     if (!tripId) {
@@ -230,7 +532,11 @@ export default function Return() {
         return;
       }
 
-      if (!employees.length) {
+      // Bail out only when the trip genuinely has no one on it — not just an empty first
+      // office roster, which can legitimately happen on a multi-office route where every
+      // rider assigned to the first office is absent/unassigned but others board further
+      // down the route. `employees` here is already scoped to the first office only.
+      if (!tripEmployeesRaw.length) {
         router.push('/shuttle');
         return;
       }
@@ -259,6 +565,10 @@ export default function Return() {
               status: emp.status === 'present' ? 'PRESENT' : 'ABSENT',
             })),
           }).unwrap();
+
+          if (officeStop) {
+            setConfirmedOfficeRosters((prev) => ({ ...prev, [officeStop.id]: employees }));
+          }
 
           if (activeTrip?.route_id) {
             let driverLat: number | undefined;
@@ -330,15 +640,84 @@ export default function Return() {
       return;
     }
 
+    // Already arrived at an OFFICE stop and its roster is showing inline in Route
+    // Overview (see isAtOfficeAwaitingAttendance) — this tap submits that office's
+    // bulk attendance and proceeds, replacing what used to be a separate sheet's own
+    // "Proceed" button. Mirrors the pre-trip office's submit-then-move-on shape exactly.
+    if (isAtOfficeAwaitingAttendance) {
+      const unmarked = officeSheetEmployees.filter((e) => e.status === null);
+      if (unmarked.length > 0) {
+        toast.show(
+          <CustomToast type="error" message={tr('markAllStopAttendance')} />,
+          { duration: 3500, position: 'top', backgroundColor: '#ff4545' },
+        );
+        return;
+      }
+
+      const { nextStop: nextDrivingStop, isLast: wasLastStop } = computeNextNavigableStopAfter(currentStop.id);
+      setConfirmedLastStopOverride(wasLastStop);
+      setIsConfirmingOffice(true);
+
+      try {
+        await submitReturnAttendance({
+          shuttleTripId: tripId,
+          entries: officeSheetEmployees.map((emp) => ({
+            employee_id: emp.id,
+            status: emp.status === 'present' ? 'PRESENT' : 'ABSENT',
+          })),
+        }).unwrap();
+        setConfirmedOfficeRosters((prev) => ({ ...prev, [currentStop.id]: officeSheetEmployees }));
+        await proceedFromStop({ tripId }).unwrap();
+      } catch {
+        setIsConfirmingOffice(false);
+        toast.show(
+          <CustomToast type="error" message={tr('failedProceed')} />,
+          { duration: 4000, position: 'top', backgroundColor: '#ff4545' },
+        );
+        return;
+      }
+
+      // isConfirmingOffice is deliberately NOT cleared here — see the useEffect above
+      // for why, and refetchActiveTrip below still needs to run regardless.
+
+      // Fire-and-forget, called only now that both writes are done — see
+      // submitReturnAttendance's own comment for why an auto-invalidated refetch
+      // triggered right after the first write alone would race proceedFromStop's
+      // optimistic patch and can revert current_stop_status back to stale AT_STOP,
+      // leaving the button stuck showing "Confirm attendance & proceed" forever.
+      refetchActiveTrip();
+
+      // Deliberately NOT clearing officeSheetEmployees here — the render below keeps
+      // showing it (disabled) for this exact stop until the historical, server-truth
+      // view is ready to take over, so the roster stays visibly continuous through this
+      // submit-and-refetch window instead of gapping out to nothing for a beat. It gets
+      // naturally replaced the next time a different office's roster is initialized, or
+      // just persists harmlessly if this was the last office of the trip.
+      // Last stop: no Maps hand-off — lastStopDropConfirmed takes over once the
+      // refetch above lands, flipping the main button to "Complete Trip".
+      if (!wasLastStop && nextDrivingStop) {
+        openInMaps(nextDrivingStop);
+      }
+      return;
+    }
+
     // Last stop: "Mark as Arrived" first, same as any other stop — this
     // confirms its drop-off with a real timestamp instead of relying on the
     // straggler sweep. Only once that's done does the button become
     // "Complete Trip", tapped later once the driver is actually home.
     if (isLastStop) {
       if (!lastStopDropConfirmed) {
-        // Same confirmation as any other stop — no Maps hand-off, there's no next stop.
         try {
           await arriveAtStop({ tripId, current_stop_id: currentStop.id }).unwrap();
+          // OFFICE (last stop, e.g. a second/only office at the very end of a multi-office
+          // route) is a boarding origin in the evening — attendance is required before
+          // moving on, same as any other OFFICE stop. Its roster now shows inline in Route
+          // Overview (isAtOfficeAwaitingAttendance flips true once this response lands);
+          // the branch above handles the driver's next tap. Nothing more to do here.
+          if (currentStop.stopType === 'OFFICE') {
+            return;
+          }
+          // PICKUP (home): no attendance UI — server already handled the drop-off.
           await proceedFromStop({ tripId }).unwrap();
         } catch {
           toast.show(
@@ -370,12 +749,18 @@ export default function Return() {
       return;
     }
 
-    // Middle stop: mark arrived (flips this stop's present employees to
-    // DROPPED_OFF server-side — the manual replacement for the old GPS geofence),
-    // then hand off to Maps for the next stop. No attendance sheet here — everyone
-    // was already marked present/absent before the ride began.
+    // Middle stop. OFFICE = a normal boarding-origin stop on this leg (2nd/3rd office on
+    // a multi-office route) — attendance is required, scoped to whoever boards there
+    // (office_stop_id). Its roster now shows inline in Route Overview once this arrive
+    // call lands; the isAtOfficeAwaitingAttendance branch above handles the next tap.
+    // PICKUP (home) = unchanged from today: mark arrived (flips this stop's present
+    // employees to DROPPED_OFF server-side), then hand off to Maps. No attendance UI —
+    // everyone was already marked present/absent before the ride began.
     try {
       await arriveAtStop({ tripId, current_stop_id: currentStop.id }).unwrap();
+      if (currentStop.stopType === 'OFFICE') {
+        return;
+      }
       await proceedFromStop({ tripId }).unwrap();
       if (nextStopAfterCurrent) {
         openInMaps(nextStopAfterCurrent);
@@ -392,6 +777,11 @@ export default function Return() {
     activeTrip?.current_stop_id,
     activeTrip?.current_stop_status,
     employees,
+    officeStop,
+    officeSheetEmployees,
+    isAtOfficeAwaitingAttendance,
+    computeNextNavigableStopAfter,
+    tripEmployeesRaw,
     rideStarted,
     isLastStop,
     currentStop,
@@ -569,96 +959,10 @@ export default function Return() {
           </AppText>
         </View>
 
-        {/* Attendance section */}
-        <View
-          className={`mb-6 ${isRTL ? 'items-end' : ''}`}
-          style={isRTL ? { overflow: 'visible' } : undefined}
-        >
-          <AppText
-            className={`mb-1 text-black ${isRTL ? 'font-bold' : 'text-xl font-bold'}`}
-            style={buildRtlSectionTitleStyle(language)}
-          >
-            {tr('markAttendance')}
-          </AppText>
-          <AppText
-            className={`mb-4 text-[#6B7280] ${isRTL ? '' : 'text-sm'}`}
-            style={buildRtlSmallSubtitleTextStyle(language)}
-          >
-            {tr('markAttendanceSubtitle')}
-          </AppText>
-
-          <View className="overflow-hidden">
-            {employees.map((emp, index) => (
-              <View
-                key={emp.id}
-                className="flex-row items-center py-4 p"
-                style={
-                  index < employees.length - 1
-                    ? { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: 'rgba(156,163,175,0.35)' }
-                    : undefined
-                }
-              >
-                <View
-                  className="w-14 h-14 rounded-full items-center justify-center mr-3 bg-gray-200"
-                  style={{
-                    borderWidth: 2,
-                    borderColor: '#FF5A00'
-                  }}
-                >
-                  <AppText className="text-black font-semibold text-lg">
-                    {getInitials(emp.name)}
-                  </AppText>
-                </View>
-                <View className="flex-1 min-w-0 mr-2">
-                  <AppText className="text-black font-bold text-[17px]" numberOfLines={1}>
-                    {emp.name}
-                  </AppText>
-                  <View className="flex-row items-center mt-1">
-                    <AppText className="text-[#8E8E93] text-[15px] mr-2" numberOfLines={1}>
-                      {emp.number || 'No number'}
-                    </AppText>
-                  </View>
-                </View>
-                <View className="flex-row gap-3">
-                  <Pressable
-                    disabled={rideStarted}
-                    onPress={() => handleMarkAbsent(emp.id)}
-                    className="w-[42px] h-[42px] rounded-full items-center justify-center border "
-                    style={{
-                      backgroundColor: emp.status === 'absent' ? '#D27360' : 'transparent',
-                      borderColor: emp.status === 'absent' ? '#D27360' : emp.status === 'present' ? '#C0C0C0' : '#D27360',
-                      opacity: rideStarted ? 0.5 : 1,
-                    }}
-                  >
-                    <Ionicons
-                      name="close"
-                      size={24}
-                      color={emp.status === 'absent' ? '#FFF' : emp.status === 'present' ? '#C0C0C0' : '#D27360'}
-                    />
-                  </Pressable>
-                  <Pressable
-                    disabled={rideStarted}
-                    onPress={() => handleMarkPresent(emp.id)}
-                    className="w-[42px] h-[42px] rounded-full items-center justify-center border"
-                    style={{
-                      backgroundColor: emp.status === 'present' ? '#4AA388' : 'transparent',
-                      borderColor: emp.status === 'present' ? '#4AA388' : emp.status === 'absent' ? '#C0C0C0' : '#4AA388',
-                      opacity: rideStarted ? 0.5 : 1,
-                    }}
-                  >
-                    <Ionicons
-                      name="checkmark"
-                      size={24}
-                      color={emp.status === 'present' ? '#FFF' : emp.status === 'absent' ? '#C0C0C0' : '#4AA388'}
-                    />
-                  </Pressable>
-                </View>
-              </View>
-            ))}
-          </View>
-        </View>
-
-        {/* Route Overview */}
+        {/* Route Overview — attendance for whichever office is currently actionable (the
+            pre-trip start office before Begin Ride, or the office the driver has just
+            arrived at mid-route) nests directly under that office's own row below,
+            instead of a separate section up here or a modal sheet. */}
         <View className="mb-6">
           <AppText
             className={`mb-6 text-black ${isRTL ? 'font-bold' : 'text-xl font-bold'}`}
@@ -668,14 +972,75 @@ export default function Return() {
           </AppText>
           <View className="ml-2">
             {routeOverviewStops.map((stop, index) => {
-              // Office is where the driver actually is pre-ride, so it's "current" until
-              // Begin Ride is tapped — then the highlight hands off to whichever real stop
-              // the driver is heading to/at, same mechanism morning already uses. Once the
-              // last stop's drop-off is confirmed, the highlight hands off again to the
-              // Home step below rather than staying stuck on the last stop.
-              const isCurrent = stop.isOffice
-                ? !rideStarted
-                : rideStarted && !stop.skipped && currentStop?.id === stop.id && !lastStopDropConfirmed;
+              // Pre-ride: only the starting office (the one whose attendance is taken
+              // before Begin Ride) is "current". Other OFFICE stops on a multi-office
+              // route are later destinations and must stay unfilled until the driver
+              // actually heads there. After Begin Ride, highlight follows currentStop
+              // the same way morning already does. Once the last stop's drop-off is
+              // confirmed, the highlight hands off again to the Home step below.
+              const isCurrent = rideStarted
+                ? !stop.skipped && currentStop?.id === stop.id && !effectiveLastStopDropConfirmed
+                : officeStop?.id === stop.id;
+
+              // Exactly one office is ever "open" for attendance at a time: the pre-trip
+              // start office before Begin Ride, or whichever office officeSheetEmployees
+              // currently holds. That second case covers BOTH the driver actively marking
+              // it right now AND the submit-and-refetch window right after they confirm —
+              // officeSheetEmployees isn't cleared until a *different* office's roster
+              // replaces it, so the row stays visibly continuous instead of gapping out
+              // for a beat while the historical (server-truth) view catches up. Only the
+              // tick/cross buttons themselves get gated by whether it's still genuinely
+              // editable (isEditableNow) — the roster itself keeps showing regardless.
+              const isPreTripOfficeRow = !rideStarted && officeStop?.id === stop.id;
+              const isLiveOfficeAttendanceRow =
+                stop.isOffice && officeSheetEmployees.length > 0 && officeSheetEmployees[0]?.stopId === stop.id;
+              const isEditableNow =
+                isAtOfficeAwaitingAttendance && currentStop?.id === stop.id && !isSubmitting && !isProceeding;
+              const officeRoster = stop.isOffice
+                ? tripEmployeesRaw.filter((emp: TripEmployee) => emp.officeStopId === stop.id)
+                : [];
+              // A locally-confirmed snapshot (see confirmedOfficeRosters above) means we
+              // already know this office's exact roster+status — no need to wait on
+              // attendanceByEmployeeId (server refetch) to decide whether this row has
+              // something to show.
+              const confirmedRosterForStop = stop.isOffice ? confirmedOfficeRosters[stop.id] : undefined;
+              // Any OTHER office that's already been through this (attendance records
+              // already exist for its roster, and it's not the one officeSheetEmployees
+              // is currently holding) keeps showing read-only — kept for reference for
+              // the rest of the trip instead of vanishing once the driver proceeds past it.
+              const isHistoricalOfficeRow =
+                !isPreTripOfficeRow
+                && !isLiveOfficeAttendanceRow
+                && rideStarted
+                && stop.isOffice
+                && (confirmedRosterForStop !== undefined || officeRoster.some((emp) => attendanceByEmployeeId.has(emp.id)));
+
+              // No-ops by default (the historical branch below is read-only, and this
+              // covers it defensively even if `disabled` on the row ever stops being
+              // honored — a tap here must never be able to reach a live mutation).
+              let attendanceRoster: ReturnEmployee[] | null = null;
+              let onMarkAbsent: (id: string) => void = () => {};
+              let onMarkPresent: (id: string) => void = () => {};
+              let rowDisabled = true;
+              if (isPreTripOfficeRow) {
+                attendanceRoster = employees;
+                onMarkAbsent = handleMarkAbsent;
+                onMarkPresent = handleMarkPresent;
+                rowDisabled = false;
+              } else if (isLiveOfficeAttendanceRow) {
+                attendanceRoster = officeSheetEmployees;
+                onMarkAbsent = handleMarkOfficeSheetAbsent;
+                onMarkPresent = handleMarkOfficeSheetPresent;
+                rowDisabled = !isEditableNow;
+              } else if (isHistoricalOfficeRow) {
+                attendanceRoster = confirmedRosterForStop ?? officeRoster.map((emp) => {
+                  const log = attendanceByEmployeeId.get(emp.id);
+                  const normalized = log?.status?.toUpperCase();
+                  const status: EmployeeStatus =
+                    normalized === 'PRESENT' || normalized === 'BOARDED' ? 'present' : normalized === 'ABSENT' ? 'absent' : null;
+                  return { id: emp.id, name: emp.fullName, number: emp.phone ?? '', status, stopId: stop.id };
+                });
+              }
 
               return (
                 <View key={stop.id || index} className="flex-row items-start">
@@ -687,9 +1052,9 @@ export default function Return() {
                       style={{ borderWidth: isCurrent ? 4 : 3, borderColor: '#FFF' }}
                     />
                     {/* Always connects onward — the Home step below is appended after every stop. */}
-                    <View className={`w-[2px] h-12 my-1 ${isCurrent ? 'bg-[#FF5A00]' : 'bg-[#E5E5E5]'}`} />
+                    <View className={`w-[2px] my-1 ${attendanceRoster?.length ? 'flex-1' : 'h-12'} ${isCurrent ? 'bg-[#FF5A00]' : 'bg-[#E5E5E5]'}`} />
                   </View>
-                  <View className={`flex-1 ${isCurrent ? 'mt-[-4px]' : 'mt-[-2px]'}`}>
+                  <View className={`flex-1 ${isCurrent ? 'mt-[-4px]' : 'mt-[-2px]'} ${attendanceRoster?.length ? 'pb-4' : ''}`}>
                     {stop.skipped ? (
                       <AppText className="text-[17px] font-medium text-[#9CA3AF]">
                         <AppText style={{ textDecorationLine: 'line-through' }}>{stop.name}</AppText>
@@ -700,16 +1065,31 @@ export default function Return() {
                       <>
                         <AppText className={`text-[17px] ${isCurrent ? 'font-bold text-black' : 'font-medium text-[#6B7280]'}`}>
                           {stop.name}
-                          {stop.isOffice && (
-                            <AppText className="text-[13px] font-semibold text-[#9CA3AF]">
-                              {'  '}({tr('officeStart')})
-                            </AppText>
-                          )}
                         </AppText>
-                        {stop.eta && (
-                          <AppText className="text-[13px] font-medium text-[#9CA3AF] mt-0.5">{stop.eta}</AppText>
+                        {(stop.eta || stop.isOffice) && (
+                          <AppText className="text-[13px] font-medium text-[#9CA3AF] mt-0.5">
+                            {stop.eta}
+                            {stop.isOffice
+                              ? `${stop.eta ? '  ' : ''}${tr('officeLabel')}${officeStop?.id === stop.id ? ` (${tr('officeStart')})` : ''}`
+                              : ''}
+                          </AppText>
                         )}
                       </>
+                    )}
+
+                    {!!attendanceRoster?.length && (
+                      <View className="mt-3 rounded-xl border border-[#EEE] px-3">
+                        {attendanceRoster.map((emp, i) => (
+                          <AttendanceRow
+                            key={emp.id}
+                            emp={emp}
+                            isLast={i === attendanceRoster.length - 1}
+                            onMarkAbsent={onMarkAbsent}
+                            onMarkPresent={onMarkPresent}
+                            disabled={rowDisabled}
+                          />
+                        ))}
+                      </View>
                     )}
                   </View>
                 </View>
@@ -721,15 +1101,15 @@ export default function Return() {
               <View className="items-center mr-4">
                 <View
                   className={`rounded-full shadow-sm items-center justify-center ${
-                    lastStopDropConfirmed ? 'w-5 h-5 bg-[#FF5A00]' : 'w-4 h-4 bg-[#A3A3A3]'
+                    effectiveLastStopDropConfirmed ? 'w-5 h-5 bg-[#FF5A00]' : 'w-4 h-4 bg-[#A3A3A3]'
                   }`}
-                  style={{ borderWidth: lastStopDropConfirmed ? 4 : 3, borderColor: '#FFF' }}
+                  style={{ borderWidth: effectiveLastStopDropConfirmed ? 4 : 3, borderColor: '#FFF' }}
                 >
-                  <Ionicons name="home" size={lastStopDropConfirmed ? 11 : 9} color="#FFF" />
+                  <Ionicons name="home" size={effectiveLastStopDropConfirmed ? 11 : 9} color="#FFF" />
                 </View>
               </View>
-              <View className={`flex-1 ${lastStopDropConfirmed ? 'mt-[-4px]' : 'mt-[-2px]'}`}>
-                <AppText className={`text-[17px] ${lastStopDropConfirmed ? 'font-bold text-black' : 'font-medium text-[#6B7280]'}`}>
+              <View className={`flex-1 ${effectiveLastStopDropConfirmed ? 'mt-[-4px]' : 'mt-[-2px]'}`}>
+                <AppText className={`text-[17px] ${effectiveLastStopDropConfirmed ? 'font-bold text-black' : 'font-medium text-[#6B7280]'}`}>
                   {tr('homeAfterStop')}
                 </AppText>
               </View>
@@ -782,9 +1162,11 @@ export default function Return() {
           )}
           <AppText className="text-white text-[17px] font-bold mr-1">
             {rideStarted
-              ? (lastStopDropConfirmed
-                ? (isActionLoading ? tr('completing') : tr('completeTrip'))
-                : (isActionLoading ? tr('markingArrived') : tr('markAsArrived')))
+              ? (isAtOfficeAwaitingAttendance
+                ? (isActionLoading ? tr('proceeding') : tr('confirmAttendanceProceed'))
+                : effectiveLastStopDropConfirmed
+                  ? (isActionLoading ? tr('completing') : tr('completeTrip'))
+                  : (isActionLoading ? tr('markingArrived') : tr('markAsArrived')))
               : (isActionLoading ? tr('beginning') : tr('beginRide'))}
           </AppText>
           {/* <Ionicons name="chevron-forward" size={22} color="#FFF" /> */}
@@ -793,3 +1175,4 @@ export default function Return() {
     </SafeAreaView>
   );
 }
+

@@ -173,6 +173,7 @@ const MOCK_ROUTE_STOPS = [
     evening_eta: '18:00',
     lat: 24.873044,
     lng: 67.002354,
+    stop_type: 'PICKUP' as const,
   },
   {
     id: 5,
@@ -183,6 +184,7 @@ const MOCK_ROUTE_STOPS = [
     evening_eta: '18:15',
     lat: 24.859338,
     lng: 66.994114,
+    stop_type: 'PICKUP' as const,
   },
   {
     id: 6,
@@ -193,6 +195,7 @@ const MOCK_ROUTE_STOPS = [
     evening_eta: '18:35',
     lat: 24.867437,
     lng: 67.029305,
+    stop_type: 'OFFICE' as const,
   },
 ];
 

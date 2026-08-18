@@ -334,6 +334,9 @@ export default function RideInProgress() {
 
   // CRASH RECOVERY: If app is relaunched while driver was at a stop (AT_STOP),
   // automatically restore the attendance bottom sheet so they can continue.
+  // OFFICE stops (morning = destination, no attendance) never got a sheet in the first
+  // place — the interrupted transaction there is just "finish the arrive→proceed pair,"
+  // so recover by completing that instead of opening a sheet that was never shown.
   const hasAutoOpenedRef = useRef(false);
   useEffect(() => {
     if (
@@ -343,6 +346,12 @@ export default function RideInProgress() {
       !isTripsLoading
     ) {
       hasAutoOpenedRef.current = true;
+      if (currentStop?.stopType === 'OFFICE') {
+        proceedFromStop({ tripId: activeTrip.id }).catch(() => {
+          // Swallow — driver can retry via the main slide button if this fails.
+        });
+        return;
+      }
       setAttendanceStopId(activeTrip.current_stop_id);
       // Small delay to let the BottomSheet mount before snapping
       const timer = setTimeout(() => {
@@ -350,7 +359,7 @@ export default function RideInProgress() {
       }, 400);
       return () => clearTimeout(timer);
     }
-  }, [isAtStop, activeTrip?.current_stop_id, isTripsLoading]);
+  }, [isAtStop, activeTrip?.current_stop_id, isTripsLoading, currentStop, proceedFromStop, activeTrip?.id]);
 
   // Per-employee loading state for inline tick/cross actions
   const [employeeLoadingMap, setEmployeeLoadingMap] = useState<Record<string, EmployeeLoadingAction>>({});
@@ -524,6 +533,37 @@ export default function RideInProgress() {
     if (!activeTrip) return;
 
     if (!isLastStop) {
+      // OFFICE stops are a morning destination (drop-off), never a boarding origin — no
+      // attendance UI, and unlike PICKUP stops the driver doesn't need to review anyone
+      // before moving on, so arrive + proceed run back-to-back with just a confirmation.
+      if (currentStop.stopType === 'OFFICE') {
+        try {
+          await arriveAtStop({
+            tripId: activeTrip.id,
+            current_stop_id: currentStop.id,
+          }).unwrap();
+          const nextDrivingStop = nextStopAfterCurrent;
+          await proceedFromStop({ tripId: activeTrip.id }).unwrap();
+          toast.show(
+            <CustomToast
+              type="success"
+              message={tr('arrivedAtOffice').replace('{{name}}', currentStop.name)}
+            />,
+            { duration: 3000, position: 'top', backgroundColor: '#1ad41d' },
+          );
+          if (nextDrivingStop) {
+            openInMaps(nextDrivingStop);
+          }
+        } catch {
+          Alert.alert(
+            'Error',
+            'Failed to mark as arrived. Please try again.',
+            [{ text: 'OK' }],
+          );
+        }
+        return;
+      }
+
       try {
         await arriveAtStop({
           tripId: activeTrip.id,
@@ -563,9 +603,12 @@ export default function RideInProgress() {
     startTracking,
     tripId,
     arriveAtStop,
+    proceedFromStop,
     completeTrip,
     stops.length,
     refetchActiveTrip,
+    toast,
+    tr,
   ]);
 
   return (
@@ -694,8 +737,11 @@ export default function RideInProgress() {
                           <Text className={`text-[17px] ${isCurrent ? 'font-bold text-black' : 'font-medium text-[#6B7280]'}`}>
                             {stop.name}
                           </Text>
-                          {stop.eta && (
-                            <Text className="text-[13px] font-medium text-[#9CA3AF] mt-0.5">{stop.eta}</Text>
+                          {(stop.eta || stop.isOffice) && (
+                            <Text className="text-[13px] font-medium text-[#9CA3AF] mt-0.5">
+                              {stop.eta}
+                              {stop.isOffice ? `${stop.eta ? '  ' : ''}${tr('officeLabel')}` : ''}
+                            </Text>
                           )}
                         </>
                       )}

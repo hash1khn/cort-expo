@@ -8,6 +8,11 @@ export type Stop = {
   eta: string;
   lat: number;
   lng: number;
+  /** PICKUP = home/neighborhood stop, OFFICE = company office stop. Drives whether
+   * attendance UI is shown at this stop for the trip's direction — PICKUP stops need it
+   * in the morning, OFFICE stops need it in the evening; the other stop type at each
+   * direction is a destination (drop-off happens automatically server-side, no UI). */
+  stopType: 'PICKUP' | 'OFFICE';
 };
 
 function formatEta(stop: { morning_eta?: string | null; evening_eta?: string | null }, direction: 'MORNING' | 'EVENING'): string {
@@ -38,6 +43,7 @@ function buildStops(activeTrip: ShuttleTrip | null): Stop[] {
     eta: formatEta(stop, direction),
     lat: stop.lat ?? 0,
     lng: stop.lng ?? 0,
+    stopType: stop.stop_type ?? 'PICKUP',
   }));
 }
 
@@ -56,6 +62,7 @@ function buildDisplayStops(activeTrip: ShuttleTrip | null): DisplayStop[] {
     eta: formatEta(s, direction),
     skipped: false,
     sequence_order: s.sequence_order,
+    isOffice: s.stop_type === 'OFFICE',
   }));
   const skipped = excludedRaw.map((s) => ({
     id: s.id,
@@ -63,10 +70,11 @@ function buildDisplayStops(activeTrip: ShuttleTrip | null): DisplayStop[] {
     eta: '—',
     skipped: true,
     sequence_order: s.sequence_order,
+    isOffice: false,
   }));
   const rest = [...navigable, ...skipped]
     .sort((a, b) => a.sequence_order - b.sequence_order)
-    .map(({ id, name, eta, skipped }) => ({ id, name, eta, skipped }));
+    .map(({ id, name, eta, skipped, isOffice }) => ({ id, name, eta, skipped, isOffice }));
   const office = buildOfficeDisplayStop(activeTrip);
   // Office is always evening_sequence = 1 by convention — guaranteed to sort before every
   // real stop — so it's simplest to just prepend it rather than fold it into the sort above.

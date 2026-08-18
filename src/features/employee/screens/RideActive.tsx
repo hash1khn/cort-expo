@@ -222,6 +222,13 @@ export default function RideActive() {
   const apiPickupStopId = activeTrip?.my_pickup_stop_id ?? null;
   const myPickupStopId = apiPickupStopId ?? (myPickupStopIdParam ? Number(myPickupStopIdParam) : null);
 
+  // ── myStopId ──────────────────────────────────────────────────────────────
+  // Direction-aware "which stop is mine for boarding purposes on this leg" — the backend's
+  // my_stop_id already resolves to my_office_stop_id for EVENING (multi-office aware) and
+  // my_pickup_stop_id otherwise. Falls back to myPickupStopId when the trip hasn't loaded
+  // yet (e.g. the route-param-only initial render), same as apiPickupStopId above.
+  const myStopId = activeTrip?.my_stop_id ?? myPickupStopId;
+
   const routeStops = useMemo(
     () =>
       (activeTrip?.routes?.route_stops ?? [])
@@ -283,8 +290,8 @@ export default function RideActive() {
 
   const captainIsHere =
     currentStopId !== null &&
-    myPickupStopId !== null &&
-    currentStopId === myPickupStopId &&
+    myStopId !== null &&
+    currentStopId === myStopId &&
     currentStopStatus === 'AT_STOP';
 
   // ── Boarding mutation ─────────────────────────────────────────────────────

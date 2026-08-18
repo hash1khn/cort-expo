@@ -19,6 +19,10 @@ type RouteStop = {
   lng: number | null;
   /** True for a synthetic stop backed by a same-day route override, not a real route_stops row. */
   is_override?: boolean;
+  /** PICKUP = home/neighborhood stop, OFFICE = company office stop. A route can have several
+   * of either. Drives whether attendance UI is required at this stop for a given trip
+   * direction — see the symmetric rule documented in useActiveTrip.ts / RideInProgress.tsx. */
+  stop_type: 'PICKUP' | 'OFFICE';
 };
 
 type RouteCount = {
@@ -112,6 +116,10 @@ export type TripEmployee = {
   pickupStopId: number | null;
   pickupStopName: string | null;
   pickupStopOrder: number | null;
+  /** Which office stop this employee is dropped at (morning) / boards from (evening) —
+   * null for legacy/pre-backfill assignments, in which case callers should fall back to
+   * treating the employee as belonging to the route's first/only office stop. */
+  officeStopId: number | null;
 };
 
 type TodayTripsWrappedResponse = {
@@ -204,6 +212,7 @@ export const shuttleApi = baseApi.injectEndpoints({
             pickupStopName: stop.name ?? row.stop_name ?? null,
             pickupStopOrder:
               typeof stop.sequence_order === 'number' ? stop.sequence_order : null,
+            officeStopId: row.office_stop_id ?? null,
           } as TripEmployee;
         });
       },
@@ -256,6 +265,11 @@ export const shuttleApi = baseApi.injectEndpoints({
           ...(status ? { status } : {}),
         },
       }),
+      // route_stops (and its baked-in "skip this stop if everyone assigned is absent"
+      // exclusion, computed server-side) lives on getTodayTrip, tagged 'ShuttleTrip' — a
+      // present/absent change can flip whether a later stop should still be navigated to,
+      // so the trip must be refetched here too, not just the attendance sub-cache below.
+      invalidatesTags: (result, error) => (error ? [] : ['ShuttleTrip']),
       async onQueryStarted(
         { shuttleTripId, employeeId },
         { dispatch, queryFulfilled },
@@ -302,6 +316,9 @@ export const shuttleApi = baseApi.injectEndpoints({
           employee_id: employeeId,
         },
       }),
+      // Same reasoning as scanPassenger above — marking someone absent can newly empty
+      // out a later stop, which only getTodayTrip's route_stops/excluded_stops reflects.
+      invalidatesTags: (result, error) => (error ? [] : ['ShuttleTrip']),
       async onQueryStarted(
         { shuttleTripId, employeeId },
         { dispatch, queryFulfilled },
@@ -405,6 +422,17 @@ export const shuttleApi = baseApi.injectEndpoints({
           entries,
         },
       }),
+      // route_stops/excluded_stops on getTodayTrip (tagged 'ShuttleTrip') bakes in the
+      // "skip this stop if everyone assigned is absent" exclusion, computed server-side,
+      // and does need to be refreshed after this call — but NOT via automatic tag
+      // invalidation here. Every caller of this mutation (Return.tsx) immediately follows
+      // it with a second write (startTrip, or proceedFromStop) that changes trip state
+      // further; an auto-triggered background refetch fired the instant THIS mutation
+      // resolves can still be in flight when that second write's own optimistic patch
+      // lands, and land after it — silently reverting the newer, correct state back to
+      // stale data (e.g. current_stop_status flipping back to AT_STOP after
+      // proceedFromStop already moved it to EN_ROUTE). Each caller instead explicitly
+      // calls refetchActiveTrip() once, after its full write sequence completes.
       invalidatesTags: (result, error, { shuttleTripId }) =>
         error ? [] : [{ type: 'Attendance', id: shuttleTripId }],
     }),

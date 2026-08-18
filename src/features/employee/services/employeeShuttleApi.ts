@@ -10,6 +10,9 @@ export type RouteStop = {
   evening_eta: string | null;
   lat: number | null;
   lng: number | null;
+  /** PICKUP = home/neighborhood stop, OFFICE = company office stop. A route can have several
+   * of either — see the symmetric attendance rule documented alongside my_stop_id below. */
+  stop_type: 'PICKUP' | 'OFFICE';
 };
 
 export type ShuttleTripForEmployee = {
@@ -28,6 +31,14 @@ export type ShuttleTripForEmployee = {
   my_pickup_stop_id?: number | null;
   /** Full details of this employee's pickup stop (null if unassigned) */
   my_pickup_stop?: RouteStop | null;
+  /** The ID of this employee's assigned office stop — which office they're dropped at
+   * (morning) / board from (evening). Null for legacy/pre-backfill assignments or an
+   * inbound daily-override (which always targets a pickup-type stop). */
+  my_office_stop_id?: number | null;
+  /** Direction-aware convenience field: which stop is "mine" for boarding-origin purposes
+   * on this leg — my_office_stop_id when direction is EVENING, my_pickup_stop_id otherwise.
+   * Use this (not my_pickup_stop_id) for "is the driver at my stop right now" comparisons. */
+  my_stop_id?: number | null;
   /** This employee's own boarding/drop-off status on the trip ('BOARDED' | 'DROPPED_OFF' | 'ABSENT' | null).
    * Only populated for currently STARTED/IN_PROGRESS trips — distinct from the trip-level `status`,
    * since an evening trip can still be IN_PROGRESS for other riders after this employee is dropped off. */
