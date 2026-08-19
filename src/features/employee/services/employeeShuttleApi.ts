@@ -133,6 +133,25 @@ export const employeeShuttleApi = baseApi.injectEndpoints({
       providesTags: ['ShuttleTrip'],
     }),
 
+    getShuttleTripsForEmployeePaginated: builder.query<
+      { data: ShuttleTripForEmployee[]; pagination: ShuttleTripsForEmployeePagination },
+      GetShuttleTripsForEmployeeParams
+    >({
+      query: ({ companyId, employeeId, page, limit, todayOnly }) => ({
+        url: '/shuttle-trips/for-employee',
+        params: {
+          company_id: companyId,
+          employee_id: employeeId,
+          ...(page != null ? { page } : {}),
+          ...(limit != null ? { limit } : {}),
+          ...(todayOnly ? { today_only: true } : {}),
+        },
+      }),
+      transformResponse: (response: { data: ShuttleTripForEmployee[]; pagination: ShuttleTripsForEmployeePagination }) =>
+        response,
+      providesTags: ['ShuttleTrip'],
+    }),
+
     getShuttlePolyline: builder.query<ShuttlePolylineResponse, GetShuttlePolylineParams>({
       query: ({ tripId, driverLat, driverLng }) => ({
         url: `/shuttle-trips/${tripId}/polyline`,
@@ -149,6 +168,7 @@ export const employeeShuttleApi = baseApi.injectEndpoints({
 export const {
   useGetShuttleTripsForEmployeeQuery,
   useGetShuttlePolylineQuery,
+  useLazyGetShuttleTripsForEmployeePaginatedQuery,
 } = employeeShuttleApi;
 
 /**

@@ -289,6 +289,7 @@ export const bookingsApi = baseApi.injectEndpoints({
 
 export const {
   useGetChauffeurBookingsQuery,
+  useLazyGetChauffeurBookingsQuery,
   useGetEmployeeActiveChauffeurBookingQuery,
   useRequestNextDayPickupMutation,
   useSubmitChauffeurReviewMutation,

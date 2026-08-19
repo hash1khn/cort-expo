@@ -1,5 +1,5 @@
-import React, { useMemo, useState } from 'react';
-import { View, Text as RNText, Pressable, ScrollView } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { View, Text as RNText, Pressable, FlatList, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from "@react-native-vector-icons/ionicons/static";
 import { useRouter } from 'expo-router';
@@ -14,8 +14,8 @@ import {
   buildRtlTabTextStyle,
 } from '@/i18n/types';
 import { useAppSelector } from '../../../store/hooks';
-import { useGetChauffeurBookingsQuery } from '../services/bookingsApi';
-import { useGetShuttleTripsForEmployeeQuery } from '../services/employeeShuttleApi';
+import { useLazyGetChauffeurBookingsQuery } from '../services/bookingsApi';
+import { useLazyGetShuttleTripsForEmployeePaginatedQuery } from '../services/employeeShuttleApi';
 
 const Text = (props: React.ComponentProps<typeof RNText>) => {
   return <RNText {...props} style={[{ fontFamily }, props.style]} />;
@@ -31,8 +31,10 @@ type RideCard = {
   rideType: 'shuttle' | 'chauffeur';
   bookingId?: number;
   tripId?: number;
-  sortKey: number; // unix ms for sorting
+  sortKey: number;
 };
+
+const PAGE_SIZE = 15;
 
 export default function EmployeeRides() {
   const router = useRouter();
@@ -45,79 +47,172 @@ export default function EmployeeRides() {
   const hasChauffeur = user?.enabled_services?.chauffeur ?? false;
   const hasShuttle = user?.enabled_services?.shuttle ?? false;
 
-  const { data: chauffeurBookingsData, isLoading: isChauffeurLoading } =
-    useGetChauffeurBookingsQuery(
-      { companyId, employeeId },
-      { skip: !companyId || !employeeId || !hasChauffeur },
-    );
+  const [triggerChauffeur] = useLazyGetChauffeurBookingsQuery();
+  const [triggerShuttle] = useLazyGetShuttleTripsForEmployeePaginatedQuery();
 
-  const { data: shuttleTrips = [], isLoading: isShuttleLoading } =
-    useGetShuttleTripsForEmployeeQuery(
-      { companyId, employeeId },
-      { skip: !companyId || !employeeId || !hasShuttle },
-    );
+  const [chauffeurCards, setChauffeurCards] = useState<RideCard[]>([]);
+  const [shuttleCards, setShuttleCards] = useState<RideCard[]>([]);
+  const [chauffeurHasNext, setChauffeurHasNext] = useState(true);
+  const [shuttleHasNext, setShuttleHasNext] = useState(true);
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
 
-  const isLoading =
-    (hasChauffeur && isChauffeurLoading) || (hasShuttle && isShuttleLoading);
+  const chauffeurPage = useRef(1);
+  const shuttlePage = useRef(1);
+  const initialFetched = useRef(false);
 
-  const chauffeurCards = useMemo((): RideCard[] => {
-    const completed = (chauffeurBookingsData?.data ?? []).filter(
-      (b) => b.status === 'COMPLETED',
-    );
-    return completed.map((booking) => {
-      const rawDate = booking.scheduled_for ? new Date(booking.scheduled_for) : null;
-      return {
-        id: `chauffeur-${booking.id}`,
-        destination:
-          booking.destination_cities?.[0] ||
-          booking.pickup_address?.split(',')[0] ||
-          '—',
-        date: rawDate
-          ? rawDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-          : '—',
-        time: rawDate
-          ? rawDate.toLocaleTimeString('en-US', {
-              hour: '2-digit',
-              minute: '2-digit',
-              hour12: true,
-            })
-          : '—',
-        rideType: 'chauffeur',
-        bookingId: booking.id,
-        sortKey: rawDate?.getTime() ?? 0,
-      };
-    });
-  }, [chauffeurBookingsData]);
+  const mapChauffeurToCards = useCallback((bookings: any[]): RideCard[] => {
+    return bookings
+      .filter((b) => b.status === 'COMPLETED')
+      .map((booking) => {
+        const rawDate = booking.scheduled_for ? new Date(booking.scheduled_for) : null;
+        return {
+          id: `chauffeur-${booking.id}`,
+          destination:
+            booking.destination_cities?.[0] ||
+            booking.pickup_address?.split(',')[0] ||
+            '—',
+          date: rawDate
+            ? rawDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+            : '—',
+          time: rawDate
+            ? rawDate.toLocaleTimeString('en-US', {
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: true,
+              })
+            : '—',
+          rideType: 'chauffeur' as const,
+          bookingId: booking.id,
+          sortKey: rawDate?.getTime() ?? 0,
+        };
+      });
+  }, []);
 
-  const shuttleCards = useMemo((): RideCard[] => {
-    const completed = shuttleTrips.filter((t) => t.status === 'COMPLETED');
-    return completed.map((trip) => {
-      const rawDate = trip.trip_date ? new Date(trip.trip_date) : null;
-      // completed_at / started_at may be null for older trips — fall back to trip_date
-      const rawTime = trip.completed_at
-        ? new Date(trip.completed_at)
-        : trip.started_at
-          ? new Date(trip.started_at)
-          : rawDate;
-      return {
-        id: `shuttle-${trip.id}`,
-        destination: trip.routes?.name ?? 'Shuttle Route',
-        date: rawDate
-          ? rawDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-          : '—',
-        time: rawTime
-          ? rawTime.toLocaleTimeString('en-US', {
-              hour: '2-digit',
-              minute: '2-digit',
-              hour12: true,
-            })
-          : '—',
-        rideType: 'shuttle',
-        tripId: trip.id,
-        sortKey: rawDate?.getTime() ?? 0,
-      };
-    });
-  }, [shuttleTrips]);
+  const mapShuttleToCards = useCallback((trips: any[]): RideCard[] => {
+    return trips
+      .filter((t) => t.status === 'COMPLETED')
+      .map((trip) => {
+        const rawDate = trip.trip_date ? new Date(trip.trip_date) : null;
+        const rawTime = trip.completed_at
+          ? new Date(trip.completed_at)
+          : trip.started_at
+            ? new Date(trip.started_at)
+            : rawDate;
+        return {
+          id: `shuttle-${trip.id}`,
+          destination: trip.routes?.name ?? 'Shuttle Route',
+          date: rawDate
+            ? rawDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+            : '—',
+          time: rawTime
+            ? rawTime.toLocaleTimeString('en-US', {
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: true,
+              })
+            : '—',
+          rideType: 'shuttle' as const,
+          tripId: trip.id,
+          sortKey: rawDate?.getTime() ?? 0,
+        };
+      });
+  }, []);
+
+  const fetchInitial = useCallback(async () => {
+    if (!companyId || !employeeId) return;
+    setIsInitialLoading(true);
+
+    const promises: Promise<void>[] = [];
+
+    if (hasChauffeur) {
+      promises.push(
+        triggerChauffeur({ companyId, employeeId, page: 1, limit: PAGE_SIZE, status: 'COMPLETED' })
+          .unwrap()
+          .then((res) => {
+            setChauffeurCards(mapChauffeurToCards(res.data));
+            setChauffeurHasNext(res.pagination.hasNext);
+            chauffeurPage.current = 1;
+          })
+          .catch(() => {
+            setChauffeurHasNext(false);
+          }),
+      );
+    } else {
+      setChauffeurHasNext(false);
+    }
+
+    if (hasShuttle) {
+      promises.push(
+        triggerShuttle({ companyId, employeeId, page: 1, limit: PAGE_SIZE })
+          .unwrap()
+          .then((res) => {
+            setShuttleCards(mapShuttleToCards(res.data));
+            setShuttleHasNext(res.pagination.hasNext);
+            shuttlePage.current = 1;
+          })
+          .catch(() => {
+            setShuttleHasNext(false);
+          }),
+      );
+    } else {
+      setShuttleHasNext(false);
+    }
+
+    await Promise.all(promises);
+    setIsInitialLoading(false);
+  }, [companyId, employeeId, hasChauffeur, hasShuttle, triggerChauffeur, triggerShuttle, mapChauffeurToCards, mapShuttleToCards]);
+
+  useEffect(() => {
+    if (!initialFetched.current && companyId && employeeId) {
+      initialFetched.current = true;
+      fetchInitial();
+    }
+  }, [fetchInitial, companyId, employeeId]);
+
+  const canLoadMore = useMemo(() => {
+    if (activeFilter === 'chauffeur') return chauffeurHasNext;
+    if (activeFilter === 'shuttle') return shuttleHasNext;
+    return chauffeurHasNext || shuttleHasNext;
+  }, [activeFilter, chauffeurHasNext, shuttleHasNext]);
+
+  const loadMore = useCallback(async () => {
+    if (isLoadingMore || !canLoadMore) return;
+    setIsLoadingMore(true);
+
+    const promises: Promise<void>[] = [];
+
+    if ((activeFilter === 'all' || activeFilter === 'chauffeur') && chauffeurHasNext) {
+      const nextPage = chauffeurPage.current + 1;
+      promises.push(
+        triggerChauffeur({ companyId, employeeId, page: nextPage, limit: PAGE_SIZE, status: 'COMPLETED' })
+          .unwrap()
+          .then((res) => {
+            setChauffeurCards((prev) => [...prev, ...mapChauffeurToCards(res.data)]);
+            setChauffeurHasNext(res.pagination.hasNext);
+            chauffeurPage.current = nextPage;
+          })
+          .catch(() => {}),
+      );
+    }
+
+    if ((activeFilter === 'all' || activeFilter === 'shuttle') && shuttleHasNext) {
+      const nextPage = shuttlePage.current + 1;
+      promises.push(
+        triggerShuttle({ companyId, employeeId, page: nextPage, limit: PAGE_SIZE })
+          .unwrap()
+          .then((res) => {
+            setShuttleCards((prev) => [...prev, ...mapShuttleToCards(res.data)]);
+            setShuttleHasNext(res.pagination.hasNext);
+            shuttlePage.current = nextPage;
+          })
+          .catch(() => {}),
+      );
+    }
+
+    await Promise.all(promises);
+    setIsLoadingMore(false);
+  }, [isLoadingMore, canLoadMore, activeFilter, chauffeurHasNext, shuttleHasNext, companyId, employeeId, triggerChauffeur, triggerShuttle, mapChauffeurToCards, mapShuttleToCards]);
 
   const filteredCards = useMemo((): RideCard[] => {
     let cards: RideCard[];
@@ -132,6 +227,49 @@ export default function EmployeeRides() {
     shuttle: t('employee:filterShuttle'),
     chauffeur: t('employee:filterChauffeur'),
   };
+
+  const renderItem = useCallback(({ item: card }: { item: RideCard }) => (
+    <CompactRideHistoryCard
+      destination={card.destination}
+      date={card.date}
+      timeOfDropoff={card.time}
+      vehicleType={card.rideType}
+      rideType={card.rideType === 'shuttle' ? t('employee:filterShuttle') : t('employee:filterChauffeur')}
+      onPress={() =>
+        router.push({
+          pathname: '/employee/ride-details',
+          params: {
+            from: 'history',
+            rideDate: card.date,
+            ...(card.bookingId != null
+              ? { rideId: String(card.bookingId), rideType: 'chauffeur' }
+              : { rideId: String(card.tripId), rideType: 'shuttle' }),
+          },
+        })
+      }
+    />
+  ), [t, router]);
+
+  const renderFooter = useCallback(() => {
+    if (!isLoadingMore) return null;
+    return (
+      <View className="py-4 items-center">
+        <ActivityIndicator size="small" color={colors.primary} />
+      </View>
+    );
+  }, [isLoadingMore]);
+
+  const renderEmpty = useCallback(() => {
+    if (isInitialLoading) return null;
+    return (
+      <View className="items-center justify-center mt-20 gap-3">
+        <Ionicons name="time-outline" size={48} color="#d1d5db" />
+        <Text className={`text-gray-400 text-base ${isRTL ? 'text-right' : 'text-center'}`}>
+          {t('employee:noRideHistory')}
+        </Text>
+      </View>
+    );
+  }, [isInitialLoading, isRTL, t]);
 
   return (
     <SafeAreaView className="flex-1 bg-white" edges={['top']}>
@@ -176,51 +314,25 @@ export default function EmployeeRides() {
       </View>
 
       {/* Ride list */}
-      <ScrollView
-        className="flex-1"
-        contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 24 }}
-        showsVerticalScrollIndicator={false}
-      >
-        <View className="gap-4">
-          {isLoading ? (
-            <>
-              <CompactRideHistoryCardSkeleton />
-              <CompactRideHistoryCardSkeleton />
-              <CompactRideHistoryCardSkeleton />
-            </>
-          ) : filteredCards.length === 0 ? (
-            <View className="items-center justify-center mt-20 gap-3">
-              <Ionicons name="time-outline" size={48} color="#d1d5db" />
-              <Text className={`text-gray-400 text-base ${isRTL ? 'text-right' : 'text-center'}`}>
-                {t('employee:noRideHistory')}
-              </Text>
-            </View>
-          ) : (
-            filteredCards.map((card) => (
-              <CompactRideHistoryCard
-                key={card.id}
-                destination={card.destination}
-                date={card.date}
-                timeOfDropoff={card.time}
-                vehicleType={card.rideType}
-                rideType={card.rideType === 'shuttle' ? t('employee:filterShuttle') : t('employee:filterChauffeur')}
-                onPress={() =>
-                  router.push({
-                    pathname: '/employee/ride-details',
-                    params: {
-                      from: 'history',
-                      rideDate: card.date,
-                      ...(card.bookingId != null
-                        ? { rideId: String(card.bookingId), rideType: 'chauffeur' }
-                        : { rideId: String(card.tripId), rideType: 'shuttle' }),
-                    },
-                  })
-                }
-              />
-            ))
-          )}
+      {isInitialLoading ? (
+        <View className="flex-1 px-4 gap-4">
+          <CompactRideHistoryCardSkeleton />
+          <CompactRideHistoryCardSkeleton />
+          <CompactRideHistoryCardSkeleton />
         </View>
-      </ScrollView>
+      ) : (
+        <FlatList
+          data={filteredCards}
+          renderItem={renderItem}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 24, gap: 16 }}
+          showsVerticalScrollIndicator={false}
+          onEndReached={loadMore}
+          onEndReachedThreshold={0.3}
+          ListFooterComponent={renderFooter}
+          ListEmptyComponent={renderEmpty}
+        />
+      )}
     </SafeAreaView>
   );
 }
