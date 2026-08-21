@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { AppState, AppStateStatus } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import NetInfo from '@react-native-community/netinfo';
+import * as Sentry from '@sentry/react-native';
 import { socketService } from '../services/socket.service';
 import { tokenStorage } from '../features/auth/utils/tokenStorage';
 import { ACTIVE_RIDE_KEY } from '../services/location/backgroundLocationTask';
@@ -48,6 +49,8 @@ export function useSocketConnection(enabled: boolean) {
             const prev = appStateRef.current;
             appStateRef.current = nextState;
 
+            Sentry.logger.info('[AppState] transition', { from: prev, to: nextState });
+
             if (nextState === 'active' && prev !== 'active') {
                 // Came to foreground — reconnect (with the latest token) if needed
                 connectWithLatestToken();
@@ -65,13 +68,23 @@ export function useSocketConnection(enabled: boolean) {
                 // is starting. We do a first check then recheck after 1.5 s to close
                 // the window before deciding to disconnect.
                 AsyncStorage.getItem(ACTIVE_RIDE_KEY).then((activeRideId) => {
-                    if (activeRideId) return; // ride already active — keep socket alive
+                    if (activeRideId) {
+                        Sentry.logger.info('[AppState] backgrounded — keeping socket alive', {
+                            tripId: activeRideId,
+                        });
+                        return; // ride already active — keep socket alive
+                    }
                     // Not set yet — wait and recheck before disconnecting
                     setTimeout(() => {
                         AsyncStorage.getItem(ACTIVE_RIDE_KEY).then((recheckId) => {
                             if (!recheckId) {
+                                Sentry.logger.info('[AppState] backgrounded — no active ride, disconnecting socket');
                                 socketService.disconnect();
                                 setIsConnected(false);
+                            } else {
+                                Sentry.logger.info('[AppState] backgrounded — active ride appeared on recheck, keeping socket alive', {
+                                    tripId: recheckId,
+                                });
                             }
                         });
                     }, 1500);
@@ -91,6 +104,7 @@ export function useSocketConnection(enabled: boolean) {
         if (!enabled) return;
         return NetInfo.addEventListener((state) => {
             if (state.isConnected) {
+                Sentry.logger.info('[NetInfo] connectivity restored', { type: state.type });
                 connectWithLatestToken();
                 flushOfflineLocationQueue().catch(() => null);
             }

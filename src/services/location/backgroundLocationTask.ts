@@ -1,9 +1,18 @@
 import * as TaskManager from 'expo-task-manager';
 import * as Location from 'expo-location';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Sentry from '@sentry/react-native';
 import { socketService } from '../socket.service';
 import { tokenStorage } from '../../features/auth/utils/tokenStorage';
 import { enqueueLocationPoint, flushOfflineLocationQueue, resetFlushBackoff } from './offlineLocationQueue';
+
+/**
+ * Resets to 0 on every fresh JS process (cold start or headless spin-up).
+ * A gap where this never advances again for a trip that's still supposedly
+ * active — with no reset in between — is the "task registered but silently
+ * not delivering" symptom we're trying to catch.
+ */
+let invocationCounter = 0;
 
 /**
  * AsyncStorage key that holds the active ride / booking ID while a ride is
@@ -35,17 +44,29 @@ TaskManager.defineTask(
     data,
     error,
   }: TaskManager.TaskManagerTaskBody<{ locations: Location.LocationObject[] }>) => {
+    invocationCounter += 1;
+
     if (error) {
       // kCLErrorLocationUnknown (Code=0) is transient — the OS couldn't get a
       // GPS fix at this exact moment. The task will be invoked again on the
       // next update so we just ignore it to avoid noisy logs.
       if (!error.message?.includes('Code=0')) {
         console.warn('[RiderLocation] Task error:', error.message);
+        Sentry.logger.error('[RiderLocation] task error', {
+          invocation: invocationCounter,
+          message: error.message,
+        });
       }
       return;
     }
 
-    if (!data?.locations?.length) return;
+    if (!data?.locations?.length) {
+      // Task fired but with no locations — distinct from not firing at all.
+      Sentry.logger.warn('[RiderLocation] task fired with no locations', {
+        invocation: invocationCounter,
+      });
+      return;
+    }
 
     const location = data.locations[0];
     const { latitude, longitude, speed, heading } = location.coords;
@@ -71,7 +92,15 @@ TaskManager.defineTask(
         } catch { /* non-fatal */ }
       }
 
-      if (socketService.isConnected()) {
+      const path = socketService.isConnected() ? 'socket' : 'offline_queue';
+      Sentry.logger.info('[RiderLocation] task invocation', {
+        invocation: invocationCounter,
+        tripId,
+        tripType: tripType ?? null,
+        path,
+      });
+
+      if (path === 'socket') {
         // Live path: send immediately via WebSocket.
         // Do NOT also enqueue — that would double-send every point (once via
         // socket to ride.gateway.ts, once via HTTP flush to rides.controller.ts).
@@ -94,6 +123,10 @@ TaskManager.defineTask(
       }
     } catch (e) {
       console.warn('[RiderLocation] Failed to send location update:', e);
+      Sentry.logger.error('[RiderLocation] failed to send location update', {
+        invocation: invocationCounter,
+        error: e instanceof Error ? e.message : String(e),
+      });
     }
   },
 );

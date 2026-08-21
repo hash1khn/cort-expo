@@ -1,4 +1,5 @@
 import { io, Socket } from 'socket.io-client';
+import * as Sentry from '@sentry/react-native';
 import { env } from '../core/config/env';
 import { tokenStorage } from '../features/auth/utils/tokenStorage';
 
@@ -41,6 +42,10 @@ class SocketService {
   connect(token: string) {
     if (this.socket?.connected) return;
 
+    Sentry.logger.info('[Socket] connect() called', {
+      hadExistingSocket: this.socket != null,
+    });
+
     this.currentToken = token;
     this.isManualDisconnect = false;
 
@@ -65,6 +70,11 @@ class SocketService {
     // Internal system listeners (not stored in registry)
     this.socket.on('connect', () => {
       console.log('[Socket] Connected:', this.socket?.id);
+      Sentry.logger.info('[Socket] connected', {
+        socketId: this.socket?.id ?? null,
+        replayingRideJoin: this.pendingRideJoin != null,
+        tripId: this.pendingRideJoin?.tripId ?? null,
+      });
       // Rejoin ride room — server lost our membership when transport dropped
       if (this.pendingRideJoin) {
         this.socket?.emit('join:ride', this.pendingRideJoin);
@@ -73,6 +83,11 @@ class SocketService {
 
     this.socket.on('disconnect', async (reason) => {
       console.log('[Socket] Disconnected:', reason);
+      Sentry.logger.warn('[Socket] disconnected', {
+        reason,
+        isManualDisconnect: this.isManualDisconnect,
+        tripId: this.pendingRideJoin?.tripId ?? null,
+      });
 
       // Socket.IO never auto-reconnects after 'io server disconnect' because it
       // treats a server-side socket.disconnect() as intentional. We handle it
@@ -83,6 +98,9 @@ class SocketService {
         try {
           const freshToken = await tokenStorage.refreshAccessToken();
           const tokenToUse = freshToken ?? this.currentToken;
+          Sentry.logger.info('[Socket] server-disconnect token refresh', {
+            refreshed: freshToken != null,
+          });
           if (tokenToUse) {
             // Brief delay to avoid hammering the server if it keeps rejecting.
             this.serverDisconnectRetryTimer = setTimeout(() => {
@@ -94,6 +112,7 @@ class SocketService {
           }
         } catch {
           console.warn('[Socket] Token refresh failed after server disconnect');
+          Sentry.logger.error('[Socket] server-disconnect token refresh threw');
         }
       }
     });
@@ -108,6 +127,11 @@ class SocketService {
         err.message?.toLowerCase().includes('jwt') ||
         err.message?.toLowerCase().includes('token');
 
+      Sentry.logger.warn('[Socket] connect_error', {
+        message: err.message,
+        isAuthError,
+      });
+
       if (isAuthError) {
         try {
           const freshToken = await tokenStorage.refreshAccessToken();
@@ -116,8 +140,12 @@ class SocketService {
             // new token without needing to tear down the socket.
             (this.socket.auth as Record<string, string>).token = freshToken;
           }
+          Sentry.logger.info('[Socket] connect_error token refresh', {
+            refreshed: freshToken != null,
+          });
         } catch {
           console.warn('[Socket] Token refresh failed');
+          Sentry.logger.error('[Socket] connect_error token refresh threw');
         }
       }
     });
@@ -141,6 +169,9 @@ class SocketService {
       this.socket.disconnect();
       this.socket = null;
       console.log('[Socket] Manually disconnected');
+      Sentry.logger.info('[Socket] manual disconnect()', {
+        tripId: this.pendingRideJoin?.tripId ?? null,
+      });
     }
     // registry is intentionally NOT cleared — listeners will be re-attached
     // when connect() is called again (e.g. app returns to foreground).
@@ -181,6 +212,12 @@ class SocketService {
   joinRide(tripId: number | string, userId: string, role: 'driver' | 'employee', tripType?: 'shuttle' | 'chauffeur') {
     const tripIdStr = String(tripId);
     this.pendingRideJoin = { tripId: tripIdStr, userId, role, tripType };
+    Sentry.logger.info('[Socket] joinRide()', {
+      tripId: tripIdStr,
+      role,
+      tripType: tripType ?? null,
+      socketConnected: this.socket?.connected ?? false,
+    });
     this.socket?.emit('join:ride', { tripId: tripIdStr, userId, role, tripType });
   }
 
@@ -189,6 +226,9 @@ class SocketService {
    * the next reconnect after the ride is over.
    */
   leaveRide() {
+    Sentry.logger.info('[Socket] leaveRide()', {
+      tripId: this.pendingRideJoin?.tripId ?? null,
+    });
     this.pendingRideJoin = null;
   }
 

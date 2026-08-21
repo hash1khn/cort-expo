@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
 import * as TaskManager from 'expo-task-manager';
+import * as Sentry from '@sentry/react-native';
 import { ACTIVE_RIDE_KEY, ACTIVE_RIDE_TYPE_KEY, RIDER_LOCATION_TASK } from './backgroundLocationTask';
 import { flushOfflineLocationQueue, dropQueuePointsForOtherTrips } from './offlineLocationQueue';
 
@@ -43,6 +44,17 @@ export async function startLocationTracking(tripId: string | number, tripType?: 
   // stale while still reporting as registered, silently dropping the next
   // trip's location updates. Restart it so every new ride starts fresh.
   const alreadyRunning = await TaskManager.isTaskRegisteredAsync(RIDER_LOCATION_TASK);
+
+  // Diagnostic: alreadyRunning=true means this is a 2nd+ start/stop cycle
+  // within the same still-alive process — the exact condition suspected of
+  // leaving the Android foreground service in a stale state (see
+  // LocationTaskConsumer.kt's mService not being nulled by stopForegroundService).
+  Sentry.logger.info('[RiderLocation] startLocationTracking', {
+    tripId: newTripId,
+    tripType: tripType ?? null,
+    alreadyRunning,
+  });
+
   if (alreadyRunning) {
     await Location.stopLocationUpdatesAsync(RIDER_LOCATION_TASK);
   }
@@ -79,10 +91,15 @@ export async function startLocationTracking(tripId: string | number, tripType?: 
  * Safe to call even when tracking is not running.
  */
 export async function stopLocationTracking(): Promise<void> {
+  const tripIdAtStop = await AsyncStorage.getItem(ACTIVE_RIDE_KEY);
   await AsyncStorage.removeItem(ACTIVE_RIDE_KEY);
   await AsyncStorage.removeItem(ACTIVE_RIDE_TYPE_KEY);
 
   const isRunning = await TaskManager.isTaskRegisteredAsync(RIDER_LOCATION_TASK);
+  Sentry.logger.info('[RiderLocation] stopLocationTracking', {
+    tripId: tripIdAtStop,
+    wasRunning: isRunning,
+  });
   if (isRunning) {
     await Location.stopLocationUpdatesAsync(RIDER_LOCATION_TASK);
   }

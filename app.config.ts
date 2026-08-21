@@ -160,6 +160,14 @@ export default ({ config }: ConfigContext): ExpoConfig => {
           "isAndroidForegroundServiceEnabled": true,
           "isIosBackgroundLocationEnabled": true
         }
+      ],
+      [
+        "@sentry/react-native/expo",
+        {
+          "url": "https://sentry.io/",
+          "project": "react-native",
+          "organization": "traflinq"
+        }
       ]
     ],
     experiments: {

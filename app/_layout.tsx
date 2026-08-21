@@ -51,6 +51,43 @@ import { Platform, View } from 'react-native';
 import { apiFetch } from '../src/services/api';
 import { useNotification } from '../src/context/NotificationContext';
 import { refreshAvailableLanguages } from '../src/i18n/region';
+import * as Sentry from '@sentry/react-native';
+
+// Skip Sentry entirely in dev/simulator builds — every logger.* call below
+// fires continuously per active ride (every 5-10s), and dev/local testing
+// would otherwise burn the same project quota as production. Every Sentry.*
+// call elsewhere in the app (logger, captureException, setUser, wrap) is a
+// safe no-op when init() was never called, so nothing else needs a __DEV__
+// check. Temporarily remove this guard if you need to verify the pipe itself
+// from a dev build again.
+if (!__DEV__) {
+  Sentry.init({
+    dsn: 'https://af3d7ea87a729e401a4b62f130dfbf8b@o4511885246922752.ingest.us.sentry.io/4511947540070400',
+
+    // Adds more context data to events (IP address, cookies, user, etc.)
+    // For more information, visit: https://docs.sentry.io/platforms/react-native/data-management/data-collected/
+    sendDefaultPii: true,
+
+    // Enable Logs
+    enableLogs: true,
+
+    // Configure Session Replay
+    replaysSessionSampleRate: 0.1,
+    replaysOnErrorSampleRate: 1,
+    integrations: [Sentry.mobileReplayIntegration()],
+
+    // uncomment the line below to enable Spotlight (https://spotlightjs.com)
+    // spotlight: __DEV__,
+  });
+}
+
+// Fires once per fresh JS process — cold start OR a headless spin-up to run
+// the background location task while all React views are unmounted (this
+// file is imported before any component mounts either way). A gap in the
+// location task's invocation counter with no matching process-start log in
+// between means the task stopped firing without the process dying; a
+// process-start log appearing means the process itself was (re)started.
+Sentry.logger.info('[App] process start', { platform: Platform.OS });
 
 SplashScreen.preventAutoHideAsync().catch(() => {
   // no-op (can throw if called twice in dev)
@@ -100,6 +137,16 @@ function RootLayoutContent() {
   const hasHydrated = useAppSelector((s) => s.auth._hasHydrated);
   const { ready: appConfigReady, gate } = useAppConfigGate();
 
+  // Tag Sentry events/logs with the current user so a specific driver's
+  // sessions can be filtered to directly instead of searching all events.
+  useEffect(() => {
+    if (user?.id) {
+      Sentry.setUser({ id: String(user.id), email: user.email ?? undefined });
+    } else {
+      Sentry.setUser(null);
+    }
+  }, [user?.id, user?.email]);
+
   // Handle both null and undefined, and wait for hydration
   // Use != null to check for both null and undefined
   const isLoggedIn = hasHydrated && (role != null);
@@ -138,9 +185,14 @@ function RootLayoutContent() {
   // the foreground service is orphaned — stop it so the notification clears.
   useEffect(() => {
     TaskManager.isTaskRegisteredAsync(RIDER_LOCATION_TASK).then(async (registered) => {
-      if (!registered) return;
       const activeRideId = await AsyncStorage.getItem(ACTIVE_RIDE_KEY);
+      Sentry.logger.info('[App] boot-time tracking reconciliation', {
+        taskRegistered: registered,
+        activeRideId,
+      });
+      if (!registered) return;
       if (!activeRideId) {
+        Sentry.logger.warn('[App] stopping orphaned location task on boot (no active ride)');
         await stopLocationTracking().catch(console.warn);
       }
     });
@@ -250,7 +302,7 @@ function RootLayoutContent() {
   );
 }
 
-export default function RootLayout() {
+export default Sentry.wrap(function RootLayout() {
   return (
     <Provider store={store}>
       <PersistGate loading={null} persistor={persistor}>
@@ -262,4 +314,4 @@ export default function RootLayout() {
       </PersistGate>
     </Provider>
   );
-}
+});
