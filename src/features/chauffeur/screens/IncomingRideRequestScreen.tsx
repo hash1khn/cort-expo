@@ -1,5 +1,6 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   ScrollView,
   StyleSheet,
@@ -15,6 +16,10 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { fontFamily } from '@/core/theme';
 import { AppHeader } from '../../shared/components/AppHeader';
 import { useLanguage } from '@/i18n/useLanguage';
+import {
+  useAcceptBroadcastRequestMutation,
+  useRejectBroadcastRequestMutation,
+} from '../services/chauffeur.api';
 
 const Text = (props: React.ComponentProps<typeof RNText>) => (
   <RNText {...props} style={[{ fontFamily }, props.style]} />
@@ -41,6 +46,7 @@ export function IncomingRideRequestScreen() {
     t(`chauffeur:incomingRequest.${key}`, options);
 
   const params = useLocalSearchParams<{
+    bookingId?: string;
     lat?: string;
     lng?: string;
     passengerName?: string;
@@ -48,6 +54,10 @@ export function IncomingRideRequestScreen() {
     totalDays?: string;
     tripType?: string;
   }>();
+
+  const bookingId = params.bookingId ? parseInt(params.bookingId, 10) : undefined;
+  const [acceptRequest, { isLoading: isAccepting }] = useAcceptBroadcastRequestMutation();
+  const [rejectRequest, { isLoading: isRejecting }] = useRejectBroadcastRequestMutation();
 
   const pickup = useMemo(
     () => ({
@@ -75,6 +85,37 @@ export function IncomingRideRequestScreen() {
     tripTypeRaw === 'out_station' || tripTypeRaw === 'outstation' ? tr('outStation') : tr('inCity');
 
   const bottomPad = Math.max(insets.bottom, 14);
+
+  const handleDecline = async () => {
+    if (!bookingId) {
+      router.back();
+      return;
+    }
+    try {
+      await rejectRequest({ bookingId }).unwrap();
+      router.back();
+    } catch (err: any) {
+      Alert.alert(tr('acceptFailedTitle'), tr('declineFailedGeneric'));
+    }
+  };
+
+  const handleAccept = async () => {
+    if (!bookingId) {
+      router.back();
+      return;
+    }
+    try {
+      await acceptRequest({ bookingId }).unwrap();
+      router.back();
+    } catch (err: any) {
+      const isConflict = err?.status === 409;
+      Alert.alert(
+        tr('acceptFailedTitle'),
+        isConflict ? tr('acceptFailedTaken') : tr('acceptFailedGeneric'),
+        [{ text: 'OK', onPress: () => router.back() }],
+      );
+    }
+  };
 
   return (
     <View style={styles.root}>
@@ -149,11 +190,8 @@ export function IncomingRideRequestScreen() {
             {/* DECLINE */}
             <TouchableOpacity
               activeOpacity={0.75}
-              onPress={() =>
-                Alert.alert('Declined', 'You declined this request.', [
-                  { text: 'OK', onPress: () => router.back() },
-                ])
-              }
+              disabled={isAccepting || isRejecting}
+              onPress={handleDecline}
               style={{
                 flex: 1,
                 marginRight: 6,
@@ -164,28 +202,30 @@ export function IncomingRideRequestScreen() {
                 backgroundColor: '#FEF2F2',
                 alignItems: 'center',
                 justifyContent: 'center',
+                opacity: isAccepting || isRejecting ? 0.6 : 1,
               }}
             >
-              <RNText
-                style={{
-                  fontSize: 14,
-                  fontWeight: '800',
-                  color: '#EF4444',
-                  textAlign: 'center',
-                }}
-              >
-                {tr('declineRequest')}
-              </RNText>
+              {isRejecting ? (
+                <ActivityIndicator color="#EF4444" />
+              ) : (
+                <RNText
+                  style={{
+                    fontSize: 14,
+                    fontWeight: '800',
+                    color: '#EF4444',
+                    textAlign: 'center',
+                  }}
+                >
+                  {tr('declineRequest')}
+                </RNText>
+              )}
             </TouchableOpacity>
 
             {/* ACCEPT */}
             <TouchableOpacity
               activeOpacity={0.75}
-              onPress={() =>
-                Alert.alert('Accepted', 'Ride accepted!', [
-                  { text: 'OK', onPress: () => router.back() },
-                ])
-              }
+              disabled={isAccepting || isRejecting}
+              onPress={handleAccept}
               style={{
                 flex: 1,
                 marginLeft: 6,
@@ -194,18 +234,23 @@ export function IncomingRideRequestScreen() {
                 backgroundColor: '#16A34A',
                 alignItems: 'center',
                 justifyContent: 'center',
+                opacity: isAccepting || isRejecting ? 0.6 : 1,
               }}
             >
-              <RNText
-                style={{
-                  fontSize: 14,
-                  fontWeight: '800',
-                  color: '#FFFFFF',
-                  textAlign: 'center',
-                }}
-              >
-                {tr('acceptRequest')}
-              </RNText>
+              {isAccepting ? (
+                <ActivityIndicator color="#FFFFFF" />
+              ) : (
+                <RNText
+                  style={{
+                    fontSize: 14,
+                    fontWeight: '800',
+                    color: '#FFFFFF',
+                    textAlign: 'center',
+                  }}
+                >
+                  {tr('acceptRequest')}
+                </RNText>
+              )}
             </TouchableOpacity>
 
           </View>

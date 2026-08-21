@@ -9,6 +9,7 @@ import { AppHeader } from '../../shared/components/AppHeader';
 import { RequestedModal } from '../components/RequestedModal';
 import {
   useGetDriverActiveBookingQuery,
+  useGetBroadcastRequestsQuery,
   type ActiveBooking,
   getActiveLog,
   isFirstDayNotStarted,
@@ -23,6 +24,8 @@ import {
 } from '@/i18n/types';
 import { useRefetchOnReconnect } from '@/hooks/useRefetchOnReconnect';
 import { useNotification } from '@/context/NotificationContext';
+import { useBroadcastRequestsListener } from '@/hooks/useBroadcastRequestsListener';
+import { useAppSelector } from '@/store/hooks';
 
 const Text = (props: React.ComponentProps<typeof RNText>) => (
   <RNText {...props} style={[{ fontFamily }, props.style]} />
@@ -259,6 +262,37 @@ function EmptyState() {
   );
 }
 
+// ─── Nearby Requests Entry ────────────────────────────────────────────────────
+
+function NearbyRequestsEntry({ enabled }: { enabled: boolean }) {
+  const { t } = useLanguage();
+  const tr = (key: string, options?: Record<string, unknown>) =>
+    t(`chauffeur:nearbyRequests.${key}`, options);
+  const { data: requests } = useGetBroadcastRequestsQuery(undefined, {
+    skip: !enabled,
+    pollingInterval: 15000,
+  });
+  useBroadcastRequestsListener();
+
+  const count = requests?.length ?? 0;
+  if (!enabled || count === 0) return null;
+
+  return (
+    <Pressable
+      onPress={() => router.push('/chauffeur/requests')}
+      className="flex-row items-center justify-between rounded-2xl bg-[#FF5A00] px-5 py-4 mb-4 active:opacity-90"
+    >
+      <View className="flex-row items-center gap-3">
+        <Ionicons name="navigate-circle" size={22} color="#FFFFFF" />
+        <Text className="text-white text-[15px] font-bold">
+          {tr('homeEntryLabel', { count })}
+        </Text>
+      </View>
+      <Ionicons name="chevron-forward" size={18} color="#FFFFFF" />
+    </Pressable>
+  );
+}
+
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 
 export function ChauffeurHomeScreen() {
@@ -267,6 +301,7 @@ export function ChauffeurHomeScreen() {
     t(`chauffeur:home.${key}`, options);
   const { data: activeBooking, isLoading, isError, refetch } = useGetDriverActiveBookingQuery();
   useRefetchOnReconnect(refetch);
+  const marketplaceEligible = useAppSelector((state) => state.auth.user?.marketplace_eligible ?? false);
 
   // Fallback: refetch booking data when any push notification arrives,
   // in case a socket event was missed (e.g. assignment, status update).
@@ -385,6 +420,7 @@ export function ChauffeurHomeScreen() {
 
         {!isLoading && !isError && (
           <View className="mt-2">
+            <NearbyRequestsEntry enabled={marketplaceEligible && !activeBooking} />
             {activeBooking ? (
               <ActiveBookingCard
                 booking={activeBooking}

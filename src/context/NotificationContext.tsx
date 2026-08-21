@@ -67,6 +67,9 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
         if (data?.type === 'ATTENDANCE_REMINDER') {
           router.push('/employee');
         }
+        if (data?.type === 'CHAUFFEUR_BROADCAST') {
+          router.push('/chauffeur/requests');
+        }
       },
     );
 

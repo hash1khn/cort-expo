@@ -47,6 +47,7 @@ type LoginResponse = {
       company_id?: number | null;
       account_status?: 'ACTIVE' | 'INACTIVE' | 'SUSPENDED';
       driver_type?: BackendDriverType;
+      marketplace_eligible?: boolean;
       profile_picture_url?: string | null;
       enabled_services?: {
         shuttle: boolean;
@@ -71,6 +72,7 @@ export type LoginResult = {
       shuttle: boolean;
       chauffeur: boolean;
     } | null;
+    marketplace_eligible?: boolean;
   };
   role: UserRole;
 };
@@ -116,6 +118,7 @@ export const authApi = baseApi.injectEndpoints({
             account_status: user.account_status,
             profile_picture_url: user.profile_picture_url ?? null,
             enabled_services: user.enabled_services ?? null,
+            marketplace_eligible: user.marketplace_eligible ?? false,
           },
           role: mapRole(user.role as BackendRole, user.driver_type),
         };

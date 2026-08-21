@@ -100,6 +100,19 @@ export type EndDailyTripDto = {
   force_complete?: boolean;
 };
 
+/** A nearby CORT_MANAGED booking broadcast to this chauffeur, awaiting accept/reject. */
+export type BroadcastRequest = {
+  booking_id: number;
+  distance_km: number | null;
+  trip_type: TripType;
+  booking_type: string;
+  package_selected: string;
+  pickup_address: string | null;
+  city: string | null;
+  scheduled_for: string | null;
+  company_name: string | null;
+};
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 /**
@@ -367,6 +380,61 @@ export const chauffeurApi = baseApi.injectEndpoints({
       },
       invalidatesTags: ['ChauffeurBooking'],
     }),
+
+    /**
+     * GET /drivers/me/broadcast-requests
+     * Nearby PENDING marketplace booking requests for the current chauffeur.
+     * Polled as a fallback alongside the booking:broadcast:new socket event.
+     */
+    getBroadcastRequests: builder.query<BroadcastRequest[], void>({
+      query: () => '/drivers/me/broadcast-requests',
+      transformResponse: (response: { data?: BroadcastRequest[] } | BroadcastRequest[]) => {
+        if (response && typeof (response as any).data !== 'undefined') {
+          return (response as { data: BroadcastRequest[] }).data ?? [];
+        }
+        return (response as BroadcastRequest[]) ?? [];
+      },
+      providesTags: ['BroadcastRequests'],
+    }),
+
+    /**
+     * PATCH /drivers/me/broadcast-requests/{bookingId}/accept
+     * Race-safe: the backend may reject with a ConflictException if another
+     * driver won the request first — the UI must handle that explicitly.
+     */
+    acceptBroadcastRequest: builder.mutation<unknown, { bookingId: number }>({
+      query: ({ bookingId }) => ({
+        url: `/drivers/me/broadcast-requests/${bookingId}/accept`,
+        method: 'PATCH',
+      }),
+      invalidatesTags: ['BroadcastRequests', 'ChauffeurBooking'],
+    }),
+
+    /** PATCH /drivers/me/broadcast-requests/{bookingId}/reject */
+    rejectBroadcastRequest: builder.mutation<unknown, { bookingId: number }>({
+      query: ({ bookingId }) => ({
+        url: `/drivers/me/broadcast-requests/${bookingId}/reject`,
+        method: 'PATCH',
+      }),
+      invalidatesTags: ['BroadcastRequests'],
+    }),
+
+    /** POST /drivers/me/location — presence ping while the app is foregrounded. */
+    updateMyLocation: builder.mutation<unknown, { latitude: number; longitude: number }>({
+      query: (body) => ({
+        url: '/drivers/me/location',
+        method: 'POST',
+        body,
+      }),
+    }),
+
+    /** POST /drivers/me/offline — stop receiving nearby requests. */
+    markMyselfOffline: builder.mutation<unknown, void>({
+      query: () => ({
+        url: '/drivers/me/offline',
+        method: 'POST',
+      }),
+    }),
   }),
 });
 
@@ -377,4 +445,9 @@ export const {
   useMarkDriverOnboardMutation,
   useMarkDriverDropoffMutation,
   useEndDriverBookingMutation,
+  useGetBroadcastRequestsQuery,
+  useAcceptBroadcastRequestMutation,
+  useRejectBroadcastRequestMutation,
+  useUpdateMyLocationMutation,
+  useMarkMyselfOfflineMutation,
 } = chauffeurApi;

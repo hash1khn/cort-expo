@@ -19,6 +19,8 @@ export interface AuthState {
       shuttle: boolean;
       chauffeur: boolean;
     } | null;
+    /** Independent chauffeur drivers only — gates the nearby-requests marketplace feed. */
+    marketplace_eligible?: boolean;
   } | null;
   _hasHydrated: boolean;
 }
