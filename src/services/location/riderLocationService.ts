@@ -8,8 +8,21 @@ import { flushOfflineLocationQueue, dropQueuePointsForOtherTrips } from './offli
 /**
  * Saves the ride ID to AsyncStorage and starts the background location task.
  *
- * Safe to call even if the task is already running — isTaskRegisteredAsync
- * guards against double registration.
+ * Safe to call even if the task is already running — if isTaskRegisteredAsync
+ * finds a stale registration (e.g. left over from a previous trip in the
+ * same still-alive process), it's stopped and restarted fresh rather than
+ * left as-is.
+ *
+ * ⚠️  This function's promise resolving does NOT mean the task is actually
+ * delivering yet — on Android, the native foreground service backing
+ * reliable background GPS delivery finishes its handshake asynchronously,
+ * slightly after this call returns. Doing anything here that backgrounds the
+ * app (e.g. opening Google Maps) before that handshake completes can leave
+ * the task silently dead for the rest of the trip. Callers that need to
+ * background the app after starting tracking should go through
+ * useRiderLocationTracking()'s startTracking(), which awaits
+ * waitForFirstTaskInvocation() first — don't call this directly for that
+ * case.
  *
  * @param tripId    The shuttle tripId or chauffeur bookingId for this ride.
  * @param tripType  'shuttle' | 'chauffeur' — stored so the HTTP fallback can

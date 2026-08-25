@@ -15,6 +15,59 @@ import { enqueueLocationPoint, flushOfflineLocationQueue, resetFlushBackoff } fr
 let invocationCounter = 0;
 
 /**
+ * Trip IDs the task has fired at least once for since this JS process
+ * started, plus any callers currently waiting on a first fire. Backs
+ * waitForFirstTaskInvocation() below — see that function's doc comment for
+ * why this exists.
+ */
+const deliveredTripIds = new Set<string>();
+const firstDeliveryResolvers = new Map<string, Array<() => void>>();
+
+function notifyTaskAlive(tripId: string | null): void {
+  if (!tripId) return;
+  deliveredTripIds.add(tripId);
+  const resolvers = firstDeliveryResolvers.get(tripId);
+  if (resolvers) {
+    resolvers.forEach((resolve) => resolve());
+    firstDeliveryResolvers.delete(tripId);
+  }
+}
+
+/**
+ * Resolves once the background task has actually been invoked by the OS at
+ * least once for this trip (any invocation — error, empty-locations, or a
+ * real fix all count, since what we're confirming is that the native
+ * subscription is genuinely alive and wired to this JS callback, not
+ * specifically that a GPS fix arrived). Resolves `false` after `timeoutMs`
+ * if nothing fires in time, so a caller never blocks forever.
+ *
+ * Exists to close the race where a caller opens Google Maps (backgrounding
+ * the app) immediately after startLocationTracking()'s promise resolves —
+ * on Android that promise resolving does NOT guarantee the foreground
+ * service has finished its async handshake, so backgrounding too early can
+ * leave the task registered but silently dead for the rest of the trip.
+ * Callers should await this before doing anything that backgrounds the app.
+ */
+export function waitForFirstTaskInvocation(tripId: string, timeoutMs: number): Promise<boolean> {
+  if (deliveredTripIds.has(tripId)) return Promise.resolve(true);
+
+  return new Promise((resolve) => {
+    let settled = false;
+    const settle = (delivered: boolean) => {
+      if (settled) return;
+      settled = true;
+      resolve(delivered);
+    };
+
+    const resolvers = firstDeliveryResolvers.get(tripId) ?? [];
+    resolvers.push(() => settle(true));
+    firstDeliveryResolvers.set(tripId, resolvers);
+
+    setTimeout(() => settle(false), timeoutMs);
+  });
+}
+
+/**
  * AsyncStorage key that holds the active ride / booking ID while a ride is
  * in progress.  It is written before startLocationUpdatesAsync is called and
  * deleted when stopLocationUpdatesAsync is called so the background task
@@ -45,6 +98,10 @@ TaskManager.defineTask(
     error,
   }: TaskManager.TaskManagerTaskBody<{ locations: Location.LocationObject[] }>) => {
     invocationCounter += 1;
+
+    // Signal "the subscription is alive" regardless of what this particular
+    // invocation contains — see waitForFirstTaskInvocation()'s doc comment.
+    notifyTaskAlive(await AsyncStorage.getItem(ACTIVE_RIDE_KEY));
 
     if (error) {
       // kCLErrorLocationUnknown (Code=0) is transient — the OS couldn't get a

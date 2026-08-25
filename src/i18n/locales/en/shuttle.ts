@@ -33,7 +33,7 @@ export const shuttle = {
     stops: 'Stops',
     employees: 'Employees',
     start: 'Start',
-    today: 'TODAY',
+    today: 'Today',
     noRides: 'You have no rides for today.',
     couldNotLoad: "Couldn't load today's rides",
     retry: 'Retry',
