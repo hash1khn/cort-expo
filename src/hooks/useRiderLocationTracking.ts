@@ -2,11 +2,35 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { Platform, Alert, Linking, AppState } from 'react-native';
 import * as Location from 'expo-location';
 import * as TaskManager from 'expo-task-manager';
+import * as Sentry from '@sentry/react-native';
 import {
   startLocationTracking,
   stopLocationTracking,
 } from '../services/location/riderLocationService';
-import { RIDER_LOCATION_TASK } from '../services/location/backgroundLocationTask';
+import { RIDER_LOCATION_TASK, waitForFirstTaskInvocation } from '../services/location/backgroundLocationTask';
+
+/**
+ * How long to wait, after starting the task, for confirmation that it has
+ * actually fired at least once before letting the caller proceed (e.g. open
+ * Google Maps, which backgrounds the app). On Android, startLocationUpdatesAsync's
+ * promise resolving does not guarantee the foreground service has finished
+ * its async handshake — backgrounding before the task's first real fire can
+ * leave it silently dead for the rest of the trip. If nothing fires within
+ * this window (e.g. no GPS signal yet), we proceed anyway rather than
+ * blocking the driver indefinitely — but it's a real risk worth flagging.
+ */
+const FIRST_INVOCATION_TIMEOUT_MS = 10_000;
+
+async function startTrackingAndConfirm(tripId: string | number, tripType?: 'shuttle' | 'chauffeur'): Promise<void> {
+  await startLocationTracking(tripId, tripType);
+  const delivered = await waitForFirstTaskInvocation(String(tripId), FIRST_INVOCATION_TIMEOUT_MS);
+  if (!delivered) {
+    Sentry.logger.warn('[RiderLocation] proceeding without a confirmed task invocation', {
+      tripId: String(tripId),
+      timeoutMs: FIRST_INVOCATION_TIMEOUT_MS,
+    });
+  }
+}
 
 /**
  * iOS only.
@@ -161,7 +185,7 @@ export function useRiderLocationTracking(): UseRiderLocationTrackingReturn {
         }
       }
 
-      await startLocationTracking(tripId, tripType);
+      await startTrackingAndConfirm(tripId, tripType);
       setIsTracking(true);
       await Promise.resolve(onReady?.());
       return true;
@@ -187,7 +211,7 @@ export function useRiderLocationTracking(): UseRiderLocationTrackingReturn {
         (Platform.OS === 'ios' && fgStatus === 'granted' && iosScope === 'always');
 
       if (alreadyFullyGranted) {
-        await startLocationTracking(tripId, tripType);
+        await startTrackingAndConfirm(tripId, tripType);
         setIsTracking(true);
         await Promise.resolve(onReady?.());
         return true;
