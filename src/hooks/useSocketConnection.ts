@@ -5,7 +5,7 @@ import NetInfo from '@react-native-community/netinfo';
 import * as Sentry from '@sentry/react-native';
 import { socketService } from '../services/socket.service';
 import { tokenStorage } from '../features/auth/utils/tokenStorage';
-import { ACTIVE_RIDE_KEY } from '../services/location/backgroundLocationTask';
+import { ACTIVE_RIDE_KEY, getBatterySnapshot } from '../services/location/backgroundLocationTask';
 import { flushOfflineLocationQueue, resetFlushBackoff } from '../services/location/offlineLocationQueue';
 
 /**
@@ -67,10 +67,14 @@ export function useSocketConnection(enabled: boolean) {
                 // is written. Reading immediately can return null even though a ride
                 // is starting. We do a first check then recheck after 1.5 s to close
                 // the window before deciding to disconnect.
-                AsyncStorage.getItem(ACTIVE_RIDE_KEY).then((activeRideId) => {
+                AsyncStorage.getItem(ACTIVE_RIDE_KEY).then(async (activeRideId) => {
                     if (activeRideId) {
+                        // Battery reading right at the exact boundary where both known
+                        // mystery process-kills happened — see backgroundLocationTask.ts's
+                        // getBatterySnapshot() doc comment for why this matters.
                         Sentry.logger.info('[AppState] backgrounded — keeping socket alive', {
                             tripId: activeRideId,
+                            ...(await getBatterySnapshot()),
                         });
                         return; // ride already active — keep socket alive
                     }

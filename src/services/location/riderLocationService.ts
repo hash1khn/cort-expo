@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
 import * as TaskManager from 'expo-task-manager';
 import * as Sentry from '@sentry/react-native';
-import { ACTIVE_RIDE_KEY, ACTIVE_RIDE_TYPE_KEY, RIDER_LOCATION_TASK } from './backgroundLocationTask';
+import { ACTIVE_RIDE_KEY, ACTIVE_RIDE_TYPE_KEY, RIDER_LOCATION_TASK, getBatterySnapshot } from './backgroundLocationTask';
 import { flushOfflineLocationQueue, dropQueuePointsForOtherTrips } from './offlineLocationQueue';
 
 /**
@@ -66,6 +66,7 @@ export async function startLocationTracking(tripId: string | number, tripType?: 
     tripId: newTripId,
     tripType: tripType ?? null,
     alreadyRunning,
+    ...(await getBatterySnapshot()),
   });
 
   if (alreadyRunning) {

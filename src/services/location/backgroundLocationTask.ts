@@ -1,10 +1,36 @@
 import * as TaskManager from 'expo-task-manager';
 import * as Location from 'expo-location';
+import * as Battery from 'expo-battery';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Sentry from '@sentry/react-native';
 import { socketService } from '../socket.service';
 import { tokenStorage } from '../../features/auth/utils/tokenStorage';
 import { enqueueLocationPoint, flushOfflineLocationQueue, resetFlushBackoff } from './offlineLocationQueue';
+
+/**
+ * Battery snapshot to attach to tracking-lifecycle logs. `batteryOptimizationEnabled`
+ * is Android-only and is exactly the per-app Doze exemption setting suspected in the
+ * "process silently killed mid-trip" investigation — if a death correlates with this
+ * being true (or with low battery generally), that points straight at OS battery
+ * management as the mechanism; if deaths happen at full battery with optimization
+ * off too, that rules it out. Never throws — battery APIs can fail on some devices.
+ */
+export async function getBatterySnapshot(): Promise<Record<string, unknown>> {
+  try {
+    const [power, batteryOptimizationEnabled] = await Promise.all([
+      Battery.getPowerStateAsync(),
+      Battery.isBatteryOptimizationEnabledAsync().catch(() => null),
+    ]);
+    return {
+      batteryLevel: power.batteryLevel < 0 ? null : Math.round(power.batteryLevel * 100),
+      batteryState: Battery.BatteryState[power.batteryState] ?? power.batteryState,
+      lowPowerMode: power.lowPowerMode,
+      batteryOptimizationEnabled,
+    };
+  } catch {
+    return {};
+  }
+}
 
 /**
  * Resets to 0 on every fresh JS process (cold start or headless spin-up).
@@ -155,6 +181,7 @@ TaskManager.defineTask(
         tripId,
         tripType: tripType ?? null,
         path,
+        ...(await getBatterySnapshot()),
       });
 
       if (path === 'socket') {

@@ -32,6 +32,7 @@
     "@sentry/react-native": "^8.23.0",
     "@shopify/react-native-skia": "2.4.18",
     "expo": "^55.0.0",
+    "expo-battery": "~55.0.17",
     "expo-blur": "~55.0.16",
     "expo-camera": "~55.0.21",
     "expo-dev-client": "~55.0.37",
