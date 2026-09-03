@@ -27,7 +27,19 @@ export async function getBatterySnapshot(): Promise<Record<string, unknown>> {
       lowPowerMode: power.lowPowerMode,
       batteryOptimizationEnabled,
     };
-  } catch {
+  } catch (e) {
+    // Every expo-battery native method requires a live React context
+    // (BatteryModule.kt throws ReactContextLost if appContext.reactContext
+    // is null) — a headless background-task invocation of this file may
+    // simply not have one, unlike expo-location/expo-task-manager, which are
+    // built to work in that state. Logging the real error is what actually
+    // tells us whether that's what's happening here versus something else —
+    // silently returning {} previously made this undiagnosable. Deliberately
+    // unthrottled for now (logs on every failed call, same cadence as task
+    // invocation) — this is meant as short-lived diagnostic visibility, not
+    // permanent instrumentation; revisit if it turns out to be pure noise.
+    const message = e instanceof Error ? e.message : String(e);
+    Sentry.logger.warn('[RiderLocation] getBatterySnapshot failed', { error: message });
     return {};
   }
 }
@@ -49,8 +61,43 @@ let invocationCounter = 0;
 const deliveredTripIds = new Set<string>();
 const firstDeliveryResolvers = new Map<string, Array<() => void>>();
 
+/**
+ * Wall-clock time of the most recent real task invocation, and of the most
+ * recent startLocationTracking() call. Backs getMsSinceLastActivity() below,
+ * which the watchdog in riderLocationService.ts polls to detect "tracking is
+ * confirmed running but has gone silent" — the exact failure mode behind
+ * trips 1470/1504/1537/1524 (a healthy start followed by a task that never
+ * fires again, with nothing ever checking back).
+ */
+let lastInvocationAt: number | null = null;
+let trackingStartedAt: number | null = null;
+
+/**
+ * Call at the start of every startLocationTracking() attempt. Resets the
+ * "last activity" clock to now and clears any invocation timestamp left over
+ * from a previous trip/attempt, so a stale reading can't mask a genuinely
+ * silent restart.
+ */
+export function markTrackingStarted(): void {
+  trackingStartedAt = Date.now();
+  lastInvocationAt = null;
+}
+
+/**
+ * Milliseconds since the last sign of life for the current tracking attempt
+ * — the last real task invocation if one has ever happened, otherwise since
+ * markTrackingStarted() was last called. Returns null only if tracking has
+ * never been started at all in this process.
+ */
+export function getMsSinceLastActivity(): number | null {
+  const reference = lastInvocationAt ?? trackingStartedAt;
+  if (reference == null) return null;
+  return Date.now() - reference;
+}
+
 function notifyTaskAlive(tripId: string | null): void {
   if (!tripId) return;
+  lastInvocationAt = Date.now();
   deliveredTripIds.add(tripId);
   const resolvers = firstDeliveryResolvers.get(tripId);
   if (resolvers) {

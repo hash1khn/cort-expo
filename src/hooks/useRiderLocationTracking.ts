@@ -6,8 +6,16 @@ import * as Sentry from '@sentry/react-native';
 import {
   startLocationTracking,
   stopLocationTracking,
+  runTrackingWatchdogCheck,
 } from '../services/location/riderLocationService';
 import { RIDER_LOCATION_TASK, waitForFirstTaskInvocation } from '../services/location/backgroundLocationTask';
+
+/** How often the watchdog polls for "has tracking gone silent" while isTracking
+ * is true. Independent of WATCHDOG_STALE_THRESHOLD_MS in riderLocationService.ts
+ * (that's the staleness bar; this is just the sampling rate) — kept well under
+ * it so a stale period is caught within a check or two of crossing the threshold,
+ * not many minutes later. */
+const WATCHDOG_CHECK_INTERVAL_MS = 60_000;
 
 /**
  * How long to wait, after starting the task, for confirmation that it has
@@ -92,6 +100,19 @@ export interface UseRiderLocationTrackingReturn {
   /** True while startLocationUpdatesAsync is active */
   isTracking: boolean;
   /**
+   * True from the moment startTracking() is invoked until its whole sequence
+   * (permissions, native start, confirmation wait) settles — success or
+   * failure. Callers MUST fold this into their button/slider's disabled
+   * state: nothing else here prevents a second startTracking() call while
+   * the first is still in flight from producing a real, distinct repeat
+   * teardown/rebuild of the native subscription (startLocationTracking()'s
+   * own in-flight guard dedupes concurrent calls for the *same* tripId, but
+   * that's a safety net, not a substitute for not firing them in the first
+   * place — see riderLocationService.ts's startInFlight for the incident
+   * this is closing).
+   */
+  isStartingTracking: boolean;
+  /**
    * Call when the ride starts.
    *
    * Pass an optional `onReady` callback — it fires after tracking has
@@ -115,6 +136,7 @@ export interface UseRiderLocationTrackingReturn {
 
 export function useRiderLocationTracking(): UseRiderLocationTrackingReturn {
   const [isTracking, setIsTracking] = useState(false);
+  const [isStartingTracking, setIsStartingTracking] = useState(false);
   const [needsDisclosure, setNeedsDisclosure] = useState(false);
 
   // Sync isTracking with the real task state on mount — handles the case
@@ -125,6 +147,20 @@ export function useRiderLocationTracking(): UseRiderLocationTrackingReturn {
       if (registered) setIsTracking(true);
     });
   }, []);
+
+  // Watchdog: while this screen believes tracking is active, periodically
+  // check whether it has actually gone silent and re-arm it if so — see
+  // runTrackingWatchdogCheck's doc comment for exactly what this does and
+  // doesn't cover. Harmless to run from multiple mounted screens at once;
+  // each check is a no-op unless there's genuinely something stale to fix.
+  useEffect(() => {
+    if (!isTracking) return;
+    const interval = setInterval(() => {
+      runTrackingWatchdogCheck().catch(() => null);
+    }, WATCHDOG_CHECK_INTERVAL_MS);
+    return () => clearInterval(interval);
+  }, [isTracking]);
+
   const pendingTripIdRef = useRef<string | number | null>(null);
   const pendingOnReadyRef = useRef<(() => void) | null>(null);
   const pendingTripTypeRef = useRef<'shuttle' | 'chauffeur' | undefined>(undefined);
@@ -132,50 +168,16 @@ export function useRiderLocationTracking(): UseRiderLocationTrackingReturn {
   /** Request permissions (if needed) then start the task, then fire onReady. */
   const requestAndStart = useCallback(
     async (tripId: string | number, onReady?: () => void, tripType?: 'shuttle' | 'chauffeur'): Promise<boolean> => {
-      const { status: fgStatus } =
-        await Location.requestForegroundPermissionsAsync();
+      setIsStartingTracking(true);
+      try {
+        const { status: fgStatus } =
+          await Location.requestForegroundPermissionsAsync();
 
-      if (fgStatus !== 'granted') {
-        console.warn('[RiderLocation] Foreground permission denied');
-        Alert.alert(
-          'Location Permission Required',
-          'Please go to Settings → App → Permissions and enable Location to start a ride.',
-          [
-            { text: 'Open Settings', onPress: () => Linking.openSettings() },
-            { text: 'Cancel', style: 'cancel' },
-          ],
-        );
-        return false;
-      }
-
-      const { status: bgStatus } =
-        await Location.requestBackgroundPermissionsAsync();
-
-      if (bgStatus !== 'granted') {
-        if (Platform.OS === 'ios') {
-          // On iOS, tapping "Change to Always Allow" opens Settings and resolves
-          // the call with the OLD (denied) status before the user has changed
-          // anything. Wait for the user to return from Settings and re-check.
-          const nowGranted = await iosWaitForAlwaysPermission();
-          if (!nowGranted) {
-            console.warn('[RiderLocation] iOS Always permission not satisfied');
-            Alert.alert(
-              'Always Allow Required',
-              "Open Settings and set location access to 'Always' so your location is tracked during rides.",
-              [
-                { text: 'Open Settings', onPress: () => Linking.openSettings() },
-                { text: 'Cancel', style: 'cancel' },
-              ],
-            );
-            return false;
-          }
-          // User returned from Settings with Always granted — fall through.
-        } else {
-          // Android: the read after requestBackgroundPermissionsAsync() is reliable.
-          console.warn('[RiderLocation] Background permission denied');
+        if (fgStatus !== 'granted') {
+          console.warn('[RiderLocation] Foreground permission denied');
           Alert.alert(
-            'Always Allow Required',
-            "Set location access to 'Allow all the time' in Settings so your location is tracked during rides.",
+            'Location Permission Required',
+            'Please go to Settings → App → Permissions and enable Location to start a ride.',
             [
               { text: 'Open Settings', onPress: () => Linking.openSettings() },
               { text: 'Cancel', style: 'cancel' },
@@ -183,12 +185,51 @@ export function useRiderLocationTracking(): UseRiderLocationTrackingReturn {
           );
           return false;
         }
-      }
 
-      await startTrackingAndConfirm(tripId, tripType);
-      setIsTracking(true);
-      await Promise.resolve(onReady?.());
-      return true;
+        const { status: bgStatus } =
+          await Location.requestBackgroundPermissionsAsync();
+
+        if (bgStatus !== 'granted') {
+          if (Platform.OS === 'ios') {
+            // On iOS, tapping "Change to Always Allow" opens Settings and resolves
+            // the call with the OLD (denied) status before the user has changed
+            // anything. Wait for the user to return from Settings and re-check.
+            const nowGranted = await iosWaitForAlwaysPermission();
+            if (!nowGranted) {
+              console.warn('[RiderLocation] iOS Always permission not satisfied');
+              Alert.alert(
+                'Always Allow Required',
+                "Open Settings and set location access to 'Always' so your location is tracked during rides.",
+                [
+                  { text: 'Open Settings', onPress: () => Linking.openSettings() },
+                  { text: 'Cancel', style: 'cancel' },
+                ],
+              );
+              return false;
+            }
+            // User returned from Settings with Always granted — fall through.
+          } else {
+            // Android: the read after requestBackgroundPermissionsAsync() is reliable.
+            console.warn('[RiderLocation] Background permission denied');
+            Alert.alert(
+              'Always Allow Required',
+              "Set location access to 'Allow all the time' in Settings so your location is tracked during rides.",
+              [
+                { text: 'Open Settings', onPress: () => Linking.openSettings() },
+                { text: 'Cancel', style: 'cancel' },
+              ],
+            );
+            return false;
+          }
+        }
+
+        await startTrackingAndConfirm(tripId, tripType);
+        setIsTracking(true);
+        await Promise.resolve(onReady?.());
+        return true;
+      } finally {
+        setIsStartingTracking(false);
+      }
     },
     [],
   );
@@ -211,10 +252,15 @@ export function useRiderLocationTracking(): UseRiderLocationTrackingReturn {
         (Platform.OS === 'ios' && fgStatus === 'granted' && iosScope === 'always');
 
       if (alreadyFullyGranted) {
-        await startTrackingAndConfirm(tripId, tripType);
-        setIsTracking(true);
-        await Promise.resolve(onReady?.());
-        return true;
+        setIsStartingTracking(true);
+        try {
+          await startTrackingAndConfirm(tripId, tripType);
+          setIsTracking(true);
+          await Promise.resolve(onReady?.());
+          return true;
+        } finally {
+          setIsStartingTracking(false);
+        }
       }
 
       // Android: show the disclosure modal first (Play Store policy).
@@ -258,6 +304,7 @@ export function useRiderLocationTracking(): UseRiderLocationTrackingReturn {
 
   return {
     isTracking,
+    isStartingTracking,
     startTracking,
     stopTracking,
     needsDisclosure,

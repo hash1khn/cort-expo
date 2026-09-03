@@ -190,6 +190,7 @@ export default function RideInProgress() {
   const {
     startTracking,
     stopTracking,
+    isStartingTracking,
     needsDisclosure,
     onDisclosureAccept,
     onDisclosureDecline,
@@ -320,7 +321,7 @@ export default function RideInProgress() {
   const [proceedFromStop, { isLoading: isProceeding }] = useProceedFromStopMutation();
   const [completeTrip, { isLoading: isCompletingTrip }] = useCompleteTripMutation();
 
-  const isActionLoading = isStartingTrip || isArrivingAtStop || isCompletingTrip;
+  const isActionLoading = isStartingTrip || isArrivingAtStop || isCompletingTrip || isStartingTracking;
 
   // Single source of truth: derive present/absent from server manifest only. Presence of an
   // entry in this map (not just its status) distinguishes a genuine attendance record from

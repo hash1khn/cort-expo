@@ -2,8 +2,8 @@ import { Stack, usePathname, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { stopLocationTracking } from '../src/services/location/riderLocationService';
-import { RIDER_LOCATION_TASK, ACTIVE_RIDE_KEY } from '../src/services/location/backgroundLocationTask';
+import { stopLocationTracking, startLocationTracking } from '../src/services/location/riderLocationService';
+import { RIDER_LOCATION_TASK, ACTIVE_RIDE_KEY, ACTIVE_RIDE_TYPE_KEY } from '../src/services/location/backgroundLocationTask';
 import * as Notifications from 'expo-notifications';
 import * as TaskManager from 'expo-task-manager';
 // ⚠️ Must be imported at module scope so the task is registered before any
@@ -180,9 +180,18 @@ function RootLayoutContent() {
     });
   }, [pathname, segments, hasHydrated, isLoggedIn, role]);
 
-  // On every app boot, if the location task is still registered from a
-  // previous crash/force-kill but there is no active ride in storage,
-  // the foreground service is orphaned — stop it so the notification clears.
+  // On every app boot, reconcile the location task against whatever ride
+  // state survived from before this process started — covers both
+  // directions:
+  //  - No active ride, but the task is still registered from a previous
+  //    crash/force-kill: it's orphaned — stop it so the notification clears.
+  //  - A ride IS still marked active, but this is a fresh process (e.g. the
+  //    OS killed the app mid-trip and the driver just reopened it — see trip
+  //    1523: a healthy start, then 2+ hours of silence after the process
+  //    died, then a relaunch that never got proactively re-armed). Restart
+  //    tracking unconditionally rather than trusting whatever state the OS
+  //    left the old registration in — startLocationTracking's stop-then-
+  //    restart already handles an already-registered task safely.
   useEffect(() => {
     TaskManager.isTaskRegisteredAsync(RIDER_LOCATION_TASK).then(async (registered) => {
       const activeRideId = await AsyncStorage.getItem(ACTIVE_RIDE_KEY);
@@ -190,8 +199,17 @@ function RootLayoutContent() {
         taskRegistered: registered,
         activeRideId,
       });
-      if (!registered) return;
-      if (!activeRideId) {
+
+      if (activeRideId) {
+        const tripType = (await AsyncStorage.getItem(ACTIVE_RIDE_TYPE_KEY)) as 'shuttle' | 'chauffeur' | null;
+        Sentry.logger.warn('[App] re-arming tracking on boot for still-active ride', {
+          tripId: activeRideId,
+        });
+        await startLocationTracking(activeRideId, tripType ?? undefined).catch(console.warn);
+        return;
+      }
+
+      if (registered) {
         Sentry.logger.warn('[App] stopping orphaned location task on boot (no active ride)');
         await stopLocationTracking().catch(console.warn);
       }

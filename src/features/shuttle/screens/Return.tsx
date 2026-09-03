@@ -228,9 +228,6 @@ export default function Return() {
   // atomic operation from the UI's perspective, closing that gap.
   const [isConfirmingOffice, setIsConfirmingOffice] = useState(false);
 
-  const isActionLoading =
-    isSubmitting || isStartingTrip || isArrivingAtStop || isProceeding || isCompletingTrip || isConfirmingOffice;
-
   // ── Mid-route OFFICE stop attendance (evening equivalent of RideInProgress.tsx's
   // morning PICKUP attendance sheet) — an additional office stop (2nd, 3rd...) on a
   // multi-office route requires attendance just like a home stop does in the morning,
@@ -352,10 +349,14 @@ export default function Return() {
   const {
     startTracking,
     stopTracking,
+    isStartingTracking,
     needsDisclosure,
     onDisclosureAccept,
     onDisclosureDecline,
   } = useRiderLocationTracking();
+
+  const isActionLoading =
+    isSubmitting || isStartingTrip || isArrivingAtStop || isProceeding || isCompletingTrip || isConfirmingOffice || isStartingTracking;
 
   // Track present/absent per employee for the return trip.
   const [employees, setEmployees] = useState<ReturnEmployee[]>([]);
