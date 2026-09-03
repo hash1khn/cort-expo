@@ -46,8 +46,13 @@ type ReturnEmployee = {
 };
 
 function getApiErrorMessage(error: unknown): string | null {
-  const maybe = error as { data?: { message?: string }; message?: string } | undefined;
-  return maybe?.data?.message || maybe?.message || null;
+  const maybe = error as { data?: { message?: string }; message?: string; error?: string; status?: string | number } | undefined;
+  // Server returned a structured error (4xx / 5xx)
+  if (maybe?.data?.message) return maybe.data.message;
+  // RTK Query FETCH_ERROR (timeout, network drop, DNS failure)
+  if (maybe?.status === 'FETCH_ERROR') return 'Network request failed — please check your connection and retry.';
+  if (maybe?.status === 'TIMEOUT_ERROR') return 'The request timed out — the trip may have completed on the server. Please pull to refresh.';
+  return maybe?.message || maybe?.error || null;
 }
 
 function getInitials(name: string) {

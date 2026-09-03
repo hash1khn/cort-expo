@@ -505,12 +505,19 @@ export const shuttleApi = baseApi.injectEndpoints({
     }),
     completeTrip: builder.mutation<
       ShuttleTrip,
-      { tripId: number; total_distance?: number; end_time?: string }
+      { tripId: number; total_distance?: number; end_time?: string; lat?: number; lng?: number }
     >({
-      query: ({ tripId, total_distance = 0, end_time }) => ({
+      query: ({ tripId, total_distance = 0, end_time, lat, lng }) => ({
         url: `/shuttle-trips/${tripId}/complete`,
         method: 'POST',
-        body: { total_distance, ...(end_time ? { end_time } : {}) },
+        body: {
+          total_distance,
+          ...(end_time ? { end_time } : {}),
+          ...(lat != null && lng != null ? { lat, lng } : {}),
+        },
+        // Complete does straggler drop-offs + Redis reads + polyline encoding;
+        // the default 20s can be too tight on a loaded server or slow connection.
+        timeout: 45000,
       }),
       invalidatesTags: ['ShuttleTrip'],
       async onQueryStarted(

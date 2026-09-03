@@ -69,8 +69,13 @@ type StopEmployee = {
 type EmployeeLoadingAction = 'scanning' | 'marking_absent' | null;
 
 function getApiErrorMessage(error: unknown): string | null {
-  const maybe = error as { data?: { message?: string }; message?: string } | undefined;
-  return maybe?.data?.message || maybe?.message || null;
+  const maybe = error as { data?: { message?: string }; message?: string; error?: string; status?: string | number } | undefined;
+  // Server returned a structured error (4xx / 5xx)
+  if (maybe?.data?.message) return maybe.data.message;
+  // RTK Query FETCH_ERROR (timeout, network drop, DNS failure)
+  if (maybe?.status === 'FETCH_ERROR') return 'Network request failed — please check your connection and retry.';
+  if (maybe?.status === 'TIMEOUT_ERROR') return 'The request timed out — the trip may have completed on the server. Please pull to refresh.';
+  return maybe?.message || maybe?.error || null;
 }
 
 function getInitials(name: string) {
@@ -588,9 +593,21 @@ export default function RideInProgress() {
     }
 
     try {
+      let lat: number | undefined;
+      let lng: number | undefined;
+      try {
+        const loc = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Balanced,
+        });
+        lat = loc.coords.latitude;
+        lng = loc.coords.longitude;
+      } catch (e) {
+        console.warn('Could not read GPS for trip complete', e);
+      }
       await completeTrip({
         tripId: activeTrip.id,
         total_distance: 0,
+        ...(lat != null && lng != null ? { lat, lng } : {}),
       }).unwrap();
       await stopTracking().catch(console.warn);
       router.push('/shuttle');
